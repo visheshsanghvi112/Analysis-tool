@@ -56,9 +56,8 @@ def calculate_fibonacci_levels(data):
     )
 
 
-# ── 3. Correlation Heatmap ───────────────────────────────────────
+# ── 3. Correlation Heatmap ───────────────────────────────────
 def correlation_heatmap(data):
-    # Keep only numeric columns to avoid corr() errors
     data = data.select_dtypes(include=[np.number])
     if data.empty or data.shape[1] < 2:
         print("  [!] Not enough data for correlation heatmap.")
@@ -70,6 +69,130 @@ def correlation_heatmap(data):
     plt.title("Correlation Heatmap of Indicators")
     plt.tight_layout()
     plt.show()
+
+
+# ── 3b. Plotly Price Chart ───────────────────────────────────
+def show_price_chart(sd, ticker, signal, sent_label, latest_close):
+    """Interactive candlestick chart with MAs, Bollinger Bands, VWAP, RSI, MACD."""
+    fig = make_subplots(
+        rows=3, cols=1, shared_xaxes=True,
+        row_heights=[0.6, 0.2, 0.2],
+        vertical_spacing=0.05,
+        subplot_titles=(
+            f"{ticker} — Price, MAs, Bollinger Bands & VWAP",
+            "RSI  (Overbought >70 | Oversold <30)",
+            "MACD & Signal Line"
+        )
+    )
+
+    # Candlestick
+    fig.add_trace(go.Candlestick(
+        x=sd.index,
+        open=sd['Open'], high=sd['High'],
+        low=sd['Low'],   close=sd['Close'],
+        name='Price',
+        increasing_line_color='#26a69a',
+        decreasing_line_color='#ef5350'
+    ), row=1, col=1)
+
+    # Moving Averages
+    for ma, color in [('20 Day MA','#2196F3'), ('50 Day MA','#FF9800'), ('100 Day MA','#4CAF50')]:
+        if ma in sd.columns:
+            fig.add_trace(go.Scatter(
+                x=sd.index, y=sd[ma], mode='lines', name=ma,
+                line=dict(color=color, width=1)
+            ), row=1, col=1)
+
+    # Bollinger Bands
+    fig.add_trace(go.Scatter(
+        x=sd.index, y=sd['Upper Band'], mode='lines',
+        name='Upper Band', line=dict(color='#ff6b6b', dash='dash', width=1)
+    ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=sd.index, y=sd['Lower Band'], mode='lines',
+        name='Lower Band', line=dict(color='#ff6b6b', dash='dash', width=1),
+        fill='tonexty', fillcolor='rgba(255,107,107,0.06)'
+    ), row=1, col=1)
+
+    # VWAP
+    fig.add_trace(go.Scatter(
+        x=sd.index, y=sd['VWAP'], mode='lines',
+        name='VWAP', line=dict(color='#E040FB', width=1.5, dash='dot')
+    ), row=1, col=1)
+
+    # RSI
+    fig.add_trace(go.Scatter(
+        x=sd.index, y=sd['RSI'], mode='lines',
+        name='RSI', line=dict(color='#9C27B0', width=1.5)
+    ), row=2, col=1)
+    fig.add_trace(go.Scatter(
+        x=[sd.index[0], sd.index[-1]], y=[70, 70],
+        mode='lines', line=dict(color='red', dash='dash', width=1),
+        showlegend=False, name='Overbought'
+    ), row=2, col=1)
+    fig.add_trace(go.Scatter(
+        x=[sd.index[0], sd.index[-1]], y=[30, 30],
+        mode='lines', line=dict(color='green', dash='dash', width=1),
+        showlegend=False, name='Oversold'
+    ), row=2, col=1)
+
+    # MACD histogram
+    macd_diff   = (sd['MACD'] - sd['Signal Line']).fillna(0)
+    macd_colors = ['#26a69a' if v >= 0 else '#ef5350' for v in macd_diff]
+    fig.add_trace(go.Bar(
+        x=sd.index, y=macd_diff,
+        name='MACD Histogram', marker_color=macd_colors, opacity=0.5
+    ), row=3, col=1)
+    fig.add_trace(go.Scatter(
+        x=sd.index, y=sd['MACD'], mode='lines',
+        name='MACD', line=dict(color='#00BCD4', width=1.5)
+    ), row=3, col=1)
+    fig.add_trace(go.Scatter(
+        x=sd.index, y=sd['Signal Line'], mode='lines',
+        name='Signal Line', line=dict(color='#FF9800', width=1.5)
+    ), row=3, col=1)
+
+    fig.update_layout(
+        title=dict(
+            text=(f"<b>{ticker}</b>  |  Signal: {signal}  "
+                  f"|  Sentiment: {sent_label}  |  Close: ₹{latest_close:.2f}"),
+            font=dict(size=15)
+        ),
+        template='plotly_dark',
+        xaxis_rangeslider_visible=False,
+        height=850,
+        legend=dict(orientation='h', yanchor='bottom', y=1.01, xanchor='right', x=1),
+    )
+    fig.show()
+
+
+# ── 3c. Interactive Menu after each stock ────────────────────
+def show_menu(sd, ticker, signal, sent_label, latest_close):
+    """After printing the summary, let the user choose what to open."""
+    hmap_cols = ['Close','20 Day MA','50 Day MA','Upper Band',
+                 'Lower Band','RSI','MACD','ATR','VWAP','OBV','ADX']
+    while True:
+        print()
+        print("  What do you want to do next?")
+        print("  [1] Show price chart (candlestick + RSI + MACD)")
+        print("  [2] Show correlation heatmap")
+        print("  [3] Show both")
+        print("  [4] Next stock / Exit")
+        choice = input("  Enter choice (1/2/3/4): ").strip()
+
+        if choice == '1':
+            show_price_chart(sd, ticker, signal, sent_label, latest_close)
+        elif choice == '2':
+            hmap_data = sd[[c for c in hmap_cols if c in sd.columns]].dropna()
+            correlation_heatmap(hmap_data)
+        elif choice == '3':
+            show_price_chart(sd, ticker, signal, sent_label, latest_close)
+            hmap_data = sd[[c for c in hmap_cols if c in sd.columns]].dropna()
+            correlation_heatmap(hmap_data)
+        elif choice == '4':
+            break
+        else:
+            print("  Invalid choice. Enter 1, 2, 3 or 4.")
 
 
 # ── 4. Real News Sentiment (Google News RSS — no API key) ────────
@@ -345,115 +468,11 @@ def detailed_stock_analysis(tickers, start_date=None, end_date=None):
                     print(f"  {k:<16} : {v}")
 
             print(f"\n  — News Sentiment —")
-            print(f"  Score            : {avg_sent:.3f}  →  {sent_label}")
+            print(f"  Score            : {avg_sent:.3f}  ->  {sent_label}")
             print(f"  Subjectivity     : {avg_subj:.3f}")
 
-            # ── Plotly Interactive Chart ──────────────────────
-            fig = make_subplots(
-                rows=3, cols=1, shared_xaxes=True,
-                row_heights=[0.6, 0.2, 0.2],
-                vertical_spacing=0.05,
-                subplot_titles=(
-                    f"{ticker} — Price, MAs, Bollinger Bands & VWAP",
-                    "RSI  (Overbought >70 | Oversold <30)",
-                    "MACD & Signal Line"
-                )
-            )
-
-            # Candlestick
-            fig.add_trace(go.Candlestick(
-                x=sd.index,
-                open=sd['Open'], high=sd['High'],
-                low=sd['Low'],   close=sd['Close'],
-                name='Price',
-                increasing_line_color='#26a69a',
-                decreasing_line_color='#ef5350'
-            ), row=1, col=1)
-
-            # Moving Averages
-            for ma, color in [('20 Day MA', '#2196F3'), ('50 Day MA', '#FF9800'), ('100 Day MA', '#4CAF50')]:
-                fig.add_trace(go.Scatter(
-                    x=sd.index, y=sd[ma], mode='lines', name=ma,
-                    line=dict(color=color, width=1)
-                ), row=1, col=1)
-
-            # Bollinger Bands
-            fig.add_trace(go.Scatter(
-                x=sd.index, y=sd['Upper Band'], mode='lines',
-                name='Upper Band', line=dict(color='#ff6b6b', dash='dash', width=1)
-            ), row=1, col=1)
-            fig.add_trace(go.Scatter(
-                x=sd.index, y=sd['Lower Band'], mode='lines',
-                name='Lower Band', line=dict(color='#ff6b6b', dash='dash', width=1),
-                fill='tonexty', fillcolor='rgba(255,107,107,0.06)'
-            ), row=1, col=1)
-
-            # VWAP
-            fig.add_trace(go.Scatter(
-                x=sd.index, y=sd['VWAP'], mode='lines',
-                name='VWAP', line=dict(color='#E040FB', width=1.5, dash='dot')
-            ), row=1, col=1)
-
-            # RSI
-            fig.add_trace(go.Scatter(
-                x=sd.index, y=sd['RSI'], mode='lines',
-                name='RSI', line=dict(color='#9C27B0', width=1.5)
-            ), row=2, col=1)
-
-            # RSI reference lines as Scatter instead of add_hline (max compatibility)
-            fig.add_trace(go.Scatter(
-                x=[sd.index[0], sd.index[-1]], y=[70, 70],
-                mode='lines', name='Overbought (70)',
-                line=dict(color='red', dash='dash', width=1),
-                showlegend=False
-            ), row=2, col=1)
-            fig.add_trace(go.Scatter(
-                x=[sd.index[0], sd.index[-1]], y=[30, 30],
-                mode='lines', name='Oversold (30)',
-                line=dict(color='green', dash='dash', width=1),
-                showlegend=False
-            ), row=2, col=1)
-
-            # MACD
-            macd_colors = ['#26a69a' if v >= 0 else '#ef5350'
-                           for v in (sd['MACD'] - sd['Signal Line']).fillna(0)]
-            fig.add_trace(go.Bar(
-                x=sd.index,
-                y=(sd['MACD'] - sd['Signal Line']),
-                name='MACD Histogram',
-                marker_color=macd_colors,
-                opacity=0.5
-            ), row=3, col=1)
-            fig.add_trace(go.Scatter(
-                x=sd.index, y=sd['MACD'], mode='lines',
-                name='MACD', line=dict(color='#00BCD4', width=1.5)
-            ), row=3, col=1)
-            fig.add_trace(go.Scatter(
-                x=sd.index, y=sd['Signal Line'], mode='lines',
-                name='Signal Line', line=dict(color='#FF9800', width=1.5)
-            ), row=3, col=1)
-
-            fig.update_layout(
-                title=dict(
-                    text=(f"<b>{ticker}</b>  |  Signal: {signal}  "
-                          f"|  Sentiment: {sent_label}  |  Close: ₹{latest_close:.2f}"),
-                    font=dict(size=15)
-                ),
-                template='plotly_dark',
-                xaxis_rangeslider_visible=False,
-                height=850,
-                legend=dict(orientation='h', yanchor='bottom', y=1.01, xanchor='right', x=1),
-            )
-            fig.show()
-
-            # ── Correlation Heatmap ───────────────────────────
-            hmap_cols = [
-                'Close', '20 Day MA', '50 Day MA',
-                'Upper Band', 'Lower Band', 'RSI',
-                'MACD', 'ATR', 'VWAP', 'OBV', 'ADX'
-            ]
-            hmap_data = sd[[c for c in hmap_cols if c in sd.columns]].dropna()
-            correlation_heatmap(hmap_data)
+            # ── Hand off to menu — nothing auto-opens ─────────
+            show_menu(sd, ticker, signal, sent_label, latest_close)
 
         except Exception as e:
             print(f"  [ERROR] {ticker}: {e}")
@@ -464,7 +483,7 @@ def detailed_stock_analysis(tickers, start_date=None, end_date=None):
 # ── Entry Point ───────────────────────────────────────────────────
 if __name__ == "__main__":
     print("\n" + "="*55)
-    print("  📈  Stock Analysis Tool — by Vishesh Sanghvi")
+    print("  Stock Analysis Tool -- by Vishesh Sanghvi")
     print("="*55 + "\n")
 
     tickers_raw = input("Enter tickers (e.g. HDFCBANK.NS, TATAMOTORS.NS): ")
