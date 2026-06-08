@@ -16,17 +16,38 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-# ── 1. Support & Resistance ──────────────────────────────────
+# ── Helper: safely extract a scalar from a pandas Series/value ──
+def _scalar(val):
+    """Ensures any pandas Series or numpy scalar becomes a plain Python float."""
+    if isinstance(val, pd.Series):
+        val = val.iloc[0]
+    return float(val)
+
+
+# ── Helper: flatten yfinance MultiIndex columns safely ──────────
+def _flatten_columns(df):
+    """
+    yfinance >=0.2.x returns MultiIndex columns like ('Close','HDFCBANK.NS').
+    This strips the ticker level and deduplicates if needed.
+    """
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = [col[0] for col in df.columns]
+    # Drop any duplicate columns (keep first)
+    df = df.loc[:, ~df.columns.duplicated()]
+    return df
+
+
+# ── 1. Support & Resistance ──────────────────────────────────────
 def calculate_support_resistance(data):
-    resistance = data['Close'].max()
-    support = data['Close'].min()
+    resistance = _scalar(data['Close'].max())
+    support    = _scalar(data['Close'].min())
     return support, resistance
 
 
-# ── 2. Fibonacci Retracement ─────────────────────────────────
+# ── 2. Fibonacci Retracement ─────────────────────────────────────
 def calculate_fibonacci_levels(data):
-    max_price = data['Close'].max()
-    min_price = data['Close'].min()
+    max_price = _scalar(data['Close'].max())
+    min_price = _scalar(data['Close'].min())
     diff = max_price - min_price
     return (
         max_price - 0.236 * diff,
@@ -35,8 +56,13 @@ def calculate_fibonacci_levels(data):
     )
 
 
-# ── 3. Correlation Heatmap ───────────────────────────────────
+# ── 3. Correlation Heatmap ───────────────────────────────────────
 def correlation_heatmap(data):
+    # Keep only numeric columns to avoid corr() errors
+    data = data.select_dtypes(include=[np.number])
+    if data.empty or data.shape[1] < 2:
+        print("  [!] Not enough data for correlation heatmap.")
+        return
     correlation = data.corr()
     plt.figure(figsize=(12, 8))
     sns.heatmap(correlation, annot=True, fmt='.2f',
@@ -46,72 +72,65 @@ def correlation_heatmap(data):
     plt.show()
 
 
-# ── 4. REAL News Sentiment (Google News RSS — no API key) ────
+# ── 4. Real News Sentiment (Google News RSS — no API key) ────────
 def fetch_news_sentiment(ticker):
     """
-    Fetches live news headlines from Google News RSS for the ticker
-    and scores them with TextBlob NLP. No API key required.
+    Fetches live news from Google News RSS and scores with TextBlob.
+    Falls back to Neutral (0.0) gracefully if anything fails.
     """
     try:
-        # Strip .NS / .BO suffix for cleaner news search
         search_term = ticker.replace('.NS', '').replace('.BO', '')
-        url = (f"https://news.google.com/rss/search?"
-               f"q={search_term}+stock+India&hl=en-IN&gl=IN&ceid=IN:en")
-        feed = feedparser.parse(url)
-        entries = feed.entries[:8]   # top 8 headlines
+        url = (
+            f"https://news.google.com/rss/search?"
+            f"q={search_term}+stock+India&hl=en-IN&gl=IN&ceid=IN:en"
+        )
+        feed    = feedparser.parse(url)
+        entries = feed.entries[:8]
 
         if not entries:
-            print(f"  [!] No news found for {ticker}, defaulting to Neutral.")
+            print(f"  [!] No news found for {ticker}, using Neutral.")
             return 0.0, 0.0
 
-        sentiment_score = 0.0
+        sentiment_score    = 0.0
         subjectivity_score = 0.0
         for entry in entries:
-            text = entry.get('title', '') + ' ' + entry.get('summary', '')
+            text     = entry.get('title', '') + ' ' + entry.get('summary', '')
             analysis = TextBlob(text)
-            sentiment_score += analysis.sentiment.polarity
+            sentiment_score    += analysis.sentiment.polarity
             subjectivity_score += analysis.sentiment.subjectivity
 
-        avg_sentiment = sentiment_score / len(entries)
-        avg_subjectivity = subjectivity_score / len(entries)
-        return avg_sentiment, avg_subjectivity
+        return sentiment_score / len(entries), subjectivity_score / len(entries)
 
     except Exception as e:
-        print(f"  [!] Sentiment fetch failed: {e}. Defaulting to Neutral.")
+        print(f"  [!] Sentiment error: {e}. Using Neutral.")
         return 0.0, 0.0
 
 
-# ── 5. Buy / Sell / Hold Signal ──────────────────────────────
+# ── 5. Buy / Sell / Hold Signal ──────────────────────────────────
 def generate_signal(rsi, macd, signal_line, close, vwap, adx):
     """
-    Combines RSI + MACD + VWAP + ADX to produce a trading signal.
-    - BUY  : RSI oversold + MACD crossing up + price near/below VWAP
-    - SELL : RSI overbought + MACD crossing down + price above VWAP
-    - HOLD : Everything else
+    Scores RSI + MACD crossover + price vs VWAP + trend strength (ADX).
+    Returns a clear BUY / SELL / HOLD string.
     """
     score = 0
 
-    # RSI signal
     if rsi < 35:
-        score += 2      # oversold → bullish
+        score += 2   # oversold
     elif rsi > 65:
-        score -= 2      # overbought → bearish
+        score -= 2   # overbought
 
-    # MACD signal
     if macd > signal_line:
-        score += 1
+        score += 1   # bullish crossover
     else:
         score -= 1
 
-    # Price vs VWAP
     if close < vwap:
-        score += 1      # price below fair value → potential buy
+        score += 1   # below fair value
     else:
         score -= 1
 
-    # ADX (trend strength) — only act if trend is strong
     if adx < 20:
-        score = 0       # weak trend, no clear signal → HOLD
+        score = 0    # weak trend → no trade
 
     if score >= 2:
         return "🟢 BUY"
@@ -121,276 +140,345 @@ def generate_signal(rsi, macd, signal_line, close, vwap, adx):
         return "🟡 HOLD"
 
 
-# ── 6. Fundamentals ─────────────────────────────────────────
+# ── 6. Fundamentals ──────────────────────────────────────────────
 def fetch_fundamentals(ticker):
-    """Fetches PE ratio, Market Cap, 52w High/Low from yfinance."""
+    """PE, Market Cap, 52W High/Low, Dividend Yield from yfinance."""
     try:
-        info = yf.Ticker(ticker).info
+        info   = yf.Ticker(ticker).info
         pe     = info.get('trailingPE', 'N/A')
         mktcap = info.get('marketCap', None)
         high52 = info.get('fiftyTwoWeekHigh', 'N/A')
-        low52  = info.get('fiftyTwoWeekLow', 'N/A')
+        low52  = info.get('fiftyTwoWeekLow',  'N/A')
         div    = info.get('dividendYield', None)
-
-        mktcap_str = (f"₹{mktcap/1e9:.2f}B" if mktcap else "N/A")
-        div_str    = (f"{div*100:.2f}%" if div else "N/A")
-
         return {
-            'PE Ratio'   : round(pe, 2) if isinstance(pe, float) else pe,
-            'Market Cap' : mktcap_str,
+            'PE Ratio'   : round(pe, 2) if isinstance(pe, (int, float)) else 'N/A',
+            'Market Cap' : f"₹{mktcap/1e9:.2f}B" if mktcap else 'N/A',
             '52W High'   : high52,
             '52W Low'    : low52,
-            'Div Yield'  : div_str,
+            'Div Yield'  : f"{div*100:.2f}%" if div else 'N/A',
         }
     except Exception:
         return {}
 
 
-# ── 7. VWAP — daily reset (correct implementation) ──────────
+# ── 7. VWAP — correct daily-reset implementation ─────────────────
 def calculate_daily_vwap(data):
     """
-    VWAP resets each trading day. Groups by date and computes
-    cumulative (price × volume) / cumulative volume per day.
+    True VWAP resets every trading day.
+    Groups by calendar date, then computes cumulative TP*Vol / cumVol.
     """
-    data = data.copy()
-    data['Date'] = data.index.date
-    data['TP'] = (data['High'] + data['Low'] + data['Close']) / 3
-    data['TPV'] = data['TP'] * data['Volume']
+    data        = data.copy()
+    data['_dt'] = data.index.date
+    data['_tp'] = (data['High'] + data['Low'] + data['Close']) / 3
+    data['_tpv']= data['_tp'] * data['Volume']
 
-    data['CumTPV'] = data.groupby('Date')['TPV'].cumsum()
-    data['CumVol']  = data.groupby('Date')['Volume'].cumsum()
-    data['VWAP']    = data['CumTPV'] / data['CumVol']
-    data.drop(columns=['Date', 'TP', 'TPV', 'CumTPV', 'CumVol'], inplace=True)
+    data['_ctpv'] = data.groupby('_dt')['_tpv'].cumsum()
+    data['_cvol']  = data.groupby('_dt')['Volume'].cumsum()
+    data['VWAP']   = data['_ctpv'] / data['_cvol']
+
+    data.drop(columns=['_dt', '_tp', '_tpv', '_ctpv', '_cvol'], inplace=True)
     return data
 
 
-# ── 8. Main Analysis ─────────────────────────────────────────
+# ── 8. ATR — named Series to avoid pd.concat column clash ────────
+def calculate_atr(df):
+    """True Range uses named Series so pd.concat doesn't create duplicate column names."""
+    hl = (df['High'] - df['Low']).rename('hl')
+    hc = np.abs(df['High'] - df['Close'].shift()).rename('hc')
+    lc = np.abs(df['Low']  - df['Close'].shift()).rename('lc')
+    tr = pd.concat([hl, hc, lc], axis=1).max(axis=1)
+    return tr.rolling(14).mean()
+
+
+# ── 9. ADX ───────────────────────────────────────────────────────
+def calculate_adx(df, n=14):
+    df = df.copy()
+    df['+DM'] = np.where(
+        (df['High'] - df['High'].shift(1)) > (df['Low'].shift(1) - df['Low']),
+        (df['High'] - df['High'].shift(1)).clip(lower=0), 0)
+    df['-DM'] = np.where(
+        (df['Low'].shift(1) - df['Low']) > (df['High'] - df['High'].shift(1)),
+        (df['Low'].shift(1) - df['Low']).clip(lower=0), 0)
+    df['+DI'] = 100 * (df['+DM'].rolling(n).sum() / df['ATR'])
+    df['-DI'] = 100 * (df['-DM'].rolling(n).sum() / df['ATR'])
+    denom     = (df['+DI'] + df['-DI']).replace(0, np.nan)   # avoid div-by-zero
+    df['DX']  = (np.abs(df['+DI'] - df['-DI']) / denom) * 100
+    df['ADX'] = df['DX'].rolling(n).mean()
+    return df
+
+
+# ── 10. RSI ──────────────────────────────────────────────────────
+def calculate_rsi(series, period=14):
+    delta    = series.diff(1)
+    gain     = delta.where(delta > 0, 0.0)
+    loss     = -delta.where(delta < 0, 0.0)
+    avg_gain = gain.rolling(period).mean()
+    avg_loss = loss.rolling(period).mean()
+    rs       = avg_gain / avg_loss.replace(0, np.nan)
+    return 100 - (100 / (1 + rs))
+
+
+# ── 11. Main Analysis ────────────────────────────────────────────
 def detailed_stock_analysis(tickers, start_date=None, end_date=None):
     if not start_date or not end_date:
         end_date   = datetime.today()
-        start_date = end_date - timedelta(days=90)
+        start_date = end_date - timedelta(days=365)   # 1 year default for better MA coverage
 
     for ticker in tickers:
         print(f"\n{'='*55}")
-        print(f"  Analysing: {ticker}")
+        print(f"  Analysing : {ticker}")
         print(f"{'='*55}")
 
         try:
-            # ── Fetch data ───────────────────────────────────
-            stock_data = yf.download(
-                ticker, start=start_date, end=end_date, interval="1d", progress=False
-            )
-            if stock_data.empty:
-                print(f"  [!] No data found for {ticker}. Skipping.")
+            # ── Fetch & clean data ────────────────────────────
+            raw = yf.download(ticker, start=start_date, end=end_date,
+                              interval="1d", progress=False, auto_adjust=True)
+            if raw.empty:
+                print(f"  [!] No data for {ticker}. Check ticker symbol.")
                 continue
 
-            # Flatten MultiIndex columns if present
-            if isinstance(stock_data.columns, pd.MultiIndex):
-                stock_data.columns = stock_data.columns.get_level_values(0)
+            sd = _flatten_columns(raw)
 
-            # ── Moving Averages ──────────────────────────────
-            stock_data['20 Day MA']  = stock_data['Close'].rolling(20).mean()
-            stock_data['50 Day MA']  = stock_data['Close'].rolling(50).mean()
-            stock_data['100 Day MA'] = stock_data['Close'].rolling(100).mean()
+            # Ensure we have required columns
+            required = {'Open', 'High', 'Low', 'Close', 'Volume'}
+            missing  = required - set(sd.columns)
+            if missing:
+                print(f"  [!] Missing columns {missing} for {ticker}. Skipping.")
+                continue
 
-            # ── Bollinger Bands ──────────────────────────────
-            stock_data['20 Day STD'] = stock_data['Close'].rolling(20).std()
-            stock_data['Upper Band'] = stock_data['20 Day MA'] + 2 * stock_data['20 Day STD']
-            stock_data['Lower Band'] = stock_data['20 Day MA'] - 2 * stock_data['20 Day STD']
+            # Ensure numeric dtypes
+            for col in required:
+                sd[col] = pd.to_numeric(sd[col], errors='coerce')
+            sd.dropna(subset=['Close', 'Volume'], inplace=True)
 
-            # ── RSI ──────────────────────────────────────────
-            delta    = stock_data['Close'].diff(1)
-            gain     = delta.where(delta > 0, 0)
-            loss     = -delta.where(delta < 0, 0)
-            avg_gain = gain.rolling(14).mean()
-            avg_loss = loss.rolling(14).mean()
-            rs       = avg_gain / avg_loss
-            stock_data['RSI'] = 100 - (100 / (1 + rs))
+            if len(sd) < 30:
+                print(f"  [!] Too few rows ({len(sd)}) for {ticker}. Try a wider date range.")
+                continue
 
-            # ── MACD ─────────────────────────────────────────
-            stock_data['12 EMA']     = stock_data['Close'].ewm(span=12, adjust=False).mean()
-            stock_data['26 EMA']     = stock_data['Close'].ewm(span=26, adjust=False).mean()
-            stock_data['MACD']       = stock_data['12 EMA'] - stock_data['26 EMA']
-            stock_data['Signal Line']= stock_data['MACD'].ewm(span=9, adjust=False).mean()
+            # ── Moving Averages ───────────────────────────────
+            sd['20 Day MA']  = sd['Close'].rolling(20).mean()
+            sd['50 Day MA']  = sd['Close'].rolling(50).mean()
+            sd['100 Day MA'] = sd['Close'].rolling(100).mean()
 
-            # ── ATR ──────────────────────────────────────────
-            hl  = stock_data['High'] - stock_data['Low']
-            hc  = np.abs(stock_data['High'] - stock_data['Close'].shift())
-            lc  = np.abs(stock_data['Low']  - stock_data['Close'].shift())
-            tr  = pd.concat([hl, hc, lc], axis=1).max(axis=1)
-            stock_data['ATR'] = tr.rolling(14).mean()
+            # ── Bollinger Bands ───────────────────────────────
+            sd['20 Day STD'] = sd['Close'].rolling(20).std()
+            sd['Upper Band'] = sd['20 Day MA'] + 2 * sd['20 Day STD']
+            sd['Lower Band'] = sd['20 Day MA'] - 2 * sd['20 Day STD']
 
-            # ── VWAP (daily reset — correct) ─────────────────
-            stock_data = calculate_daily_vwap(stock_data)
+            # ── RSI ───────────────────────────────────────────
+            sd['RSI'] = calculate_rsi(sd['Close'])
 
-            # ── OBV ──────────────────────────────────────────
-            stock_data['OBV'] = (
-                np.sign(stock_data['Close'].diff()) * stock_data['Volume']
-            ).fillna(0).cumsum()
+            # ── MACD ──────────────────────────────────────────
+            sd['12 EMA']      = sd['Close'].ewm(span=12, adjust=False).mean()
+            sd['26 EMA']      = sd['Close'].ewm(span=26, adjust=False).mean()
+            sd['MACD']        = sd['12 EMA'] - sd['26 EMA']
+            sd['Signal Line'] = sd['MACD'].ewm(span=9, adjust=False).mean()
 
-            # ── ADX ──────────────────────────────────────────
-            def calculate_adx(df, n=14):
-                df['+DM'] = np.where(
-                    (df['High'] - df['High'].shift(1)) > (df['Low'].shift(1) - df['Low']),
-                    df['High'] - df['High'].shift(1), 0)
-                df['-DM'] = np.where(
-                    (df['Low'].shift(1) - df['Low']) > (df['High'] - df['High'].shift(1)),
-                    df['Low'].shift(1) - df['Low'], 0)
-                df['+DI'] = 100 * (df['+DM'].rolling(n).sum() / df['ATR'])
-                df['-DI'] = 100 * (df['-DM'].rolling(n).sum() / df['ATR'])
-                df['DX']  = (np.abs(df['+DI'] - df['-DI']) / (df['+DI'] + df['-DI'])) * 100
-                df['ADX'] = df['DX'].rolling(n).mean()
-                return df
+            # ── ATR ───────────────────────────────────────────
+            sd['ATR'] = calculate_atr(sd)
 
-            stock_data = calculate_adx(stock_data)
+            # ── VWAP (daily reset) ────────────────────────────
+            sd = calculate_daily_vwap(sd)
 
-            # ── Latest values for signal ─────────────────────
-            latest       = stock_data.dropna().iloc[-1]
-            latest_rsi   = float(latest['RSI'])
-            latest_macd  = float(latest['MACD'])
-            latest_sig   = float(latest['Signal Line'])
-            latest_close = float(latest['Close'])
-            latest_vwap  = float(latest['VWAP'])
-            latest_adx   = float(latest['ADX'])
+            # ── OBV ───────────────────────────────────────────
+            sd['OBV'] = (np.sign(sd['Close'].diff()) * sd['Volume']).fillna(0).cumsum()
 
-            # ── Signal ───────────────────────────────────────
+            # ── ADX ───────────────────────────────────────────
+            sd = calculate_adx(sd)
+
+            # ── Latest non-NaN row ────────────────────────────
+            key_cols = ['RSI', 'MACD', 'Signal Line', 'VWAP', 'ADX']
+            valid    = sd.dropna(subset=key_cols)
+
+            if valid.empty:
+                print(f"  [!] Indicators still NaN for {ticker}. "
+                      f"Try extending the date range (need at least 100 days).")
+                continue
+
+            latest       = valid.iloc[-1]
+            latest_rsi   = _scalar(latest['RSI'])
+            latest_macd  = _scalar(latest['MACD'])
+            latest_sig   = _scalar(latest['Signal Line'])
+            latest_close = _scalar(latest['Close'])
+            latest_vwap  = _scalar(latest['VWAP'])
+            latest_adx   = _scalar(latest['ADX'])
+
+            # ── Signal ────────────────────────────────────────
             signal = generate_signal(
                 latest_rsi, latest_macd, latest_sig,
                 latest_close, latest_vwap, latest_adx
             )
 
-            # ── Support / Resistance / Fibonacci ─────────────
-            support, resistance = calculate_support_resistance(stock_data)
-            fib1, fib2, fib3   = calculate_fibonacci_levels(stock_data)
+            # ── Support / Resistance / Fibonacci ──────────────
+            support, resistance = calculate_support_resistance(sd)
+            fib1, fib2, fib3   = calculate_fibonacci_levels(sd)
 
-            # ── Fundamentals ─────────────────────────────────
+            # ── Fundamentals ──────────────────────────────────
             fundamentals = fetch_fundamentals(ticker)
 
-            # ── Sentiment ────────────────────────────────────
-            avg_sentiment, avg_subjectivity = fetch_news_sentiment(ticker)
-            sentiment_label = (
-                "Positive 📈" if avg_sentiment > 0.05
-                else "Negative 📉" if avg_sentiment < -0.05
-                else "Neutral ➡️"
-            )
+            # ── Sentiment ─────────────────────────────────────
+            avg_sent, avg_subj = fetch_news_sentiment(ticker)
+            if avg_sent > 0.05:
+                sent_label = "Positive 📈"
+            elif avg_sent < -0.05:
+                sent_label = "Negative 📉"
+            else:
+                sent_label = "Neutral ➡️"
 
-            # ── Print Summary ─────────────────────────────────
+            # ── Console Output ────────────────────────────────
             print(f"\n  📌 Latest Close  : ₹{latest_close:.2f}")
             print(f"  📊 Signal        : {signal}")
-            print(f"\n  — Technical —")
-            print(f"  RSI              : {latest_rsi:.2f}  (>70 overbought, <30 oversold)")
-            print(f"  MACD             : {latest_macd:.4f}  |  Signal: {latest_sig:.4f}")
-            print(f"  ADX              : {latest_adx:.2f}  (>25 = strong trend)")
+            print(f"\n  — Technical Indicators —")
+            print(f"  RSI              : {latest_rsi:.2f}   (>70 overbought | <30 oversold)")
+            print(f"  MACD             : {latest_macd:.4f}  |  Signal Line: {latest_sig:.4f}")
+            print(f"  ADX              : {latest_adx:.2f}   (>25 = strong trend)")
             print(f"  VWAP             : ₹{latest_vwap:.2f}")
-            print(f"  Support          : ₹{float(support):.2f}")
-            print(f"  Resistance       : ₹{float(resistance):.2f}")
-            print(f"  Fibonacci 23.6%  : ₹{float(fib1):.2f}")
-            print(f"  Fibonacci 38.2%  : ₹{float(fib2):.2f}")
-            print(f"  Fibonacci 61.8%  : ₹{float(fib3):.2f}")
+            print(f"  Support          : ₹{support:.2f}")
+            print(f"  Resistance       : ₹{resistance:.2f}")
+            print(f"  Fibonacci 23.6%  : ₹{fib1:.2f}")
+            print(f"  Fibonacci 38.2%  : ₹{fib2:.2f}")
+            print(f"  Fibonacci 61.8%  : ₹{fib3:.2f}")
 
             if fundamentals:
                 print(f"\n  — Fundamentals —")
                 for k, v in fundamentals.items():
                     print(f"  {k:<16} : {v}")
 
-            print(f"\n  — Sentiment (Live News) —")
-            print(f"  Score            : {avg_sentiment:.3f}  →  {sentiment_label}")
-            print(f"  Subjectivity     : {avg_subjectivity:.3f}")
+            print(f"\n  — News Sentiment —")
+            print(f"  Score            : {avg_sent:.3f}  →  {sent_label}")
+            print(f"  Subjectivity     : {avg_subj:.3f}")
 
-            # ── Plotly Chart ─────────────────────────────────
+            # ── Plotly Interactive Chart ──────────────────────
             fig = make_subplots(
                 rows=3, cols=1, shared_xaxes=True,
                 row_heights=[0.6, 0.2, 0.2],
+                vertical_spacing=0.05,
                 subplot_titles=(
-                    f"{ticker} — Price & Indicators",
+                    f"{ticker} — Price, MAs, Bollinger Bands & VWAP",
                     "RSI  (Overbought >70 | Oversold <30)",
-                    "MACD"
+                    "MACD & Signal Line"
                 )
             )
 
             # Candlestick
             fig.add_trace(go.Candlestick(
-                x=stock_data.index,
-                open=stock_data['Open'], high=stock_data['High'],
-                low=stock_data['Low'],  close=stock_data['Close'],
-                name='Price'), row=1, col=1)
+                x=sd.index,
+                open=sd['Open'], high=sd['High'],
+                low=sd['Low'],   close=sd['Close'],
+                name='Price',
+                increasing_line_color='#26a69a',
+                decreasing_line_color='#ef5350'
+            ), row=1, col=1)
 
-            # MAs
-            for col, color in [('20 Day MA','blue'), ('50 Day MA','orange'), ('100 Day MA','green')]:
+            # Moving Averages
+            for ma, color in [('20 Day MA', '#2196F3'), ('50 Day MA', '#FF9800'), ('100 Day MA', '#4CAF50')]:
                 fig.add_trace(go.Scatter(
-                    x=stock_data.index, y=stock_data[col],
-                    mode='lines', name=col,
-                    line=dict(color=color, width=1)), row=1, col=1)
+                    x=sd.index, y=sd[ma], mode='lines', name=ma,
+                    line=dict(color=color, width=1)
+                ), row=1, col=1)
 
             # Bollinger Bands
             fig.add_trace(go.Scatter(
-                x=stock_data.index, y=stock_data['Upper Band'],
-                mode='lines', name='Upper Band',
-                line=dict(color='red', dash='dash', width=1)), row=1, col=1)
+                x=sd.index, y=sd['Upper Band'], mode='lines',
+                name='Upper Band', line=dict(color='#ff6b6b', dash='dash', width=1)
+            ), row=1, col=1)
             fig.add_trace(go.Scatter(
-                x=stock_data.index, y=stock_data['Lower Band'],
-                mode='lines', name='Lower Band',
-                line=dict(color='red', dash='dash', width=1),
-                fill='tonexty', fillcolor='rgba(255,0,0,0.05)'), row=1, col=1)
+                x=sd.index, y=sd['Lower Band'], mode='lines',
+                name='Lower Band', line=dict(color='#ff6b6b', dash='dash', width=1),
+                fill='tonexty', fillcolor='rgba(255,107,107,0.06)'
+            ), row=1, col=1)
 
             # VWAP
             fig.add_trace(go.Scatter(
-                x=stock_data.index, y=stock_data['VWAP'],
-                mode='lines', name='VWAP',
-                line=dict(color='magenta', width=1.5, dash='dot')), row=1, col=1)
+                x=sd.index, y=sd['VWAP'], mode='lines',
+                name='VWAP', line=dict(color='#E040FB', width=1.5, dash='dot')
+            ), row=1, col=1)
 
             # RSI
             fig.add_trace(go.Scatter(
-                x=stock_data.index, y=stock_data['RSI'],
-                mode='lines', name='RSI',
-                line=dict(color='purple')), row=2, col=1)
-            fig.add_hline(y=70, line_dash='dash', line_color='red',   row=2, col=1)
-            fig.add_hline(y=30, line_dash='dash', line_color='green',  row=2, col=1)
+                x=sd.index, y=sd['RSI'], mode='lines',
+                name='RSI', line=dict(color='#9C27B0', width=1.5)
+            ), row=2, col=1)
+
+            # RSI reference lines as Scatter instead of add_hline (max compatibility)
+            fig.add_trace(go.Scatter(
+                x=[sd.index[0], sd.index[-1]], y=[70, 70],
+                mode='lines', name='Overbought (70)',
+                line=dict(color='red', dash='dash', width=1),
+                showlegend=False
+            ), row=2, col=1)
+            fig.add_trace(go.Scatter(
+                x=[sd.index[0], sd.index[-1]], y=[30, 30],
+                mode='lines', name='Oversold (30)',
+                line=dict(color='green', dash='dash', width=1),
+                showlegend=False
+            ), row=2, col=1)
 
             # MACD
+            macd_colors = ['#26a69a' if v >= 0 else '#ef5350'
+                           for v in (sd['MACD'] - sd['Signal Line']).fillna(0)]
+            fig.add_trace(go.Bar(
+                x=sd.index,
+                y=(sd['MACD'] - sd['Signal Line']),
+                name='MACD Histogram',
+                marker_color=macd_colors,
+                opacity=0.5
+            ), row=3, col=1)
             fig.add_trace(go.Scatter(
-                x=stock_data.index, y=stock_data['MACD'],
-                mode='lines', name='MACD',
-                line=dict(color='teal')), row=3, col=1)
+                x=sd.index, y=sd['MACD'], mode='lines',
+                name='MACD', line=dict(color='#00BCD4', width=1.5)
+            ), row=3, col=1)
             fig.add_trace(go.Scatter(
-                x=stock_data.index, y=stock_data['Signal Line'],
-                mode='lines', name='Signal Line',
-                line=dict(color='orange')), row=3, col=1)
+                x=sd.index, y=sd['Signal Line'], mode='lines',
+                name='Signal Line', line=dict(color='#FF9800', width=1.5)
+            ), row=3, col=1)
 
             fig.update_layout(
                 title=dict(
-                    text=f"{ticker} — Stock Analysis  |  Signal: {signal}  |  Sentiment: {sentiment_label}",
-                    font=dict(size=16)
+                    text=(f"<b>{ticker}</b>  |  Signal: {signal}  "
+                          f"|  Sentiment: {sent_label}  |  Close: ₹{latest_close:.2f}"),
+                    font=dict(size=15)
                 ),
                 template='plotly_dark',
                 xaxis_rangeslider_visible=False,
-                height=800,
+                height=850,
+                legend=dict(orientation='h', yanchor='bottom', y=1.01, xanchor='right', x=1),
             )
             fig.show()
 
             # ── Correlation Heatmap ───────────────────────────
-            heatmap_cols = [
+            hmap_cols = [
                 'Close', '20 Day MA', '50 Day MA',
                 'Upper Band', 'Lower Band', 'RSI',
                 'MACD', 'ATR', 'VWAP', 'OBV', 'ADX'
             ]
-            correlation_heatmap(stock_data[heatmap_cols].dropna())
+            hmap_data = sd[[c for c in hmap_cols if c in sd.columns]].dropna()
+            correlation_heatmap(hmap_data)
 
         except Exception as e:
             print(f"  [ERROR] {ticker}: {e}")
+            import traceback
+            traceback.print_exc()
 
 
-# ── Entry Point ──────────────────────────────────────────────
+# ── Entry Point ───────────────────────────────────────────────────
 if __name__ == "__main__":
-    print("\n🔷 Stock Analysis Tool — by Vishesh Sanghvi\n")
+    print("\n" + "="*55)
+    print("  📈  Stock Analysis Tool — by Vishesh Sanghvi")
+    print("="*55 + "\n")
 
-    tickers_input = input("Enter tickers (e.g. HDFCBANK.NS, TATAMOTORS.NS): ")
-    tickers = [t.strip() for t in tickers_input.split(',')]
+    tickers_raw = input("Enter tickers (e.g. HDFCBANK.NS, TATAMOTORS.NS): ")
+    tickers     = [t.strip() for t in tickers_raw.split(',') if t.strip()]
 
-    start_input = input("Start date (YYYY-MM-DD) or Enter for last 3 months: ").strip()
-    end_input   = input("End date   (YYYY-MM-DD) or Enter for today         : ").strip()
+    if not tickers:
+        print("No tickers entered. Exiting.")
+        exit()
 
-    start_date = start_input or None
-    end_date   = end_input   or None
+    start_input = input("Start date (YYYY-MM-DD) or Enter for last 1 year : ").strip()
+    end_input   = input("End date   (YYYY-MM-DD) or Enter for today        : ").strip()
 
-    detailed_stock_analysis(tickers, start_date, end_date)
+    detailed_stock_analysis(
+        tickers,
+        start_date=start_input or None,
+        end_date=end_input or None
+    )
