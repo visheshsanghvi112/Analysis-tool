@@ -265,11 +265,11 @@ def generate_signal(rsi, macd, signal_line, close, vwap, adx):
         score = 0    # weak trend → no trade
 
     if score >= 2:
-        return "🟢 BUY"
+        return "BUY"
     elif score <= -2:
-        return "🔴 SELL"
+        return "SELL"
     else:
-        return "🟡 HOLD"
+        return "HOLD"
 
 
 # ── 6. Full Fundamentals ─────────────────────────────────────────
