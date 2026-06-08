@@ -167,7 +167,7 @@ def show_price_chart(sd, ticker, signal, sent_label, latest_close):
 
 
 # ── 3c. Interactive Menu after each stock ────────────────────
-def show_menu(sd, ticker, signal, sent_label, latest_close):
+def show_menu(sd, ticker, signal, sent_label, latest_close, start_date, end_date):
     """After printing the summary, let the user choose what to open."""
     hmap_cols = ['Close','20 Day MA','50 Day MA','Upper Band',
                  'Lower Band','RSI','MACD','ATR','VWAP','OBV','ADX']
@@ -177,8 +177,9 @@ def show_menu(sd, ticker, signal, sent_label, latest_close):
         print("  [1] Show price chart (candlestick + RSI + MACD)")
         print("  [2] Show correlation heatmap")
         print("  [3] Show both")
-        print("  [4] Next stock / Exit")
-        choice = input("  Enter choice (1/2/3/4): ").strip()
+        print("  [4] Peer comparison (compare with other stocks)")
+        print("  [5] Next stock / Exit")
+        choice = input("  Enter choice (1/2/3/4/5): ").strip()
 
         if choice == '1':
             show_price_chart(sd, ticker, signal, sent_label, latest_close)
@@ -190,9 +191,17 @@ def show_menu(sd, ticker, signal, sent_label, latest_close):
             hmap_data = sd[[c for c in hmap_cols if c in sd.columns]].dropna()
             correlation_heatmap(hmap_data)
         elif choice == '4':
+            peers_raw = input("  Enter peer tickers (e.g. KOTAKBANK.NS, ICICIBANK.NS): ").strip()
+            peers = [p.strip() for p in peers_raw.split(',') if p.strip()]
+            if peers:
+                print(f"\n  --- Peer Comparison (includes {ticker}) ---")
+                peer_comparison([ticker] + peers)
+            else:
+                print("  No peers entered.")
+        elif choice == '5':
             break
         else:
-            print("  Invalid choice. Enter 1, 2, 3 or 4.")
+            print("  Invalid choice. Enter 1, 2, 3, 4 or 5.")
 
 
 # ── 4. Real News Sentiment (Google News RSS — no API key) ────────
@@ -263,25 +272,165 @@ def generate_signal(rsi, macd, signal_line, close, vwap, adx):
         return "🟡 HOLD"
 
 
-# ── 6. Fundamentals ──────────────────────────────────────────────
+# ── 6. Full Fundamentals ─────────────────────────────────────────
 def fetch_fundamentals(ticker):
-    """PE, Market Cap, 52W High/Low, Dividend Yield from yfinance."""
+    """
+    Fetches deep fundamental data:
+    PE, PEG, Market Cap, ROE, ROCE approx, D/E, FCF, Revenue Growth,
+    52W High/Low, Dividend Yield, Beta.
+    """
     try:
-        info   = yf.Ticker(ticker).info
-        pe     = info.get('trailingPE', 'N/A')
-        mktcap = info.get('marketCap', None)
-        high52 = info.get('fiftyTwoWeekHigh', 'N/A')
-        low52  = info.get('fiftyTwoWeekLow',  'N/A')
-        div    = info.get('dividendYield', None)
+        t    = yf.Ticker(ticker)
+        info = t.info
+
+        def _fmt(val, prefix='', suffix='', decimals=2, scale=1):
+            if val is None or val == 'N/A':
+                return 'N/A'
+            try:
+                return f"{prefix}{val/scale:.{decimals}f}{suffix}"
+            except Exception:
+                return str(val)
+
+        pe       = info.get('trailingPE')
+        peg      = info.get('trailingPegRatio')
+        mktcap   = info.get('marketCap')
+        roe      = info.get('returnOnEquity')        # decimal, e.g. 0.18 = 18%
+        de_ratio = info.get('debtToEquity')          # already a ratio
+        fcf      = info.get('freeCashflow')
+        rev_g    = info.get('revenueGrowth')          # YoY decimal
+        div      = info.get('dividendYield')
+        beta     = info.get('beta')
+        high52   = info.get('fiftyTwoWeekHigh')
+        low52    = info.get('fiftyTwoWeekLow')
+        cur_pr   = info.get('currentPrice') or info.get('regularMarketPrice')
+
+        # 52W position: where in the 52w range is current price?
+        if high52 and low52 and cur_pr and high52 != low52:
+            pos52 = f"{((cur_pr - low52)/(high52 - low52))*100:.1f}% from 52W low"
+        else:
+            pos52 = 'N/A'
+
+        # Revenue growth YoY from financials if info doesn't have it
+        if rev_g is None:
+            try:
+                fin = t.financials
+                if fin is not None and not fin.empty and 'Total Revenue' in fin.index:
+                    rev = fin.loc['Total Revenue'].dropna()
+                    if len(rev) >= 2:
+                        rev_g = (rev.iloc[0] - rev.iloc[1]) / abs(rev.iloc[1])
+            except Exception:
+                pass
+
         return {
-            'PE Ratio'   : round(pe, 2) if isinstance(pe, (int, float)) else 'N/A',
-            'Market Cap' : f"₹{mktcap/1e9:.2f}B" if mktcap else 'N/A',
-            '52W High'   : high52,
-            '52W Low'    : low52,
-            'Div Yield'  : f"{div*100:.2f}%" if div else 'N/A',
+            'PE Ratio'      : _fmt(pe, decimals=2) if pe else 'N/A',
+            'PEG Ratio'     : _fmt(peg, decimals=2) if peg else 'N/A',
+            'Market Cap'    : _fmt(mktcap, prefix='Rs.', suffix='B', scale=1e9) if mktcap else 'N/A',
+            'ROE'           : _fmt(roe, suffix='%', scale=0.01) if roe else 'N/A',
+            'Debt/Equity'   : _fmt(de_ratio, decimals=2) if de_ratio else 'N/A',
+            'Free Cash Flow': _fmt(fcf, prefix='Rs.', suffix='Cr', scale=1e7) if fcf else 'N/A',
+            'Revenue Growth': _fmt(rev_g, suffix='%', scale=0.01) if rev_g else 'N/A',
+            'Dividend Yield': _fmt(div, suffix='%', scale=0.01) if div else 'N/A',
+            'Beta'          : _fmt(beta, decimals=2) if beta else 'N/A',
+            '52W High'      : _fmt(high52, prefix='Rs.', decimals=2) if high52 else 'N/A',
+            '52W Low'       : _fmt(low52, prefix='Rs.', decimals=2) if low52 else 'N/A',
+            '52W Position'  : pos52,
+        }
+    except Exception as e:
+        return {}
+
+
+# ── 6b. Risk Metrics ─────────────────────────────────────────────
+def calculate_risk_metrics(close_series):
+    """
+    Max Drawdown, Annualized Volatility, Value at Risk (95%), Sharpe Ratio.
+    """
+    returns = close_series.pct_change().dropna()
+
+    # Annualized Volatility
+    ann_vol = returns.std() * np.sqrt(252) * 100
+
+    # Max Drawdown
+    cumulative  = (1 + returns).cumprod()
+    rolling_max = cumulative.cummax()
+    drawdown    = (cumulative - rolling_max) / rolling_max
+    max_dd      = drawdown.min() * 100
+
+    # Value at Risk (95% confidence, daily)
+    var_95 = np.percentile(returns, 5) * 100
+
+    # Sharpe Ratio (assume risk-free = 6.5% annualized for India)
+    rf_daily   = 0.065 / 252
+    excess_ret = returns - rf_daily
+    sharpe     = (excess_ret.mean() / returns.std()) * np.sqrt(252) if returns.std() > 0 else 0
+
+    return {
+        'Ann. Volatility' : f"{ann_vol:.2f}%",
+        'Max Drawdown'    : f"{max_dd:.2f}%",
+        'VaR (95%, 1D)'   : f"{var_95:.2f}%",
+        'Sharpe Ratio'    : f"{sharpe:.2f}",
+    }
+
+
+# ── 6c. Relative Strength vs Nifty ───────────────────────────────
+def calculate_relative_strength(ticker, start_date, end_date):
+    """
+    Compares stock return vs Nifty 50 return over the same period.
+    RS > 1 means stock outperformed Nifty.
+    """
+    try:
+        nifty = yf.download('^NSEI', start=start_date, end=end_date,
+                            interval='1d', progress=False, auto_adjust=True)
+        stock = yf.download(ticker, start=start_date, end=end_date,
+                            interval='1d', progress=False, auto_adjust=True)
+
+        nifty = _flatten_columns(nifty)
+        stock = _flatten_columns(stock)
+
+        if nifty.empty or stock.empty:
+            return None
+
+        nifty_ret = (_scalar(nifty['Close'].iloc[-1]) / _scalar(nifty['Close'].iloc[0]) - 1) * 100
+        stock_ret = (_scalar(stock['Close'].iloc[-1]) / _scalar(stock['Close'].iloc[0]) - 1) * 100
+        rs        = stock_ret - nifty_ret
+
+        return {
+            'Stock Return'   : f"{stock_ret:+.2f}%",
+            'Nifty Return'   : f"{nifty_ret:+.2f}%",
+            'Outperformance' : f"{rs:+.2f}%  {'(Outperforming)' if rs > 0 else '(Underperforming)'}",
         }
     except Exception:
-        return {}
+        return None
+
+
+# ── 6d. Peer Comparison ───────────────────────────────────────────
+def peer_comparison(peers):
+    """
+    Prints a side-by-side table of PE, ROE, D/E, Revenue Growth for a list of tickers.
+    """
+    rows = []
+    print(f"\n  {'Ticker':<18} {'PE':>8} {'PEG':>8} {'ROE':>8} {'D/E':>8} {'Rev Grw':>9} {'Beta':>7}")
+    print("  " + "-" * 62)
+    for p in peers:
+        try:
+            info  = yf.Ticker(p).info
+            pe    = info.get('trailingPE')
+            peg   = info.get('trailingPegRatio')
+            roe   = info.get('returnOnEquity')
+            de    = info.get('debtToEquity')
+            revg  = info.get('revenueGrowth')
+            beta  = info.get('beta')
+
+            pe_s  = f"{pe:.1f}"    if isinstance(pe, float)   else 'N/A'
+            peg_s = f"{peg:.2f}"   if isinstance(peg, float)  else 'N/A'
+            roe_s = f"{roe*100:.1f}%" if isinstance(roe, float) else 'N/A'
+            de_s  = f"{de:.2f}"    if isinstance(de, float)   else 'N/A'
+            rg_s  = f"{revg*100:.1f}%" if isinstance(revg, float) else 'N/A'
+            bt_s  = f"{beta:.2f}"  if isinstance(beta, float) else 'N/A'
+
+            print(f"  {p:<18} {pe_s:>8} {peg_s:>8} {roe_s:>8} {de_s:>8} {rg_s:>9} {bt_s:>7}")
+        except Exception:
+            print(f"  {p:<18} {'ERROR':>8}")
+    print()
 
 
 # ── 7. VWAP — correct daily-reset implementation ─────────────────
@@ -442,37 +591,53 @@ def detailed_stock_analysis(tickers, start_date=None, end_date=None):
             # ── Sentiment ─────────────────────────────────────
             avg_sent, avg_subj = fetch_news_sentiment(ticker)
             if avg_sent > 0.05:
-                sent_label = "Positive 📈"
+                sent_label = "Positive"
             elif avg_sent < -0.05:
-                sent_label = "Negative 📉"
+                sent_label = "Negative"
             else:
-                sent_label = "Neutral ➡️"
+                sent_label = "Neutral"
+
+            # ── Risk Metrics ──────────────────────────────────
+            risk = calculate_risk_metrics(sd['Close'])
+
+            # ── Relative Strength vs Nifty ────────────────────
+            rs_data = calculate_relative_strength(ticker, start_date, end_date)
 
             # ── Console Output ────────────────────────────────
-            print(f"\n  📌 Latest Close  : ₹{latest_close:.2f}")
-            print(f"  📊 Signal        : {signal}")
-            print(f"\n  — Technical Indicators —")
+            print(f"\n  Latest Close     : Rs.{latest_close:.2f}")
+            print(f"  Signal           : {signal}")
+
+            print(f"\n  --- Technical Indicators ---")
             print(f"  RSI              : {latest_rsi:.2f}   (>70 overbought | <30 oversold)")
             print(f"  MACD             : {latest_macd:.4f}  |  Signal Line: {latest_sig:.4f}")
             print(f"  ADX              : {latest_adx:.2f}   (>25 = strong trend)")
-            print(f"  VWAP             : ₹{latest_vwap:.2f}")
-            print(f"  Support          : ₹{support:.2f}")
-            print(f"  Resistance       : ₹{resistance:.2f}")
-            print(f"  Fibonacci 23.6%  : ₹{fib1:.2f}")
-            print(f"  Fibonacci 38.2%  : ₹{fib2:.2f}")
-            print(f"  Fibonacci 61.8%  : ₹{fib3:.2f}")
+            print(f"  VWAP             : Rs.{latest_vwap:.2f}")
+            print(f"  Support          : Rs.{support:.2f}")
+            print(f"  Resistance       : Rs.{resistance:.2f}")
+            print(f"  Fibonacci 23.6%  : Rs.{fib1:.2f}")
+            print(f"  Fibonacci 38.2%  : Rs.{fib2:.2f}")
+            print(f"  Fibonacci 61.8%  : Rs.{fib3:.2f}")
 
             if fundamentals:
-                print(f"\n  — Fundamentals —")
+                print(f"\n  --- Fundamentals ---")
                 for k, v in fundamentals.items():
                     print(f"  {k:<16} : {v}")
 
-            print(f"\n  — News Sentiment —")
+            print(f"\n  --- Risk Metrics ---")
+            for k, v in risk.items():
+                print(f"  {k:<16} : {v}")
+
+            if rs_data:
+                print(f"\n  --- vs Nifty 50 (same period) ---")
+                for k, v in rs_data.items():
+                    print(f"  {k:<16} : {v}")
+
+            print(f"\n  --- News Sentiment ---")
             print(f"  Score            : {avg_sent:.3f}  ->  {sent_label}")
             print(f"  Subjectivity     : {avg_subj:.3f}")
 
-            # ── Hand off to menu — nothing auto-opens ─────────
-            show_menu(sd, ticker, signal, sent_label, latest_close)
+            # ── Hand off to menu ──────────────────────────────
+            show_menu(sd, ticker, signal, sent_label, latest_close, start_date, end_date)
 
         except Exception as e:
             print(f"  [ERROR] {ticker}: {e}")
