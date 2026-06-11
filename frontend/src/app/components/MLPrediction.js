@@ -3,11 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Brain, TrendingUp, TrendingDown, Target, Zap, AlertCircle, RefreshCw } from 'lucide-react';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (
-  process.env.NODE_ENV === 'production'
-    ? 'https://your-backend.vercel.app'
-    : 'http://127.0.0.1:8000'
-);
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://stock-analysis-backend-seven.vercel.app';
 
 export default function MLPrediction({ ticker }) {
   const [prediction, setPrediction] = useState(null);

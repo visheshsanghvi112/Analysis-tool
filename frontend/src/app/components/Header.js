@@ -19,9 +19,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
   const [isSearching, setIsSearching] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
-  const API_BASE_URL = process.env.NODE_ENV === 'production' 
-    ? 'https://your-backend.vercel.app' 
-    : 'http://127.0.0.1:8000';
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://stock-analysis-backend-seven.vercel.app';
 
   const searchTickers = async (query) => {
     if (query.length < 2) {

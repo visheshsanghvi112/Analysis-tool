@@ -15,11 +15,7 @@ import {
   Minus
 } from 'lucide-react';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (
-  process.env.NODE_ENV === 'production'
-    ? 'https://your-backend.vercel.app'
-    : 'http://127.0.0.1:8000'
-);
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://stock-analysis-backend-seven.vercel.app';
 
 export default function AdvancedNews({ ticker, companyName }) {
   const [newsData, setNewsData] = useState(null);

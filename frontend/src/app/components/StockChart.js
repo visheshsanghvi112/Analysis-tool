@@ -15,11 +15,7 @@ import {
 } from 'recharts';
 import { RefreshCw, AlertTriangle } from 'lucide-react';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (
-  process.env.NODE_ENV === 'production'
-    ? 'https://your-backend.vercel.app'
-    : 'http://127.0.0.1:8000'
-);
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://stock-analysis-backend-seven.vercel.app';
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload || !payload.length) return null;
