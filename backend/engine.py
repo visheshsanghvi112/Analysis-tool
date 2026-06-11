@@ -2,49 +2,18 @@
 # Stock Analysis Engine — by Vishesh Sanghvi
 # ============================================================
 
-import yfinance as yf
 import pandas as pd
 import numpy as np
-import requests
 from datetime import datetime, timedelta
 from textblob import TextBlob
 import feedparser
 import warnings
 warnings.filterwarnings('ignore')
 
-# Shared requests session with browser-like headers to avoid yfinance 401/empty
-# responses on Vercel's serverless environment
-_YF_SESSION = requests.Session()
-_YF_SESSION.headers.update({
-    'User-Agent': (
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-        'AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/124.0.0.0 Safari/537.36'
-    ),
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
-})
-
-
-def _yf_download(ticker, **kwargs):
-    """Wrapper around yf.download that injects a session and retries once."""
-    try:
-        df = yf.download(ticker, session=_YF_SESSION, progress=False, **kwargs)
-        if df.empty:
-            # Retry without session (fallback)
-            df = yf.download(ticker, progress=False, **kwargs)
-        return df
-    except Exception:
-        return yf.download(ticker, progress=False, **kwargs)
-
-
-def _yf_ticker(ticker):
-    """Returns a yf.Ticker with a shared session."""
-    return yf.Ticker(ticker, session=_YF_SESSION)
+from yf_client import get_history, get_quote, get_info
 
 
 def _scalar(val):
-    """Safely extracts a scalar float from pandas Series or numpy types."""
     if isinstance(val, pd.Series):
         if val.empty:
             return 0.0
@@ -56,55 +25,35 @@ def _scalar(val):
 
 
 def _flatten_columns(df):
-    """Strips multiindex levels and keeps the first column level."""
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = [col[0] for col in df.columns]
     df = df.loc[:, ~df.columns.duplicated()]
     return df
 
 
-# ── Support & Resistance via swing pivot points ──────────────────────────────
 def calculate_support_resistance(data, window=10):
-    """
-    Identifies support and resistance using swing high/low pivot points.
-    A swing high is a candle whose high is the highest in a ±window neighbourhood.
-    A swing low  is a candle whose low  is the lowest  in a ±window neighbourhood.
-    Returns the most recent/relevant swing low as support and swing high as resistance.
-    """
     highs = data['High']
     lows  = data['Low']
-
-    swing_highs = []
-    swing_lows  = []
+    swing_highs, swing_lows = [], []
 
     for i in range(window, len(data) - window):
-        if highs.iloc[i] == highs.iloc[i - window : i + window + 1].max():
+        if highs.iloc[i] == highs.iloc[i - window: i + window + 1].max():
             swing_highs.append((data.index[i], _scalar(highs.iloc[i])))
-        if lows.iloc[i] == lows.iloc[i - window : i + window + 1].min():
+        if lows.iloc[i] == lows.iloc[i - window: i + window + 1].min():
             swing_lows.append((data.index[i], _scalar(lows.iloc[i])))
 
-    # Fall back to simple max/min if not enough swing points
     if not swing_highs or not swing_lows:
         return _scalar(lows.min()), _scalar(highs.max())
 
-    # Use the most recent swing low/high as the actionable levels
     recent_support    = swing_lows[-1][1]
     recent_resistance = swing_highs[-1][1]
-
-    # Make sure support < resistance (swap if data is inverted due to short window)
     if recent_support > recent_resistance:
         recent_support, recent_resistance = recent_resistance, recent_support
-
     return round(recent_support, 2), round(recent_resistance, 2)
 
 
-# ── Fibonacci on the last significant swing (last 6 months max) ──────────────
 def calculate_fibonacci_levels(data):
-    """
-    Computes Fibonacci retracement levels on the most recent significant swing,
-    capped at the last 126 trading days (~6 months) to stay relevant.
-    """
-    lookback = data.tail(126)
+    lookback  = data.tail(126)
     max_price = _scalar(lookback['High'].max())
     min_price = _scalar(lookback['Low'].min())
     diff = max_price - min_price
@@ -118,7 +67,6 @@ def calculate_fibonacci_levels(data):
 
 
 def fetch_news_sentiment(ticker):
-    """Fetches live news headlines from Google News RSS and scores them with TextBlob."""
     try:
         search_term = ticker.replace('.NS', '').replace('.BO', '')
         url = (
@@ -127,12 +75,10 @@ def fetch_news_sentiment(ticker):
         )
         feed    = feedparser.parse(url)
         entries = feed.entries[:10]
-
         if not entries:
-            return 0.0, 0.0
+            return 0.0, 0.0, []
 
-        sentiment_score    = 0.0
-        subjectivity_score = 0.0
+        sentiment_score = subjectivity_score = 0.0
         headlines = []
         for entry in entries:
             text     = entry.get('title', '') + ' ' + entry.get('summary', '')
@@ -140,246 +86,169 @@ def fetch_news_sentiment(ticker):
             sentiment_score    += analysis.sentiment.polarity
             subjectivity_score += analysis.sentiment.subjectivity
             headlines.append({
-                'title': entry.get('title', ''),
-                'link':  entry.get('link', ''),
+                'title':     entry.get('title', ''),
+                'link':      entry.get('link', ''),
                 'published': entry.get('published', ''),
-                'polarity': round(analysis.sentiment.polarity, 3)
+                'polarity':  round(analysis.sentiment.polarity, 3),
             })
 
         n = len(entries)
-        return (
-            sentiment_score / n,
-            subjectivity_score / n,
-            headlines
-        )
+        return sentiment_score / n, subjectivity_score / n, headlines
     except Exception:
         return 0.0, 0.0, []
 
 
-def generate_signal(rsi, macd, signal_line, close, upper_band, lower_band, adx, prev_macd=None, prev_signal=None):
-    """
-    Multi-factor scoring system using RSI, MACD crossover, Bollinger Band position, and ADX.
-    Each factor votes with a weight; ADX gates the overall signal strength.
-
-    Scoring:
-      RSI:              oversold(<35) = +2 | overbought(>65) = -2 | neutral zone = 0
-      MACD crossover:   fresh bullish cross = +2 | fresh bearish cross = -2 | continuation = ±1
-      Bollinger Bands:  price near/below lower band = +1 | near/above upper band = -1
-      ADX gate:         < 15 → weak trend, cap score to HOLD regardless
-                        15-25 → moderate, normal scoring
-                        > 25 → strong trend, amplify by 1 point
-    """
+def generate_signal(rsi, macd, signal_line, close, upper_band, lower_band,
+                    adx, prev_macd=None, prev_signal=None):
     reasons = []
     score   = 0
 
-    # ── RSI (thresholds match scorecard: 70/30 display, 65/35 signal) ────────
     if rsi < 35:
-        score += 2
-        reasons.append(f"RSI oversold ({rsi:.1f})")
+        score += 2; reasons.append(f"RSI oversold ({rsi:.1f})")
     elif rsi > 65:
-        score -= 2
-        reasons.append(f"RSI overbought ({rsi:.1f})")
+        score -= 2; reasons.append(f"RSI overbought ({rsi:.1f})")
     else:
         reasons.append(f"RSI neutral ({rsi:.1f})")
 
-    # ── MACD: fresh crossover > continuation ─────────────────────────────────
     if prev_macd is not None and prev_signal is not None:
         was_below = prev_macd < prev_signal
         is_above  = macd > signal_line
         if was_below and is_above:
-            score += 2
-            reasons.append("MACD bullish crossover")
+            score += 2; reasons.append("MACD bullish crossover")
         elif not was_below and not is_above:
-            score -= 2
-            reasons.append("MACD bearish crossover")
+            score -= 2; reasons.append("MACD bearish crossover")
         elif macd > signal_line:
-            score += 1
-            reasons.append("MACD above signal (bullish)")
+            score += 1; reasons.append("MACD above signal (bullish)")
         else:
-            score -= 1
-            reasons.append("MACD below signal (bearish)")
+            score -= 1; reasons.append("MACD below signal (bearish)")
     else:
         if macd > signal_line:
-            score += 1
-            reasons.append("MACD above signal (bullish)")
+            score += 1; reasons.append("MACD above signal (bullish)")
         else:
-            score -= 1
-            reasons.append("MACD below signal (bearish)")
+            score -= 1; reasons.append("MACD below signal (bearish)")
 
-    # ── Bollinger Bands position ──────────────────────────────────────────────
     band_range = upper_band - lower_band
     if band_range > 0:
-        pct_b = (close - lower_band) / band_range  # 0 = at lower, 1 = at upper
+        pct_b = (close - lower_band) / band_range
         if pct_b < 0.2:
-            score += 1
-            reasons.append(f"%B near lower band ({pct_b:.2f}) — oversold zone")
+            score += 1; reasons.append(f"%B near lower band ({pct_b:.2f})")
         elif pct_b > 0.8:
-            score -= 1
-            reasons.append(f"%B near upper band ({pct_b:.2f}) — overbought zone")
+            score -= 1; reasons.append(f"%B near upper band ({pct_b:.2f})")
 
-    # ── ADX gate ─────────────────────────────────────────────────────────────
     if adx < 15:
-        # Choppy/no trend — signals are unreliable
         score = max(-1, min(1, score))
-        reasons.append(f"ADX weak ({adx:.1f}) — ranging market, signals dampened")
+        reasons.append(f"ADX weak ({adx:.1f}) — ranging market")
     elif adx > 25:
-        # Strong trend — amplify signal by 1 in direction
         score += 1 if score > 0 else (-1 if score < 0 else 0)
         reasons.append(f"ADX strong ({adx:.1f}) — trend confirmed")
     else:
         reasons.append(f"ADX moderate ({adx:.1f})")
 
-    if score >= 3:
-        signal = "BUY"
-    elif score <= -3:
-        signal = "SELL"
-    else:
-        signal = "HOLD"
-
+    signal = "BUY" if score >= 3 else "SELL" if score <= -3 else "HOLD"
     return signal, score, reasons
 
 
 def fetch_fundamentals(ticker):
-    """Fetches key valuation, leverage, cash flow and growth metrics from yfinance."""
     try:
-        t    = _yf_ticker(ticker)
-        info = t.info
+        info = get_info(ticker)
+        if not info:
+            return {}
 
-        def _raw_val(val):
-            return val if (val is not None and val != 'N/A') else None
+        def _v(key):
+            val = info.get(key)
+            return val if val not in (None, 'N/A') else None
 
-        pe          = _raw_val(info.get('trailingPE'))
-        fwd_pe      = _raw_val(info.get('forwardPE'))
-        peg         = _raw_val(info.get('trailingPegRatio'))
-        pb          = _raw_val(info.get('priceToBook'))
-        ps          = _raw_val(info.get('priceToSalesTrailing12Months'))
-        mktcap      = _raw_val(info.get('marketCap'))
-        roe         = _raw_val(info.get('returnOnEquity'))
-        roa         = _raw_val(info.get('returnOnAssets'))
-        de_ratio    = _raw_val(info.get('debtToEquity'))
-        current_r   = _raw_val(info.get('currentRatio'))
-        quick_r     = _raw_val(info.get('quickRatio'))
-        fcf         = _raw_val(info.get('freeCashflow'))
-        rev_g       = _raw_val(info.get('revenueGrowth'))
-        earn_g      = _raw_val(info.get('earningsGrowth'))
-        div         = _raw_val(info.get('dividendYield'))
-        beta        = _raw_val(info.get('beta'))
-        high52      = _raw_val(info.get('fiftyTwoWeekHigh'))
-        low52       = _raw_val(info.get('fiftyTwoWeekLow'))
-        cur_pr      = _raw_val(info.get('currentPrice') or info.get('regularMarketPrice'))
-        prev_close  = _raw_val(info.get('previousClose'))
-        open_pr     = _raw_val(info.get('open') or info.get('regularMarketOpen'))
-        day_high    = _raw_val(info.get('dayHigh') or info.get('regularMarketDayHigh'))
-        day_low     = _raw_val(info.get('dayLow') or info.get('regularMarketDayLow'))
-        volume      = _raw_val(info.get('volume') or info.get('regularMarketVolume'))
-        avg_volume  = _raw_val(info.get('averageVolume'))
-        eps         = _raw_val(info.get('trailingEps'))
-        fwd_eps     = _raw_val(info.get('forwardEps'))
-        book_val    = _raw_val(info.get('bookValue'))
-        op_margin   = _raw_val(info.get('operatingMargins'))
-        profit_mar  = _raw_val(info.get('profitMargins'))
-        gross_mar   = _raw_val(info.get('grossMargins'))
-        earn_date   = _raw_val(info.get('earningsTimestamp'))
-        sector      = info.get('sector', None)
-        industry    = info.get('industry', None)
-        name        = info.get('longName') or info.get('shortName', '')
-        employees   = _raw_val(info.get('fullTimeEmployees'))
-        float_sh    = _raw_val(info.get('floatShares'))
-        shares_out  = _raw_val(info.get('sharesOutstanding'))
-        short_pct   = _raw_val(info.get('shortPercentOfFloat'))
+        pe         = _v('trailingPE') or _v('forwardPE')
+        fwd_pe     = _v('forwardPE')
+        peg        = _v('trailingPegRatio') or _v('pegRatio')
+        pb         = _v('priceToBook')
+        ps         = _v('priceToSalesTrailing12Months')
+        mktcap     = _v('marketCap')
+        roe        = _v('returnOnEquity')
+        roa        = _v('returnOnAssets')
+        de_ratio   = _v('debtToEquity')
+        current_r  = _v('currentRatio')
+        quick_r    = _v('quickRatio')
+        fcf        = _v('freeCashflow')
+        rev_g      = _v('revenueGrowth')
+        earn_g     = _v('earningsGrowth')
+        div        = _v('dividendYield') or _v('trailingAnnualDividendYield')
+        beta       = _v('beta')
+        high52     = _v('fiftyTwoWeekHigh')
+        low52      = _v('fiftyTwoWeekLow')
+        cur_pr     = _v('regularMarketPrice') or _v('currentPrice')
+        prev_close = _v('regularMarketPreviousClose') or _v('previousClose')
+        open_pr    = _v('regularMarketOpen')
+        day_high   = _v('regularMarketDayHigh')
+        day_low    = _v('regularMarketDayLow')
+        volume     = _v('regularMarketVolume')
+        avg_volume = _v('averageVolume') or _v('averageDailyVolume10Day')
+        eps        = _v('trailingEps')
+        fwd_eps    = _v('forwardEps')
+        book_val   = _v('bookValue')
+        op_margin  = _v('operatingMargins')
+        prof_mar   = _v('profitMargins')
+        gross_mar  = _v('grossMargins')
+        sector     = info.get('sector') or info.get('sectorDisp')
+        industry   = info.get('industry') or info.get('industryDisp')
+        name       = info.get('longName') or info.get('shortName', ticker)
+        short_pct  = _v('shortPercentOfFloat')
+        shares_out = _v('sharesOutstanding')
+        float_sh   = _v('floatShares')
 
-        # Fetch revenue growth from financials if info is empty
-        if rev_g is None:
-            try:
-                fin = t.financials
-                if fin is not None and not fin.empty and 'Total Revenue' in fin.index:
-                    rev = fin.loc['Total Revenue'].dropna()
-                    if len(rev) >= 2:
-                        rev_g = float((rev.iloc[0] - rev.iloc[1]) / abs(rev.iloc[1]))
-            except Exception:
-                pass
-
-        # Price change vs previous close
-        price_change     = None
-        price_change_pct = None
+        price_change = price_change_pct = None
         if cur_pr and prev_close and prev_close != 0:
             price_change     = round(cur_pr - prev_close, 2)
             price_change_pct = round((cur_pr - prev_close) / prev_close * 100, 2)
 
-        # 52W position as percentage
         pos_52w = None
         if high52 and low52 and high52 != low52 and cur_pr:
             pos_52w = round((cur_pr - low52) / (high52 - low52) * 100, 1)
 
-        # Volume vs average
         vol_ratio = None
         if volume and avg_volume and avg_volume > 0:
             vol_ratio = round(volume / avg_volume, 2)
 
-        # Next earnings date (human readable)
-        next_earnings = None
-        if earn_date:
-            try:
-                next_earnings = datetime.fromtimestamp(earn_date).strftime('%d %b %Y')
-            except Exception:
-                pass
-
         return {
-            'name'           : name,
-            'sector'         : sector,
-            'industry'       : industry,
-            'employees'      : int(employees) if employees else None,
-            # Valuation
-            'peRatio'        : round(pe, 2) if pe else None,
-            'forwardPE'      : round(fwd_pe, 2) if fwd_pe else None,
-            'pegRatio'       : round(peg, 2) if peg else None,
-            'pbRatio'        : round(pb, 2) if pb else None,
-            'psRatio'        : round(ps, 2) if ps else None,
-            'marketCap'      : mktcap,
-            # Per share
-            'eps'            : round(eps, 2) if eps else None,
-            'forwardEps'     : round(fwd_eps, 2) if fwd_eps else None,
-            'bookValue'      : round(book_val, 2) if book_val else None,
-            # Profitability
-            'roe'            : round(roe * 100, 2) if roe else None,
-            'roa'            : round(roa * 100, 2) if roa else None,
+            'name': name, 'sector': sector, 'industry': industry,
+            'peRatio':       round(pe, 2)       if pe       else None,
+            'forwardPE':     round(fwd_pe, 2)   if fwd_pe   else None,
+            'pegRatio':      round(peg, 2)       if peg      else None,
+            'pbRatio':       round(pb, 2)        if pb       else None,
+            'psRatio':       round(ps, 2)        if ps       else None,
+            'marketCap':     mktcap,
+            'eps':           round(eps, 2)       if eps      else None,
+            'forwardEps':    round(fwd_eps, 2)   if fwd_eps  else None,
+            'bookValue':     round(book_val, 2)  if book_val else None,
+            'roe':           round(roe * 100, 2) if roe      else None,
+            'roa':           round(roa * 100, 2) if roa      else None,
             'operatingMargin': round(op_margin * 100, 2) if op_margin else None,
-            'profitMargin'   : round(profit_mar * 100, 2) if profit_mar else None,
-            'grossMargin'    : round(gross_mar * 100, 2) if gross_mar else None,
-            # Growth
-            'revenueGrowth'  : round(rev_g * 100, 2) if rev_g else None,
-            'earningsGrowth' : round(earn_g * 100, 2) if earn_g else None,
-            # Leverage & liquidity
-            'debtToEquity'   : round(de_ratio, 2) if de_ratio else None,
-            'currentRatio'   : round(current_r, 2) if current_r else None,
-            'quickRatio'     : round(quick_r, 2) if quick_r else None,
-            'freeCashFlow'   : fcf,
-            # Dividend
-            'dividendYield'  : round(div * 100, 2) if div else None,
-            # Risk
-            'beta'           : round(beta, 2) if beta else None,
-            'shortPercent'   : round(short_pct * 100, 2) if short_pct else None,
-            # 52W
+            'profitMargin':  round(prof_mar * 100, 2)    if prof_mar  else None,
+            'grossMargin':   round(gross_mar * 100, 2)   if gross_mar else None,
+            'revenueGrowth': round(rev_g * 100, 2)       if rev_g     else None,
+            'earningsGrowth':round(earn_g * 100, 2)      if earn_g    else None,
+            'debtToEquity':  round(de_ratio, 2)          if de_ratio  else None,
+            'currentRatio':  round(current_r, 2)         if current_r else None,
+            'quickRatio':    round(quick_r, 2)           if quick_r   else None,
+            'freeCashFlow':  fcf,
+            'dividendYield': round(div * 100, 2)         if div       else None,
+            'beta':          round(beta, 2)               if beta      else None,
+            'shortPercent':  round(short_pct * 100, 2)   if short_pct else None,
             'fiftyTwoWeekHigh': high52,
-            'fiftyTwoWeekLow' : low52,
-            'fiftyTwoWeekPos' : pos_52w,
-            # Price snapshot
-            'currentPrice'   : cur_pr,
-            'previousClose'  : prev_close,
-            'openPrice'      : open_pr,
-            'dayHigh'        : day_high,
-            'dayLow'         : day_low,
-            'priceChange'    : price_change,
-            'priceChangePct' : price_change_pct,
-            # Volume
-            'volume'         : int(volume) if volume else None,
-            'avgVolume'      : int(avg_volume) if avg_volume else None,
-            'volumeRatio'    : vol_ratio,
-            # Shares
+            'fiftyTwoWeekLow':  low52,
+            'fiftyTwoWeekPos':  pos_52w,
+            'currentPrice':  cur_pr,
+            'previousClose': prev_close,
+            'openPrice':     open_pr,
+            'dayHigh':       day_high,
+            'dayLow':        day_low,
+            'priceChange':   price_change,
+            'priceChangePct':price_change_pct,
+            'volume':        int(volume)     if volume     else None,
+            'avgVolume':     int(avg_volume) if avg_volume else None,
+            'volumeRatio':   vol_ratio,
             'sharesOutstanding': shares_out,
-            'floatShares'    : float_sh,
-            # Events
-            'nextEarnings'   : next_earnings,
+            'floatShares':   float_sh,
         }
     except Exception:
         return {}
@@ -420,91 +289,74 @@ def calculate_rsi(series, period=14):
 
 
 def calculate_risk_metrics(close_series):
-    """Computes drawdown, Sharpe ratio, daily VaR, volatility."""
     returns = close_series.pct_change().dropna()
     if returns.empty:
         return {}
 
-    ann_vol = float(returns.std() * np.sqrt(252) * 100)
-
-    cumulative  = (1 + returns).cumprod()
-    rolling_max = cumulative.cummax()
-    drawdown    = (cumulative - rolling_max) / rolling_max
-    max_dd      = float(drawdown.min() * 100)
-
-    var_95 = float(np.percentile(returns, 5) * 100)
-
+    ann_vol    = float(returns.std() * np.sqrt(252) * 100)
+    cumulative = (1 + returns).cumprod()
+    rolling_max= cumulative.cummax()
+    drawdown   = (cumulative - rolling_max) / rolling_max
+    max_dd     = float(drawdown.min() * 100)
+    var_95     = float(np.percentile(returns, 5) * 100)
     rf_daily   = 0.065 / 252
     excess_ret = returns - rf_daily
     sharpe     = float((excess_ret.mean() / returns.std()) * np.sqrt(252)) if returns.std() > 0 else 0.0
-
-    # Sortino ratio (downside deviation only)
-    downside = excess_ret[excess_ret < 0]
-    sortino  = float((excess_ret.mean() / downside.std()) * np.sqrt(252)) if len(downside) > 1 and downside.std() > 0 else 0.0
+    downside   = excess_ret[excess_ret < 0]
+    sortino    = float((excess_ret.mean() / downside.std()) * np.sqrt(252)) if len(downside) > 1 and downside.std() > 0 else 0.0
 
     return {
         'annualizedVolatility': round(ann_vol, 2),
-        'maxDrawdown': round(max_dd, 2),
-        'var95_1D': round(var_95, 2),
-        'sharpeRatio': round(sharpe, 2),
-        'sortinoRatio': round(sortino, 2),
+        'maxDrawdown':          round(max_dd, 2),
+        'var95_1D':             round(var_95, 2),
+        'sharpeRatio':          round(sharpe, 2),
+        'sortinoRatio':         round(sortino, 2),
     }
 
 
 def calculate_relative_strength(ticker, start_date, end_date):
-    """Compares the cumulative return of the stock vs Nifty 50 Index."""
     try:
-        nifty = _yf_download('^NSEI', start=start_date, end=end_date, interval='1d', auto_adjust=True)
-        stock = _yf_download(ticker, start=start_date, end=end_date, interval='1d', auto_adjust=True)
-
-        nifty = _flatten_columns(nifty)
-        stock = _flatten_columns(stock)
-
+        nifty = get_history('^NSEI', period='1y')
+        stock = get_history(ticker,  period='1y')
         if nifty.empty or stock.empty:
             return {}
-
         n_ret = (_scalar(nifty['Close'].iloc[-1]) / _scalar(nifty['Close'].iloc[0]) - 1) * 100
         s_ret = (_scalar(stock['Close'].iloc[-1]) / _scalar(stock['Close'].iloc[0]) - 1) * 100
-        outperformance = s_ret - n_ret
-
         return {
-            'stockReturn': round(s_ret, 2),
-            'niftyReturn': round(n_ret, 2),
-            'outperformance': round(outperformance, 2)
+            'stockReturn':    round(s_ret, 2),
+            'niftyReturn':    round(n_ret, 2),
+            'outperformance': round(s_ret - n_ret, 2),
         }
     except Exception:
         return {}
 
 
 def analyze_ticker(ticker, start_date=None, end_date=None):
-    """Runs full analytics suite on a ticker and returns a structured dictionary."""
-    # Always fetch at least 400 calendar days so MA100 + ADX can warm up,
-    # even when the user selects a short date range.
     MIN_CALENDAR_DAYS = 400
 
     if not end_date:
-        end_dt = datetime.today()
+        end_dt   = datetime.today()
         end_date = end_dt.strftime('%Y-%m-%d')
     else:
         end_dt = datetime.strptime(end_date, '%Y-%m-%d')
 
     if not start_date:
-        start_dt = end_dt - timedelta(days=365)
+        start_dt   = end_dt - timedelta(days=365)
         start_date = start_dt.strftime('%Y-%m-%d')
         user_start = None
     else:
         user_start = start_date
-        start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        start_dt   = datetime.strptime(start_date, '%Y-%m-%d')
 
-    # Extend fetch window backwards if the requested range is too narrow
-    fetch_start_dt = min(start_dt, end_dt - timedelta(days=MIN_CALENDAR_DAYS))
-    fetch_start = fetch_start_dt.strftime('%Y-%m-%d')
-
-    raw = _yf_download(ticker, start=fetch_start, end=end_date, interval="1d", auto_adjust=True)
+    # Fetch 2y to have enough history for MA100 + ADX warm-up
+    raw = get_history(ticker, period='2y', interval='1d')
     if raw.empty:
         return {"error": f"No data found for ticker {ticker}."}
 
-    sd = _flatten_columns(raw)
+    sd = raw.copy()
+    if isinstance(sd.columns, pd.MultiIndex):
+        sd.columns = [col[0] for col in sd.columns]
+    sd = sd.loc[:, ~sd.columns.duplicated()]
 
     required = {'Open', 'High', 'Low', 'Close', 'Volume'}
     missing  = required - set(sd.columns)
@@ -518,40 +370,29 @@ def analyze_ticker(ticker, start_date=None, end_date=None):
     if len(sd) < 20:
         return {"error": f"Insufficient data for {ticker} — only {len(sd)} trading days found."}
 
-    # ── Moving Averages & Bollinger Bands ─────────────────────────────────────
     sd['20 Day MA']  = sd['Close'].rolling(20).mean()
     sd['50 Day MA']  = sd['Close'].rolling(50).mean()
     sd['100 Day MA'] = sd['Close'].rolling(100).mean()
     sd['20 Day STD'] = sd['Close'].rolling(20).std()
     sd['Upper Band'] = sd['20 Day MA'] + 2 * sd['20 Day STD']
     sd['Lower Band'] = sd['20 Day MA'] - 2 * sd['20 Day STD']
-
-    # ── RSI (Wilder's smoothing via EWM) ─────────────────────────────────────
-    sd['RSI'] = calculate_rsi(sd['Close'])
-
-    # ── MACD ─────────────────────────────────────────────────────────────────
-    sd['12 EMA']      = sd['Close'].ewm(span=12, adjust=False).mean()
-    sd['26 EMA']      = sd['Close'].ewm(span=26, adjust=False).mean()
-    sd['MACD']        = sd['12 EMA'] - sd['26 EMA']
-    sd['Signal Line'] = sd['MACD'].ewm(span=9, adjust=False).mean()
-    sd['MACD Hist']   = sd['MACD'] - sd['Signal Line']
-
-    # ── ATR, ADX ─────────────────────────────────────────────────────────────
-    sd['ATR'] = calculate_atr(sd)
-    sd        = calculate_adx(sd)
-
-    # ── OBV ───────────────────────────────────────────────────────────────────
-    sd['OBV'] = (np.sign(sd['Close'].diff()) * sd['Volume']).fillna(0).cumsum()
-
-    # ── Volume MA (20-day) for volume context ────────────────────────────────
-    sd['Volume MA20'] = sd['Volume'].rolling(20).mean()
+    sd['RSI']        = calculate_rsi(sd['Close'])
+    sd['12 EMA']     = sd['Close'].ewm(span=12, adjust=False).mean()
+    sd['26 EMA']     = sd['Close'].ewm(span=26, adjust=False).mean()
+    sd['MACD']       = sd['12 EMA'] - sd['26 EMA']
+    sd['Signal Line']= sd['MACD'].ewm(span=9, adjust=False).mean()
+    sd['MACD Hist']  = sd['MACD'] - sd['Signal Line']
+    sd['ATR']        = calculate_atr(sd)
+    sd               = calculate_adx(sd)
+    sd['OBV']        = (np.sign(sd['Close'].diff()) * sd['Volume']).fillna(0).cumsum()
+    sd['Volume MA20']= sd['Volume'].rolling(20).mean()
 
     valid = sd.dropna(subset=['RSI', 'MACD', 'Signal Line', 'ATR', 'ADX'])
     if valid.empty:
         return {"error": "Indicators could not be computed (try a larger date range)."}
 
-    latest       = valid.iloc[-1]
-    prev         = valid.iloc[-2] if len(valid) > 1 else None
+    latest = valid.iloc[-1]
+    prev   = valid.iloc[-2] if len(valid) > 1 else None
 
     latest_rsi   = _scalar(latest['RSI'])
     latest_macd  = _scalar(latest['MACD'])
@@ -562,85 +403,78 @@ def analyze_ticker(ticker, start_date=None, end_date=None):
     latest_upper = _scalar(latest['Upper Band']) if not pd.isna(latest['Upper Band']) else latest_close * 1.02
     latest_lower = _scalar(latest['Lower Band']) if not pd.isna(latest['Lower Band']) else latest_close * 0.98
 
-    prev_macd = _scalar(prev['MACD']) if prev is not None else None
+    prev_macd = _scalar(prev['MACD'])       if prev is not None else None
     prev_sig  = _scalar(prev['Signal Line']) if prev is not None else None
 
     signal, signal_score, signal_reasons = generate_signal(
         latest_rsi, latest_macd, latest_sig,
         latest_close, latest_upper, latest_lower,
-        latest_adx, prev_macd, prev_sig
+        latest_adx, prev_macd, prev_sig,
     )
 
     support, resistance = calculate_support_resistance(sd)
     fib1, fib2, fib3    = calculate_fibonacci_levels(sd)
+    fundamentals        = fetch_fundamentals(ticker)
+    risk                = calculate_risk_metrics(sd['Close'])
+    rs_data             = calculate_relative_strength(ticker, start_date, end_date)
 
-    fundamentals = fetch_fundamentals(ticker)
-    risk         = calculate_risk_metrics(sd['Close'])
-    rs_data      = calculate_relative_strength(ticker, start_date, end_date)
-    sent_result  = fetch_news_sentiment(ticker)
+    avg_sent, avg_subj, headlines = fetch_news_sentiment(ticker)
 
-    # Handle both old (2-tuple) and new (3-tuple) return from fetch_news_sentiment
-    if len(sent_result) == 3:
-        avg_sent, avg_subj, headlines = sent_result
-    else:
-        avg_sent, avg_subj = sent_result
-        headlines = []
-
-    # ── Timeseries for charts ─────────────────────────────────────────────────
-    # Only return data within the user's requested date range (not the extended fetch window)
+    # Trim chart data to the user's requested range
     chart_df = sd.copy().dropna(subset=['Close'])
     if user_start:
-        chart_df = chart_df[chart_df.index >= pd.Timestamp(user_start)]
+        chart_df = chart_df[chart_df.index >= pd.Timestamp(user_start, tz='Asia/Kolkata')]
+
     timeseries_data = []
     for idx, row in chart_df.iterrows():
         timeseries_data.append({
-            'date'      : idx.strftime('%Y-%m-%d'),
-            'open'      : round(_scalar(row['Open']), 2),
-            'high'      : round(_scalar(row['High']), 2),
-            'low'       : round(_scalar(row['Low']), 2),
-            'close'     : round(_scalar(row['Close']), 2),
-            'volume'    : int(_scalar(row['Volume'])),
+            'date':       idx.strftime('%Y-%m-%d'),
+            'open':       round(_scalar(row['Open']),  2),
+            'high':       round(_scalar(row['High']),  2),
+            'low':        round(_scalar(row['Low']),   2),
+            'close':      round(_scalar(row['Close']), 2),
+            'volume':     int(_scalar(row['Volume'])),
             'volumeMa20': round(_scalar(row['Volume MA20']), 0) if not pd.isna(row['Volume MA20']) else None,
-            'ma20'      : round(_scalar(row['20 Day MA']), 2) if not pd.isna(row['20 Day MA']) else None,
-            'ma50'      : round(_scalar(row['50 Day MA']), 2) if not pd.isna(row['50 Day MA']) else None,
-            'ma100'     : round(_scalar(row['100 Day MA']), 2) if not pd.isna(row['100 Day MA']) else None,
-            'upperBand' : round(_scalar(row['Upper Band']), 2) if not pd.isna(row['Upper Band']) else None,
-            'lowerBand' : round(_scalar(row['Lower Band']), 2) if not pd.isna(row['Lower Band']) else None,
-            'rsi'       : round(_scalar(row['RSI']), 2) if not pd.isna(row['RSI']) else None,
-            'macd'      : round(_scalar(row['MACD']), 2) if not pd.isna(row['MACD']) else None,
+            'ma20':       round(_scalar(row['20 Day MA']),   2) if not pd.isna(row['20 Day MA'])   else None,
+            'ma50':       round(_scalar(row['50 Day MA']),   2) if not pd.isna(row['50 Day MA'])   else None,
+            'ma100':      round(_scalar(row['100 Day MA']),  2) if not pd.isna(row['100 Day MA'])  else None,
+            'upperBand':  round(_scalar(row['Upper Band']),  2) if not pd.isna(row['Upper Band'])  else None,
+            'lowerBand':  round(_scalar(row['Lower Band']),  2) if not pd.isna(row['Lower Band'])  else None,
+            'rsi':        round(_scalar(row['RSI']),         2) if not pd.isna(row['RSI'])         else None,
+            'macd':       round(_scalar(row['MACD']),        2) if not pd.isna(row['MACD'])        else None,
             'macdSignal': round(_scalar(row['Signal Line']), 2) if not pd.isna(row['Signal Line']) else None,
-            'macdHist'  : round(_scalar(row['MACD Hist']), 2) if not pd.isna(row['MACD Hist']) else None,
-            'adx'       : round(_scalar(row['ADX']), 2) if not pd.isna(row['ADX']) else None,
-            'atr'       : round(_scalar(row['ATR']), 2) if not pd.isna(row['ATR']) else None,
-            'obv'       : int(_scalar(row['OBV'])),
+            'macdHist':   round(_scalar(row['MACD Hist']),   2) if not pd.isna(row['MACD Hist'])   else None,
+            'adx':        round(_scalar(row['ADX']),         2) if not pd.isna(row['ADX'])         else None,
+            'atr':        round(_scalar(row['ATR']),         2) if not pd.isna(row['ATR'])         else None,
+            'obv':        int(_scalar(row['OBV'])),
         })
 
     return {
-        'ticker': ticker,
+        'ticker':  ticker,
         'summary': {
-            'close'      : round(latest_close, 2),
-            'signal'     : signal,
-            'signalScore': signal_score,
-            'signalReasons': signal_reasons,
-            'support'    : support,
-            'resistance' : resistance,
-            'fib236'     : round(fib1, 2),
-            'fib382'     : round(fib2, 2),
-            'fib618'     : round(fib3, 2),
-            'rsi'        : round(latest_rsi, 2),
-            'macd'       : round(latest_macd, 4),
-            'macdSignal' : round(latest_sig, 4),
-            'adx'        : round(latest_adx, 2),
-            'atr'        : round(latest_atr, 2),
+            'close':          round(latest_close, 2),
+            'signal':         signal,
+            'signalScore':    signal_score,
+            'signalReasons':  signal_reasons,
+            'support':        support,
+            'resistance':     resistance,
+            'fib236':         round(fib1, 2),
+            'fib382':         round(fib2, 2),
+            'fib618':         round(fib3, 2),
+            'rsi':            round(latest_rsi,  2),
+            'macd':           round(latest_macd, 4),
+            'macdSignal':     round(latest_sig,  4),
+            'adx':            round(latest_adx,  2),
+            'atr':            round(latest_atr,  2),
         },
-        'fundamentals'    : fundamentals,
-        'risk'            : risk,
+        'fundamentals':     fundamentals,
+        'risk':             risk,
         'relativeStrength': rs_data,
         'sentiment': {
-            'score'        : round(avg_sent, 3),
-            'subjectivity' : round(avg_subj, 3),
-            'label'        : 'Positive' if avg_sent > 0.05 else 'Negative' if avg_sent < -0.05 else 'Neutral',
-            'headlines'    : headlines,
+            'score':       round(avg_sent,  3),
+            'subjectivity':round(avg_subj,  3),
+            'label':       'Positive' if avg_sent > 0.05 else 'Negative' if avg_sent < -0.05 else 'Neutral',
+            'headlines':   headlines,
         },
-        'chartData': timeseries_data
+        'chartData': timeseries_data,
     }
