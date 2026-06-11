@@ -7,21 +7,18 @@
       "use": "@vercel/next"
     },
     {
-      "src": "backend/main.py",
+      "src": "backend/api/index.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "backend/main.py"
+      "dest": "backend/api/index.py"
     },
     {
       "src": "/(.*)",
       "dest": "frontend/$1"
     }
-  ],
-  "env": {
-    "PYTHON_VERSION": "3.12"
-  }
+  ]
 }

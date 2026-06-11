@@ -18,8 +18,39 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Global ticker list — populated on startup
+# Global ticker list — lazily populated on first /api/tickers request
 TICKER_LIST = []
+_ticker_list_loaded = False
+
+
+def _ensure_ticker_list():
+    """Loads the NSE ticker list on first call. Safe to call multiple times."""
+    global TICKER_LIST, _ticker_list_loaded
+    if _ticker_list_loaded:
+        return
+    _ticker_list_loaded = True  # set early to avoid duplicate fetches on concurrent cold starts
+    try:
+        url = 'https://archives.nseindia.com/content/equities/EQUITY_L.csv'
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.ok:
+            df = pd.read_csv(io.StringIO(res.text))
+            df.columns = df.columns.str.strip()
+            for _, row in df.iterrows():
+                raw_symbol = str(row['SYMBOL']).strip()
+                symbol = raw_symbol + ".NS"
+                name = str(row['NAME OF COMPANY']).strip()
+                sector = SECTOR_MAP.get(raw_symbol, None)
+                entry = {"symbol": symbol, "name": name}
+                if sector:
+                    entry["sector"] = sector
+                TICKER_LIST.append(entry)
+            print(f"Loaded {len(TICKER_LIST)} NSE tickers successfully.")
+        else:
+            print("Failed to download NSE tickers, using empty list")
+    except Exception as e:
+        print(f"Error loading ticker list: {e}")
+        _ticker_list_loaded = False  # allow retry on next request
 
 # Security: Restrict CORS origins for production
 import os
@@ -32,21 +63,18 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Secure CORS configuration
-allowed_origins = [
-    "http://localhost:3000",
-    "http://localhost:3001", 
-    "https://your-app-name.vercel.app",  # Replace with your Vercel domain
-]
+# CORS — allow all Vercel preview/production URLs plus localhost
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 
-if os.getenv("ENVIRONMENT") == "development":
-    allowed_origins.extend(["http://127.0.0.1:3000", "http://127.0.0.1:3001"])
+# In development, always allow localhost
+if os.getenv("ENVIRONMENT") == "development" or not os.getenv("ALLOWED_ORIGINS"):
+    allowed_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=False,  # More secure
-    allow_methods=["GET", "POST"],  # Only needed methods
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
     allow_headers=["Content-Type", "Authorization"],
 )
 
@@ -96,30 +124,6 @@ SECTOR_MAP = {
     "POLICYBZR": "Fintech", "DELHIVERY": "Logistics",
 }
 
-@app.on_event("startup")
-async def load_ticker_list():
-    global TICKER_LIST
-    try:
-        url = 'https://archives.nseindia.com/content/equities/EQUITY_L.csv'
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        res = requests.get(url, headers=headers, timeout=10)
-        if res.ok:
-            df = pd.read_csv(io.StringIO(res.text))
-            df.columns = df.columns.str.strip()
-            for _, row in df.iterrows():
-                raw_symbol = str(row['SYMBOL']).strip()
-                symbol = raw_symbol + ".NS"
-                name = str(row['NAME OF COMPANY']).strip()
-                sector = SECTOR_MAP.get(raw_symbol, None)
-                entry = {"symbol": symbol, "name": name}
-                if sector:
-                    entry["sector"] = sector
-                TICKER_LIST.append(entry)
-            print(f"Loaded {len(TICKER_LIST)} NSE tickers successfully.")
-        else:
-            print("Failed to download NSE tickers, using empty list")
-    except Exception as e:
-        print(f"Error loading ticker list: {e}")
 
 @app.get("/api/tickers")
 def search_tickers(q: str = Query("", description="Query string to search tickers")):
@@ -127,6 +131,8 @@ def search_tickers(q: str = Query("", description="Query string to search ticker
     Search NSE tickers by symbol or company name.
     Returns top 30 matches. Symbol matches are ranked higher than name matches.
     """
+    _ensure_ticker_list()
+
     if not q:
         return {"tickers": TICKER_LIST[:30]}
 
