@@ -88,8 +88,9 @@ def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "version": "1.0.0",
-        "environment": os.getenv("ENVIRONMENT", "development")
+        "version": "2.0.0-yf-client",  # Updated to verify new deployment
+        "environment": os.getenv("ENVIRONMENT", "development"),
+        "using_yf_client": True
     }
 
 @app.get("/")
