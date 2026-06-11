@@ -8,7 +8,7 @@ from datetime import datetime
 import yfinance as yf
 
 # Import analysis engine functions
-from engine import analyze_ticker
+from engine import analyze_ticker, _yf_ticker, _yf_download
 from ml_models import get_ml_prediction, retrain_model
 from news_intelligence import get_advanced_news_analysis
 
@@ -174,34 +174,49 @@ def get_live_price(
         if not re.match(r'^[A-Z0-9&.-]{1,15}(\.NS|\.BO)?$', ticker_clean):
             raise HTTPException(status_code=400, detail="Invalid ticker format")
         
-        t = yf.Ticker(ticker_clean)
-        fi   = t.fast_info
+        t = _yf_ticker(ticker_clean)
 
-        price      = getattr(fi, 'last_price', None)
-        prev_close = getattr(fi, 'previous_close', None)
-        day_high   = getattr(fi, 'day_high', None)
-        day_low    = getattr(fi, 'day_low', None)
-        volume     = getattr(fi, 'last_volume', None)
-        mktcap     = getattr(fi, 'market_cap', None)
+        # Use history() — more reliable than fast_info across yfinance versions
+        hist = t.history(period="5d", interval="1d")
+        if hist.empty:
+            raise HTTPException(status_code=404, detail=f"No data found for {ticker_clean}")
+
+        latest    = hist.iloc[-1]
+        prev_row  = hist.iloc[-2] if len(hist) >= 2 else None
+
+        price      = float(latest['Close'])
+        day_high   = float(latest['High'])
+        day_low    = float(latest['Low'])
+        volume     = int(latest['Volume'])
+        prev_close = float(prev_row['Close']) if prev_row is not None else None
+
+        # Market cap from info (best-effort, non-blocking)
+        mktcap = None
+        try:
+            mktcap = t.info.get('marketCap')
+        except Exception:
+            pass
 
         change     = None
         change_pct = None
-        if price and prev_close and prev_close != 0:
+        if prev_close and prev_close != 0:
             change     = round(price - prev_close, 2)
             change_pct = round((price - prev_close) / prev_close * 100, 2)
 
         return {
-            "ticker"     : ticker.strip().upper(),
-            "price"      : round(price, 2) if price else None,
-            "change"     : change,
-            "changePct"  : change_pct,
-            "dayHigh"    : round(day_high, 2) if day_high else None,
-            "dayLow"     : round(day_low, 2) if day_low else None,
-            "volume"     : int(volume) if volume else None,
-            "marketCap"  : mktcap,
-            "prevClose"  : round(prev_close, 2) if prev_close else None,
-            "timestamp"  : datetime.now().strftime("%H:%M:%S"),
+            "ticker"    : ticker_clean,
+            "price"     : round(price, 2),
+            "change"    : change,
+            "changePct" : change_pct,
+            "dayHigh"   : round(day_high, 2),
+            "dayLow"    : round(day_low, 2),
+            "volume"    : volume,
+            "marketCap" : mktcap,
+            "prevClose" : round(prev_close, 2) if prev_close else None,
+            "timestamp" : datetime.now().strftime("%H:%M:%S"),
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -280,7 +295,7 @@ def get_portfolio_metrics(ticker: str = Query(..., description="Stock ticker sym
         ticker_clean = ticker.strip().upper()
         
         # Fetch stock data
-        stock = yf.Ticker(ticker_clean)
+        stock = _yf_ticker(ticker_clean)
         hist = stock.history(period="1y")
         info = stock.info
         
@@ -314,7 +329,10 @@ def get_portfolio_metrics(ticker: str = Query(..., description="Stock ticker sym
         
         # Beta calculation (vs NIFTY 50)
         try:
-            nifty = yf.download("^NSEI", period="1y", progress=False)['Close']
+            nifty_raw = _yf_download("^NSEI", period="1y")
+            if nifty_raw.empty:
+                raise ValueError("Empty nifty data")
+            nifty = nifty_raw['Close'] if 'Close' in nifty_raw.columns else nifty_raw.iloc[:, 0]
             nifty_returns = nifty.pct_change().dropna()
             
             # Align dates
@@ -440,7 +458,7 @@ def compare_peers(
     comparison_results = []
     for ticker in ticker_list:
         try:
-            info = yf.Ticker(ticker).info
+            info = _yf_ticker(ticker).info
             pe   = info.get('trailingPE')
             peg  = info.get('trailingPegRatio')
             roe  = info.get('returnOnEquity')

@@ -8,9 +8,23 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 import yfinance as yf
+import requests
 from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
+
+# Shared session — same approach as engine.py to work on Vercel serverless
+_YF_SESSION = requests.Session()
+_YF_SESSION.headers.update({
+    'User-Agent': (
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/124.0.0.0 Safari/537.36'
+    ),
+})
+
+def _yf_ticker(ticker):
+    return yf.Ticker(ticker, session=_YF_SESSION)
 
 class StockPredictor:
     def __init__(self):
@@ -120,7 +134,7 @@ class StockPredictor:
             end_date = datetime.now()
             start_date = end_date - timedelta(days=days_back)
             
-            stock = yf.Ticker(ticker)
+            stock = _yf_ticker(ticker)
             df = stock.history(start=start_date, end=end_date)
             
             if df.empty or len(df) < 100:
@@ -183,7 +197,7 @@ class StockPredictor:
             end_date = datetime.now()
             start_date = end_date - timedelta(days=100)
             
-            stock = yf.Ticker(ticker)
+            stock = _yf_ticker(ticker)
             df = stock.history(start=start_date, end=end_date)
             
             if df.empty:

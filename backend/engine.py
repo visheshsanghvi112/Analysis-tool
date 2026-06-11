@@ -5,11 +5,42 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import requests
 from datetime import datetime, timedelta
 from textblob import TextBlob
 import feedparser
 import warnings
 warnings.filterwarnings('ignore')
+
+# Shared requests session with browser-like headers to avoid yfinance 401/empty
+# responses on Vercel's serverless environment
+_YF_SESSION = requests.Session()
+_YF_SESSION.headers.update({
+    'User-Agent': (
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/124.0.0.0 Safari/537.36'
+    ),
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+})
+
+
+def _yf_download(ticker, **kwargs):
+    """Wrapper around yf.download that injects a session and retries once."""
+    try:
+        df = yf.download(ticker, session=_YF_SESSION, progress=False, **kwargs)
+        if df.empty:
+            # Retry without session (fallback)
+            df = yf.download(ticker, progress=False, **kwargs)
+        return df
+    except Exception:
+        return yf.download(ticker, progress=False, **kwargs)
+
+
+def _yf_ticker(ticker):
+    """Returns a yf.Ticker with a shared session."""
+    return yf.Ticker(ticker, session=_YF_SESSION)
 
 
 def _scalar(val):
@@ -211,7 +242,7 @@ def generate_signal(rsi, macd, signal_line, close, upper_band, lower_band, adx, 
 def fetch_fundamentals(ticker):
     """Fetches key valuation, leverage, cash flow and growth metrics from yfinance."""
     try:
-        t    = yf.Ticker(ticker)
+        t    = _yf_ticker(ticker)
         info = t.info
 
         def _raw_val(val):
@@ -423,8 +454,8 @@ def calculate_risk_metrics(close_series):
 def calculate_relative_strength(ticker, start_date, end_date):
     """Compares the cumulative return of the stock vs Nifty 50 Index."""
     try:
-        nifty = yf.download('^NSEI', start=start_date, end=end_date, interval='1d', progress=False, auto_adjust=True)
-        stock = yf.download(ticker, start=start_date, end=end_date, interval='1d', progress=False, auto_adjust=True)
+        nifty = _yf_download('^NSEI', start=start_date, end=end_date, interval='1d', auto_adjust=True)
+        stock = _yf_download(ticker, start=start_date, end=end_date, interval='1d', auto_adjust=True)
 
         nifty = _flatten_columns(nifty)
         stock = _flatten_columns(stock)
@@ -469,7 +500,7 @@ def analyze_ticker(ticker, start_date=None, end_date=None):
     fetch_start_dt = min(start_dt, end_dt - timedelta(days=MIN_CALENDAR_DAYS))
     fetch_start = fetch_start_dt.strftime('%Y-%m-%d')
 
-    raw = yf.download(ticker, start=fetch_start, end=end_date, interval="1d", progress=False, auto_adjust=True)
+    raw = _yf_download(ticker, start=fetch_start, end=end_date, interval="1d", auto_adjust=True)
     if raw.empty:
         return {"error": f"No data found for ticker {ticker}."}
 
