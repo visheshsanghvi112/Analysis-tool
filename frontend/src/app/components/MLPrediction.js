@@ -9,14 +9,31 @@ export default function MLPrediction({ ticker }) {
   const [prediction, setPrediction] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedPeriod, setSelectedPeriod] = useState('2y');
 
-  const fetchPrediction = async () => {
+  // Dynamic default dates for custom range
+  const [startDate, setStartDate] = useState(() => {
+    const today = new Date();
+    const twoYearsAgo = new Date(today.getFullYear() - 2, today.getMonth(), today.getDate());
+    return twoYearsAgo.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
+
+  const fetchPrediction = async (period = selectedPeriod, start = startDate, end = endDate) => {
     if (!ticker) return;
     setLoading(true);
     setError(null);
     
     try {
-      const res = await fetch(`${API_BASE_URL}/api/ml-predict?ticker=${ticker}`);
+      let url = `${API_BASE_URL}/api/ml-predict?ticker=${ticker}`;
+      if (period === 'custom') {
+         url += `&period=custom&start_date=${start}&end_date=${end}`;
+      } else {
+         url += `&period=${period}`;
+      }
+      const res = await fetch(url);
       const json = await res.json();
       
       if (!res.ok) throw new Error(json.detail || 'Failed to get prediction');
@@ -31,8 +48,16 @@ export default function MLPrediction({ ticker }) {
   };
 
   useEffect(() => {
-    fetchPrediction();
-  }, [ticker]);
+    if (selectedPeriod !== 'custom') {
+      fetchPrediction(selectedPeriod);
+    } else {
+      fetchPrediction('custom', startDate, endDate);
+    }
+  }, [ticker, selectedPeriod]);
+
+  const handlePeriodChange = (p) => {
+    setSelectedPeriod(p);
+  };
 
   const getSignalStyle = (signal) => {
     switch (signal) {
@@ -49,8 +74,30 @@ export default function MLPrediction({ ticker }) {
     }
   };
 
+  const formatPeriodLabel = (p) => {
+    if (p === '1y') return '1 Year';
+    if (p === '2y') return '2 Years';
+    if (p === '5y') return '5 Years';
+    if (p === 'max') return 'Max History';
+    if (p === 'custom') return `Custom Range (${startDate} to ${endDate})`;
+    return p;
+  };
+
+  const getStabilityStyle = (stability) => {
+    switch (stability) {
+      case 'STABLE CONSENSUS':
+        return 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5';
+      case 'MODERATE VOLATILITY':
+        return 'text-amber-400 border-amber-500/20 bg-amber-500/5';
+      case 'HIGH UNCERTAINTY':
+        return 'text-rose-400 border-rose-500/20 bg-rose-500/5';
+      default:
+        return 'text-slate-400 border-[#242424] bg-[#0a0a0a]';
+    }
+  };
+
   return (
-    <div className="bg-[#0d1424] rounded-xl sm:rounded-2xl border border-slate-800 p-4 sm:p-6 shadow-xl">
+    <div className="bg-[#121212] rounded-xl sm:rounded-2xl border border-[#282828] p-4 sm:p-6 shadow-xl">
       
       {/* Header */}
       <div className="flex items-center justify-between mb-4 sm:mb-5">
@@ -65,7 +112,7 @@ export default function MLPrediction({ ticker }) {
         </div>
         
         <button
-          onClick={fetchPrediction}
+          onClick={() => fetchPrediction(selectedPeriod, startDate, endDate)}
           disabled={loading}
           className="p-2 rounded-lg active:bg-slate-800 text-slate-500 active:text-slate-300 transition disabled:opacity-40 cursor-pointer"
           title="Refresh Prediction"
@@ -74,12 +121,63 @@ export default function MLPrediction({ ticker }) {
         </button>
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-8 text-slate-500">
-          <div className="flex items-center gap-2">
-            <Brain className="h-5 w-5 animate-pulse" />
-            <span className="text-sm">Training model & generating prediction...</span>
+      {/* Training Period Selector */}
+      <div className="mb-5">
+        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Training Data Horizon</p>
+        <div className="flex p-0.5 bg-[#0a0a0a] rounded-lg border border-[#242424] gap-1">
+          {['1y', '2y', '5y', 'max', 'custom'].map((p) => (
+            <button
+              key={p}
+              onClick={() => handlePeriodChange(p)}
+              disabled={loading}
+              className={`flex-1 py-1.5 text-[11px] font-semibold rounded-md transition ${
+                selectedPeriod === p
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-900'
+              } disabled:opacity-50`}
+            >
+              {p === 'max' ? 'Max' : p === 'custom' ? 'Custom' : p.toUpperCase()}
+            </button>
+          ))}
+        </div>
+
+        {selectedPeriod === 'custom' && (
+          <div className="mt-3 flex flex-col gap-3 p-3 bg-[#0a0a0a] rounded-lg border border-[#242424] animate-fadeIn">
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="text-[9px] text-slate-500 font-bold block mb-1">START DATE</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full bg-[#121212] border border-[#282828] text-white rounded px-2 py-1 text-xs focus:outline-none focus:border-purple-500"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-[9px] text-slate-500 font-bold block mb-1">END DATE</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full bg-[#121212] border border-[#282828] text-white rounded px-2 py-1 text-xs focus:outline-none focus:border-purple-500"
+                />
+              </div>
+            </div>
+            <button
+              onClick={() => fetchPrediction('custom', startDate, endDate)}
+              disabled={loading}
+              className="w-full bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold py-1.5 rounded text-xs transition cursor-pointer disabled:opacity-50"
+            >
+              {loading ? 'Retraining...' : 'Train Model on Selected Dates'}
+            </button>
           </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-12 text-slate-500 gap-3">
+          <Brain className="h-6 w-6 animate-pulse text-purple-400" />
+          <span className="text-xs text-slate-400">Retraining model with {formatPeriodLabel(selectedPeriod)} data...</span>
         </div>
       ) : error ? (
         <div className="flex items-center gap-3 p-4 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-400 text-sm">
@@ -141,15 +239,22 @@ export default function MLPrediction({ ticker }) {
           </div>
 
           {/* Prediction Details */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="bg-[#111827]/50 rounded-lg p-3 border border-slate-800/80">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-[#0a0a0a] rounded-lg p-3 border border-[#242424]">
               <p className="text-[10px] sm:text-xs text-slate-500 mb-1">Current Price</p>
               <p className="font-bold text-sm sm:text-base text-slate-200">Rs.{prediction.current_price?.toLocaleString()}</p>
             </div>
             
-            <div className="bg-[#111827]/50 rounded-lg p-3 border border-slate-800/80">
+            <div className="bg-[#0a0a0a] rounded-lg p-3 border border-[#242424]">
               <p className="text-[10px] sm:text-xs text-slate-500 mb-1">Horizon</p>
               <p className="font-bold text-sm sm:text-base text-slate-200">{prediction.prediction_horizon_days} Days</p>
+            </div>
+
+            <div className={`rounded-lg p-3 border ${getStabilityStyle(prediction.stability)}`}>
+              <p className="text-[10px] sm:text-xs text-slate-500 mb-1">Model Consensus</p>
+              <p className="font-bold text-[9px] sm:text-[10px] uppercase tracking-wider leading-tight">
+                {prediction.stability || 'STABLE CONSENSUS'}
+              </p>
             </div>
           </div>
 
@@ -169,8 +274,8 @@ export default function MLPrediction({ ticker }) {
 
           {/* Model Info */}
           <div className="mt-3 text-center">
-            <p className="text-[9px] sm:text-[10px] text-slate-600">
-              Random Forest Model · {new Date(prediction.timestamp).toLocaleString('en-IN', { 
+            <p className="text-[9px] sm:text-[10px] text-slate-500">
+              Random Forest Model · Trained on {formatPeriodLabel(selectedPeriod)} of data · {new Date(prediction.timestamp).toLocaleString('en-IN', { 
                 day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
               })}
             </p>

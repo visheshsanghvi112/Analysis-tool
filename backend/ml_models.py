@@ -18,6 +18,8 @@ class StockPredictor:
         self.scaler = MinMaxScaler()
         self.model = None
         self.feature_columns = []
+        self.current_ticker = None
+        self.current_period = None
         
     def create_features(self, df):
         """Create technical indicators as features for ML model"""
@@ -114,16 +116,13 @@ class StockPredictor:
         
         return np.array(X), np.array(y), df_clean
     
-    def train_model(self, ticker, days_back=730):
+    def train_model(self, ticker, period="2y", start_date=None, end_date=None):
         """Train prediction model on historical data"""
         try:
-            # Fetch extended historical data
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=days_back)
-            
-            df = get_history(ticker, period='2y')
+            df = get_history(ticker, period=period, start_date=start_date, end_date=end_date)
             if df.empty or len(df) < 100:
-                return False, "Insufficient data for training"
+                date_range_str = f"from {start_date} to {end_date}" if start_date and end_date else f"on {period} period"
+                return False, f"Insufficient data for training {date_range_str}"
             
             # Create features
             df_features = self.create_features(df)
@@ -161,6 +160,10 @@ class StockPredictor:
             # Calculate accuracy (% predictions within 2% of actual)
             accuracy = np.mean(np.abs(y_pred - y_test) < 0.02) * 100
             
+            self.current_ticker = ticker
+            self.current_period = period
+            self.current_start_date = start_date
+            self.current_end_date = end_date
             return True, {
                 'mae': mae,
                 'rmse': rmse, 
@@ -179,9 +182,6 @@ class StockPredictor:
                 return None, "Model not trained"
             
             # Fetch recent data
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=100)
-            
             df = get_history(ticker, period='6mo')
             if df.empty:
                 return None, "No recent data available"
@@ -205,9 +205,27 @@ class StockPredictor:
             # Make prediction
             predicted_return = self.model.predict(X_pred)[0]
             
-            # Calculate prediction confidence based on feature importance
-            feature_importance = self.model.feature_importances_
-            confidence = min(90, max(30, 70 + (np.std(feature_importance) * 100)))
+            # Clip predicted return to a realistic range to prevent erratic anomalies
+            predicted_return = np.clip(predicted_return, -0.15, 0.15)
+            
+            # Calculate prediction variance (disagreement) across all decision trees
+            tree_preds = [tree.predict(X_pred)[0] for tree in self.model.estimators_]
+            pred_std = np.std(tree_preds)
+            
+            # Calculate confidence score based on consensus
+            # Low standard deviation (consensus) -> high confidence.
+            # High standard deviation (disagreement) -> low confidence.
+            confidence = 88.0 - (pred_std * 2500.0)
+            confidence = max(15.0, min(95.0, confidence))
+            
+            # Classify prediction stability based on tree disagreement
+            if pred_std > 0.025:  # Standard deviation of return predictions > 2.5%
+                stability = "HIGH UNCERTAINTY"
+                confidence = max(10.0, confidence - 20.0)
+            elif pred_std > 0.012:
+                stability = "MODERATE VOLATILITY"
+            else:
+                stability = "STABLE CONSENSUS"
             
             # Convert return to price target
             current_price = df['Close'].iloc[-1]
@@ -237,6 +255,7 @@ class StockPredictor:
                 'signal': signal,
                 'signal_strength': round(signal_strength, 1),
                 'confidence': round(confidence, 1),
+                'stability': stability,
                 'prediction_horizon_days': prediction_horizon,
                 'timestamp': datetime.now().isoformat()
             }, None
@@ -247,13 +266,17 @@ class StockPredictor:
 # Global predictor instance
 stock_predictor = StockPredictor()
 
-def get_ml_prediction(ticker):
+def get_ml_prediction(ticker, period="2y", start_date=None, end_date=None):
     """Get ML prediction for a stock ticker"""
     global stock_predictor
     
-    # Train model if not already trained
-    if stock_predictor.model is None:
-        success, result = stock_predictor.train_model(ticker)
+    # Train model if not already trained, or ticker changed, or period changed, or custom dates changed
+    if (stock_predictor.model is None or 
+        stock_predictor.current_ticker != ticker or 
+        stock_predictor.current_period != period or
+        stock_predictor.current_start_date != start_date or
+        stock_predictor.current_end_date != end_date):
+        success, result = stock_predictor.train_model(ticker, period=period, start_date=start_date, end_date=end_date)
         if not success:
             return None, result
     
@@ -261,8 +284,8 @@ def get_ml_prediction(ticker):
     prediction, error = stock_predictor.predict(ticker)
     return prediction, error
 
-def retrain_model(ticker):
+def retrain_model(ticker, period="2y", start_date=None, end_date=None):
     """Force retrain the model with latest data"""
     global stock_predictor
     stock_predictor.model = None  # Reset model
-    return stock_predictor.train_model(ticker)
+    return stock_predictor.train_model(ticker, period=period, start_date=start_date, end_date=end_date)

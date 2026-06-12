@@ -42,6 +42,9 @@ export default function StockSearchModal({ isOpen, onClose, onSelect, currentTic
   const inputRef = useRef(null);
   const debounceRef = useRef(null);
   const listRef = useRef(null);
+  const abortControllerRef = useRef(null);
+
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://stock-analysis-backend-seven.vercel.app';
 
   // Load recent searches from localStorage
   useEffect(() => {
@@ -61,35 +64,52 @@ export default function StockSearchModal({ isOpen, onClose, onSelect, currentTic
     }
   }, [isOpen]);
 
-  // Close on Escape
+  // Close on Escape & cleanup
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
     if (isOpen) document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
+    return () => {
+      document.removeEventListener('keydown', handler);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+    };
   }, [isOpen, onClose]);
 
   // Fetch results with debounce
   const fetchResults = useCallback((q) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+
     if (!q || q.length < 1) {
       setResults([]);
       setLoading(false);
       return;
     }
     setLoading(true);
+    abortControllerRef.current = new AbortController();
+
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/tickers?q=${encodeURIComponent(q)}`);
+        const res = await fetch(
+          `${API_BASE_URL}/api/tickers?q=${encodeURIComponent(q)}`,
+          { signal: abortControllerRef.current.signal }
+        );
         const json = await res.json();
-        setResults(json.tickers || []);
-        setActiveIdx(-1);
-      } catch {
-        setResults([]);
+        if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
+          setResults(json.tickers || []);
+          setActiveIdx(-1);
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          setResults([]);
+        }
       } finally {
-        setLoading(false);
+        if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
+          setLoading(false);
+        }
       }
     }, 200);
-  }, []);
+  }, [API_BASE_URL]);
 
   const handleQueryChange = (e) => {
     const val = e.target.value;

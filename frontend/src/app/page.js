@@ -1,6 +1,7 @@
-﻿'use client';
+'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import Header from './components/Header';
 import LivePrice from './components/LivePrice';
 import StockChart from './components/StockChart';
@@ -8,211 +9,262 @@ import MLPrediction from './components/MLPrediction';
 import AdvancedNews from './components/AdvancedNews';
 import PortfolioMetrics from './components/PortfolioMetrics';
 import {
-  TrendingUp,
-  Brain,
-  Newspaper,
-  Shield,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  Zap,
-  Target,
-  PieChart,
-  Activity,
-  BarChart3,
+  TrendingUp, Brain, Newspaper, PieChart,
+  Activity, ArrowRight, CheckCircle, Clock, AlertTriangle,
+  LayoutGrid,
 } from 'lucide-react';
 
-/* ── Feature status card (shown after ticker selected) ───────────── */
-const FeatureCard = ({ icon: Icon, title, description, status = 'active' }) => (
-  <div className={`glass-card card-hover p-6 ${
-    status === 'active' ? 'border-indigo-500/30' : 'border-slate-700/30'
-  }`}>
-    <div className="flex items-start justify-between mb-4">
-      <div className={`p-3 rounded-xl transition-all duration-300 ${
-        status === 'active'   ? 'bg-gradient-to-br from-indigo-500/20 to-purple-600/20 neon-glow' :
-        status === 'loading'  ? 'bg-gradient-to-br from-yellow-500/20 to-orange-600/20' :
-                                'bg-slate-700/40'
-      }`}>
-        <Icon className={`h-6 w-6 ${
-          status === 'active'   ? 'text-indigo-400' :
-          status === 'loading'  ? 'text-yellow-400' :
-                                  'text-slate-500'
-        }`} />
-      </div>
-      <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full ${
-        status === 'active'  ? 'status-badge-success text-emerald-400' :
-        status === 'loading' ? 'status-badge-warning text-yellow-400'  : 
-                               'bg-slate-800/60 text-slate-500'
-      }`}>
-        {status === 'active'   && <CheckCircle className="h-3.5 w-3.5" />}
-        {status === 'loading'  && <Clock className="h-3.5 w-3.5 animate-spin" />}
-        {status === 'inactive' && <AlertTriangle className="h-3.5 w-3.5" />}
-        <span>{status === 'active' ? 'Live' : status === 'loading' ? 'Loading' : 'Offline'}</span>
+/* ── Status badge ─────────────────────────────────────────────────── */
+const StatusBadge = ({ icon: Icon, title, subtitle, status }) => {
+  const color = status === 'active' ? '#00c48c' : status === 'loading' ? '#f5a623' : '#444';
+  const bg    = status === 'active' ? 'rgba(0,196,140,0.06)' : 'transparent';
+  return (
+    <div className="v-card" style={{ padding: '14px 16px', background: bg, borderColor: status === 'active' ? 'rgba(0,196,140,0.2)' : undefined }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+        <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: color + '18', border: `1px solid ${color}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Icon style={{ width: '16px', height: '16px', color }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff', marginBottom: '2px' }}>{title}</p>
+          <p style={{ fontSize: '11px', color: '#555', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</p>
+        </div>
+        {status === 'active'   && <CheckCircle   style={{ width: '14px', height: '14px', color: '#00c48c', flexShrink: 0 }} />}
+        {status === 'loading'  && <Clock         style={{ width: '14px', height: '14px', color: '#f5a623', flexShrink: 0, animation: 'spin 1s linear infinite' }} />}
+        {status === 'inactive' && <AlertTriangle style={{ width: '14px', height: '14px', color: '#444', flexShrink: 0 }} />}
       </div>
     </div>
-    <h3 className="text-base font-bold text-white mb-2 group-hover:text-indigo-300 transition-colors">
-      {title}
-    </h3>
-    <p className="text-sm text-slate-400 leading-relaxed">{description}</p>
-  </div>
-);
+  );
+};
 
-/* ── Welcome screen ──────────────────────────────────────────────── */
-const WelcomeSection = () => (
-  <div className="flex flex-col items-center justify-center min-h-[70vh] px-4 py-16 text-center relative">
-    <div className="gradient-border mb-8 inline-block pulse-glow">
-      <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-5 rounded-[14px]">
-        <TrendingUp className="h-16 w-16 text-indigo-400" />
-      </div>
+/* ── Hero / Welcome ───────────────────────────────────────────────── */
+const WelcomeScreen = () => (
+  <section style={{
+    fontFamily: 'var(--font-poppins), var(--font-inter), sans-serif',
+    display: 'flex', flexDirection: 'column', alignItems: 'center',
+    padding: '96px 20px 96px', // Increased padding for grander layout
+    animation: 'heroFadeIn 0.5s ease both',
+    position: 'relative',
+    overflow: 'hidden',
+  }}>
+    <style>{`
+      @keyframes heroFadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+      @keyframes livePulse  { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+      @keyframes spin        { to { transform:rotate(360deg); } }
+      .hero-cta:hover  { transform:scale(1.04); }
+      .hero-cta:active { transform:scale(0.96); }
+      .browse-card:hover { border-color:#333 !important; background:#0a0a0a !important; }
+    `}</style>
+
+    {/* Ambient Background Glow behind heading */}
+    <div aria-hidden style={{
+      position: 'absolute',
+      top: '0%',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      width: '100%',
+      height: '350px',
+      background: 'radial-gradient(circle at 50% 30%, rgba(59,130,246,0.06) 0%, rgba(139,92,246,0.02) 50%, transparent 100%)',
+      filter: 'blur(80px)',
+      pointerEvents: 'none',
+      zIndex: 0
+    }} />
+
+    {/* Pill */}
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '5px 16px', borderRadius: '999px', border: '1px solid #282828', background: 'rgba(255,255,255,0.03)', marginBottom: '32px', position: 'relative', zIndex: 1 }}>
+      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#00c48c', animation: 'livePulse 2s ease infinite', flexShrink: 0 }} />
+      <span style={{ fontSize: '12px', color: '#888' }}>Live NSE &amp; BSE · Powered by ML</span>
     </div>
 
-    <h1 className="text-6xl md:text-8xl font-black gradient-text mb-6 tracking-tight leading-none drop-shadow-2xl">
-      StockIQ Pro
+    {/* Heading */}
+    <h1 style={{
+      fontSize: 'clamp(38px, 7vw, 68px)', // Increased font size
+      fontWeight: 700, textAlign: 'center',
+      maxWidth: '850px', lineHeight: 1.1, letterSpacing: '-0.04em', marginBottom: '24px',
+      background: 'linear-gradient(to bottom, #ffffff 0%, #ffffff 40%, rgba(255,255,255,0.3) 100%)',
+      WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+      padding: '0 8px',
+      position: 'relative',
+      zIndex: 1
+    }}>
+      Give your portfolio the<br />analysis it deserves
     </h1>
 
-    <p className="text-xl text-slate-300 mb-12 max-w-2xl leading-relaxed">
-      Professional-grade stock analysis with{' '}
-      <span className="text-indigo-400 font-bold">ML predictions</span>,{' '}
-      <span className="text-emerald-400 font-bold">real-time intelligence</span>, and{' '}
-      <span className="text-purple-400 font-bold">institutional analytics</span>
+    {/* Sub */}
+    <p style={{ fontSize: 'clamp(14px, 2vw, 17px)', color: '#888888', textAlign: 'center', maxWidth: '520px', lineHeight: 1.7, marginBottom: '40px', padding: '0 8px', position: 'relative', zIndex: 1 }}>
+      ML predictions, real-time sentiment &amp; institutional risk analytics for NSE and BSE — in one dashboard.
     </p>
 
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-12 w-full max-w-3xl">
-      <div className="glass-card card-hover p-6 flex flex-col items-center gap-4 border-indigo-500/20">
-        <div className="p-3 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-600/20 neon-glow">
-          <Brain className="h-8 w-8 text-indigo-400" />
-        </div>
-        <div>
-          <p className="font-bold text-white text-base mb-1">AI Predictions</p>
-          <p className="text-sm text-slate-400">Random Forest · 20+ indicators</p>
-        </div>
-      </div>
-      <div className="glass-card card-hover p-6 flex flex-col items-center gap-4 border-emerald-500/20">
-        <div className="p-3 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-600/20 success-glow">
-          <Shield className="h-8 w-8 text-emerald-400" />
-        </div>
-        <div>
-          <p className="font-bold text-white text-base mb-1">Risk Management</p>
-          <p className="text-sm text-slate-400">VaR · Sharpe · Portfolio metrics</p>
-        </div>
-      </div>
-      <div className="glass-card card-hover p-6 flex flex-col items-center gap-4 border-purple-500/20">
-        <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-600/20">
-          <Zap className="h-8 w-8 text-purple-400" />
-        </div>
-        <div>
-          <p className="font-bold text-white text-base mb-1">Real-Time Intel</p>
-          <p className="text-sm text-slate-400">Live prices · News sentiment</p>
-        </div>
+    {/* CTAs */}
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center', marginBottom: '80px', position: 'relative', zIndex: 1 }}>
+      <button
+        className="hero-cta"
+        onClick={() => { const inp = document.querySelector('header input[type="text"]'); inp?.focus(); }}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 30px', fontSize: '14px', fontWeight: 600, borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#ffffff', color: '#000000', transition: 'transform 0.2s ease', letterSpacing: '-0.01em' }}
+      >
+        Search a stock <ArrowRight style={{ width: '15px', height: '15px' }} />
+      </button>
+      <Link
+        href="/browse"
+        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 30px', fontSize: '14px', fontWeight: 500, borderRadius: '8px', border: '1px solid #282828', background: 'transparent', color: '#cccccc', textDecoration: 'none', transition: 'border-color 0.15s, color 0.15s', letterSpacing: '-0.01em' }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = '#444444'; e.currentTarget.style.color = '#ffffff'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = '#282828'; e.currentTarget.style.color = '#cccccc'; }}
+      >
+        <LayoutGrid style={{ width: '15px', height: '15px' }} /> Browse sectors
+      </Link>
+    </div>
+
+    {/* Dashboard preview */}
+    <div style={{ width: '100%', maxWidth: '960px', position: 'relative', marginBottom: '80px', zIndex: 1 }}>
+      {/* Rich Multi-Layered Glow behind the dashboard image */}
+      <div aria-hidden style={{
+        position: 'absolute',
+        top: '-10%',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '105%', // Wider than the dashboard to spill out
+        height: '110%', // Taller to shine above and below
+        background: 'radial-gradient(ellipse at 50% 40%, rgba(59,130,246,0.45) 0%, rgba(147,51,234,0.25) 30%, rgba(0,229,153,0.08) 60%, transparent 80%)',
+        filter: 'blur(70px)', // Slightly reduced blur to maintain saturation
+        pointerEvents: 'none',
+        zIndex: 0
+      }} />
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <img src="/dashboard-preview.png" alt="StockIQ Pro dashboard" style={{ width: '100%', height: 'auto', borderRadius: '12px', display: 'block', boxShadow: '0 24px 64px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.06)' }} loading="eager" />
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '35%', background: 'linear-gradient(to bottom, transparent, #000000)', borderRadius: '0 0 12px 12px', pointerEvents: 'none' }} />
       </div>
     </div>
 
-    <div className="glass-card px-6 py-4 inline-flex items-center gap-3 border-indigo-500/30">
-      <Target className="h-5 w-5 text-indigo-400" />
-      <p className="text-slate-300 text-base font-medium">
-        Search for any NSE / BSE stock above to begin
-      </p>
+    {/* Sector teaser cards */}
+    <div style={{ width: '100%', maxWidth: '960px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+        <div style={{ flex: 1, height: '1px', background: '#111' }} />
+        <span style={{ fontSize: '11px', color: '#444', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Quick access by sector</span>
+        <div style={{ flex: 1, height: '1px', background: '#111' }} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }} className="teaser-grid">
+        <style>{`
+          @media (min-width: 480px)  { .teaser-grid { grid-template-columns: repeat(4, 1fr) !important; } }
+          @media (min-width: 1024px) { .teaser-grid { grid-template-columns: repeat(8, 1fr) !important; } }
+        `}</style>
+        {[
+          { emoji: '🏦', label: 'Banking',  color: '#00c48c' },
+          { emoji: '💻', label: 'IT',        color: '#3b82f6' },
+          { emoji: '⚡', label: 'Energy',    color: '#f59e0b' },
+          { emoji: '💊', label: 'Pharma',    color: '#8b5cf6' },
+          { emoji: '🚗', label: 'Auto',      color: '#ef4444' },
+          { emoji: '🛒', label: 'FMCG',      color: '#10b981' },
+          { emoji: '📈', label: 'Finance',   color: '#06b6d4' },
+          { emoji: '🏗️', label: 'Infra',    color: '#f97316' },
+        ].map(s => (
+          <Link key={s.label} href="/browse" className="browse-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '16px 8px', background: '#060606', border: '1px solid #141414', borderRadius: '10px', textDecoration: 'none', transition: 'border-color 0.15s, background 0.15s', cursor: 'pointer' }}>
+            <span style={{ fontSize: '22px' }}>{s.emoji}</span>
+            <span style={{ fontSize: '11px', fontWeight: 500, color: '#888', textAlign: 'center' }}>{s.label}</span>
+          </Link>
+        ))}
+      </div>
+      <div style={{ textAlign: 'center', marginTop: '16px' }}>
+        <Link href="/browse" style={{ fontSize: '13px', color: '#555', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px', transition: 'color 0.15s' }}
+          onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+          onMouseLeave={e => e.currentTarget.style.color = '#555'}
+        >
+          View all 48 stocks across 8 sectors <ArrowRight style={{ width: '13px', height: '13px' }} />
+        </Link>
+      </div>
     </div>
+  </section>
+);
+
+/* ── Loading ──────────────────────────────────────────────────────── */
+const LoadingState = ({ ticker }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '120px 16px', gap: '16px' }}>
+    <div style={{ width: '40px', height: '40px', border: '2px solid #111', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+    <p style={{ fontSize: '14px', color: '#555' }}>Loading <span style={{ color: '#fff', fontWeight: 600 }}>{ticker.replace('.NS', '').replace('.BO', '')}</span>…</p>
+    <style>{`@keyframes spin { to { transform:rotate(360deg); } }`}</style>
   </div>
 );
 
-/* ── Status bar shown after ticker selected ──────────────────────── */
-const StatsOverview = ({ ticker }) => (
-  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-    <FeatureCard icon={Activity}   title="Live Prices"      description="Real-time quotes · 15-min delay" status="active" />
-    <FeatureCard icon={Brain}      title="ML Predictions"   description="5-day Random Forest forecasts"   status={ticker ? 'active' : 'inactive'} />
-    <FeatureCard icon={Newspaper}  title="News Intelligence" description="AI sentiment · breaking alerts"  status={ticker ? 'active' : 'inactive'} />
-    <FeatureCard icon={PieChart}   title="Risk Analytics"   description="VaR · options · portfolio grade"  status={ticker ? 'active' : 'inactive'} />
-  </div>
-);
-
-/* ── Dashboard ───────────────────────────────────────────────────── */
+/* ── Dashboard ────────────────────────────────────────────────────── */
 export default function Dashboard() {
   const [selectedTicker, setSelectedTicker] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading]           = useState(false);
+
+  // Read ?ticker= param on mount (set by /browse page)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get('ticker');
+    if (t) {
+      window.history.replaceState({}, '', '/');
+      handleTickerSelect(t);
+    }
+  }, []);
 
   const handleTickerSelect = (ticker) => {
     setIsLoading(true);
     setSelectedTicker(ticker);
+    window.scrollTo({ top: 0 });
     setTimeout(() => setIsLoading(false), 400);
   };
 
   return (
-    <div className="min-h-screen flex flex-col relative">
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#000' }}>
       <Header onTickerSelect={handleTickerSelect} currentTicker={selectedTicker} />
 
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 relative z-10">
+      <main style={{ flex: 1, width: '100%', maxWidth: '1280px', margin: '0 auto', padding: '0 16px 48px' }}>
         {!selectedTicker ? (
-          <WelcomeSection />
+          <WelcomeScreen />
+        ) : isLoading ? (
+          <LoadingState ticker={selectedTicker} />
         ) : (
-          <div className="space-y-6">
-            {isLoading ? (
-              <div className="flex flex-col items-center justify-center py-32 gap-6">
-                <div className="relative">
-                  <div className="h-16 w-16 border-4 border-indigo-600/30 border-t-indigo-500 rounded-full animate-spin" />
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-12 w-12 border-4 border-purple-600/30 border-b-purple-500 rounded-full animate-spin" style={{animationDirection: 'reverse', animationDuration: '1s'}} />
+          <div style={{ paddingTop: '20px' }}>
+            {/* Status row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px' }} className="status-row">
+              <style>{`
+                @media (min-width: 1024px) {
+                  .status-row        { grid-template-columns: repeat(4,1fr) !important; }
+                  .dash-main-grid    { grid-template-columns: 2fr 1fr !important; }
+                }
+              `}</style>
+              <StatusBadge icon={Activity}  title="Live Prices"       subtitle="Real-time · 15 min delay" status="active" />
+              <StatusBadge icon={Brain}     title="ML Predictions"    subtitle="5-day Random Forest"       status="active" />
+              <StatusBadge icon={Newspaper} title="News Intelligence" subtitle="AI sentiment · Alerts"     status="active" />
+              <StatusBadge icon={PieChart}  title="Risk Analytics"    subtitle="VaR · Options · Portfolio" status="active" />
+            </div>
+
+            {/* Charts grid */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }} className="dash-main-grid">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <LivePrice ticker={selectedTicker} />
+                  <StockChart ticker={selectedTicker} />
                 </div>
-                <p className="text-slate-300 text-base font-medium">
-                  Loading analysis for <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 font-bold">{selectedTicker.replace('.NS', '').replace('.BO', '')}</span>…
-                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <MLPrediction ticker={selectedTicker} />
+                  <AdvancedNews ticker={selectedTicker} />
+                </div>
               </div>
-            ) : (
-              <>
-                <StatsOverview ticker={selectedTicker} />
-
-                {/* Main grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Left: price + chart */}
-                  <div className="lg:col-span-2 flex flex-col gap-6">
-                    <LivePrice ticker={selectedTicker} />
-                    <StockChart ticker={selectedTicker} />
-                  </div>
-
-                  {/* Right: ML + news */}
-                  <div className="flex flex-col gap-6">
-                    <MLPrediction ticker={selectedTicker} />
-                    <AdvancedNews ticker={selectedTicker} />
-                  </div>
-                </div>
-
-                {/* Portfolio metrics full width */}
-                <PortfolioMetrics ticker={selectedTicker} />
-              </>
-            )}
+              <PortfolioMetrics ticker={selectedTicker} />
+            </div>
           </div>
         )}
       </main>
 
-      <footer className="border-t border-slate-800/60 mt-auto relative z-10 glass-card rounded-none">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="gradient-border">
-                <div className="bg-slate-900 p-2 rounded-xl">
-                  <TrendingUp className="h-5 w-5 text-indigo-400" />
-                </div>
-              </div>
-              <div>
-                <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 text-base">
-                  StockIQ Pro
-                </span>
-                <span className="text-sm text-slate-500 ml-2">by Vishesh Sanghvi</span>
-              </div>
+      <footer style={{ borderTop: '1px solid #111', padding: '20px 24px' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '26px', height: '26px', background: '#fff', borderRadius: '5px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <TrendingUp style={{ width: '14px', height: '14px', color: '#000' }} />
             </div>
-            <div className="flex items-center gap-6 text-sm text-slate-400">
-              <span className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                <Shield className="h-4 w-4 text-emerald-400" /> Secure
-              </span>
-              <span className="flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
-                <CheckCircle className="h-4 w-4 text-indigo-400" /> Real-time
-              </span>
-              <span className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                <Brain className="h-4 w-4 text-purple-400" /> AI-Powered
-              </span>
-            </div>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>StockIQ Pro</span>
+            <span style={{ fontSize: '12px', color: '#444' }}>by Vishesh Sanghvi</span>
           </div>
-          <p className="mt-4 text-center text-xs text-slate-600">
-            Data via Yahoo Finance (~15 min delay). Not financial advice. Consult a qualified advisor.
+          <p style={{ fontSize: '12px', color: '#666' }}>
+            Data via Yahoo Finance (~15 min delay). Not financial advice.{' '}
+            <Link href="/terms" style={{ color: '#aaa', textDecoration: 'underline', transition: 'color 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+              onMouseLeave={e => e.currentTarget.style.color = '#aaa'}
+            >
+              Terms &amp; Conditions
+            </Link>
           </p>
         </div>
       </footer>

@@ -42,15 +42,36 @@ def _get(url, params=None, retries=2):
     return None
 
 
-def get_history(ticker: str, period: str = "1y", interval: str = "1d") -> pd.DataFrame:
+def get_history(ticker: str, period: str = None, interval: str = "1d", start_date: str = None, end_date: str = None) -> pd.DataFrame:
     """
     Returns OHLCV DataFrame for the given ticker.
     period:   1d 5d 1mo 3mo 6mo 1y 2y 5y
     interval: 1m 5m 15m 1h 1d 1wk 1mo
+    start_date: YYYY-MM-DD string
+    end_date: YYYY-MM-DD string
     """
+    params = {"interval": interval, "includeAdjustedClose": "true"}
+    if start_date and end_date:
+        try:
+            # Parse YYYY-MM-DD strings to epoch timestamps
+            dt_start = datetime.strptime(start_date, "%Y-%m-%d")
+            dt_end = datetime.strptime(end_date, "%Y-%m-%d")
+            params["period1"] = int(dt_start.replace(tzinfo=timezone.utc).timestamp())
+            params["period2"] = int(dt_end.replace(tzinfo=timezone.utc).timestamp())
+        except Exception:
+            if period:
+                params["range"] = period
+            else:
+                params["range"] = "1y"
+    else:
+        if period:
+            params["range"] = period
+        else:
+            params["range"] = "1y"
+
     data = _get(
         _CHART_URL.format(ticker=ticker),
-        params={"interval": interval, "range": period, "includeAdjustedClose": "true"},
+        params=params,
     )
     if not data:
         return pd.DataFrame()

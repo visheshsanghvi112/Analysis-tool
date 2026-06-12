@@ -197,7 +197,7 @@ export default function StockChart({ ticker }) {
       </div>
 
       {/* RSI + MACD */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ minWidth: 0 }}>
 
         {/* RSI */}
         <div className="bg-[#111827]/80 rounded-xl p-4 border border-slate-800">

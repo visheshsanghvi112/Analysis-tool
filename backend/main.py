@@ -22,6 +22,12 @@ app = FastAPI(
     version="1.0.0"
 )
 
+@app.on_event("startup")
+def startup_event():
+    """Preload the ticker list on startup to avoid delay on first search request."""
+    import threading
+    threading.Thread(target=_ensure_ticker_list, daemon=True).start()
+
 # Global ticker list — lazily populated on first /api/tickers request
 TICKER_LIST = []
 _ticker_list_loaded = False
@@ -131,33 +137,79 @@ SECTOR_MAP = {
 
 
 @app.get("/api/tickers")
-def search_tickers(q: str = Query("", description="Query string to search tickers")):
+def search_tickers(
+    q: str = Query("", description="Query string to search tickers"),
+    sector: str = Query("", description="Filter by sector name"),
+    limit: int = Query(30, description="Max results", le=2000)
+):
     """
     Search NSE tickers by symbol or company name.
-    Returns top 30 matches. Symbol matches are ranked higher than name matches.
+    Optionally filter by sector. Symbol matches ranked higher than name matches.
     """
     _ensure_ticker_list()
 
+    # Sector-only filter — return all stocks in that sector
+    if sector and not q:
+        sector_lower = sector.lower()
+        results = [t for t in TICKER_LIST if t.get("sector", "").lower() == sector_lower]
+        return {"tickers": results[:limit], "total": len(results)}
+
     if not q:
-        return {"tickers": TICKER_LIST[:30]}
+        return {"tickers": TICKER_LIST[:limit], "total": len(TICKER_LIST)}
 
     q_lower = q.lower()
     symbol_matches = []
     name_matches = []
 
     for t in TICKER_LIST:
+        # Optional sector pre-filter
+        if sector and t.get("sector", "").lower() != sector.lower():
+            continue
         sym_lower = t["symbol"].lower().replace(".ns", "")
         name_lower = t["name"].lower()
         if q_lower in sym_lower:
             symbol_matches.append(t)
         elif q_lower in name_lower:
             name_matches.append(t)
-        if len(symbol_matches) + len(name_matches) >= 60:
+        if len(symbol_matches) + len(name_matches) >= 120:
             break
 
-    # Symbol matches first, then name matches, total cap at 30
-    combined = symbol_matches[:15] + name_matches[:15]
-    return {"tickers": combined[:30]}
+    combined = symbol_matches[:limit//2] + name_matches[:limit//2]
+    return {"tickers": combined[:limit], "total": len(combined)}
+
+
+@app.get("/api/sectors")
+def get_sectors():
+    """
+    Returns all stocks from TICKER_LIST grouped by sector.
+    Stocks without a known sector are placed in 'Others'.
+    Also returns a list of all unique sectors with counts.
+    """
+    _ensure_ticker_list()
+
+    grouped: dict = {}
+    for t in TICKER_LIST:
+        sec = t.get("sector") or "Others"
+        if sec not in grouped:
+            grouped[sec] = []
+        grouped[sec].append({"symbol": t["symbol"], "name": t["name"]})
+
+    # Sort each sector alphabetically by symbol
+    for sec in grouped:
+        grouped[sec].sort(key=lambda x: x["symbol"])
+
+    # Build sector summary list sorted by count desc
+    summary = [
+        {"sector": sec, "count": len(stocks)}
+        for sec, stocks in grouped.items()
+    ]
+    summary.sort(key=lambda x: -x["count"])
+
+    return {
+        "sectors": summary,
+        "grouped": grouped,
+        "total_stocks": len(TICKER_LIST)
+    }
 
 @app.get("/api/live")
 @limiter.limit("30/minute")  # Rate limit: 30 requests per minute
@@ -191,20 +243,28 @@ def get_live_price(
 
 
 @app.get("/api/ml-predict")
-def get_ml_prediction_endpoint(ticker: str = Query(..., description="Stock ticker symbol, e.g., HDFCBANK.NS")):
+def get_ml_prediction_endpoint(
+    ticker: str = Query(..., description="Stock ticker symbol, e.g., HDFCBANK.NS"),
+    period: str = Query("2y", description="Training data time period, e.g., 1y, 2y, 5y"),
+    start_date: str = Query(None, description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(None, description="End date in YYYY-MM-DD format")
+):
     """
     Returns ML-powered price prediction with confidence intervals.
     Uses Random Forest with technical indicators for next 5-day prediction.
     """
     try:
         ticker_clean = ticker.strip().upper()
-        prediction, error = get_ml_prediction(ticker_clean)
+        prediction, error = get_ml_prediction(ticker_clean, period=period, start_date=start_date, end_date=end_date)
         
         if error:
             raise HTTPException(status_code=400, detail=error)
         
         return {
             "ticker": ticker_clean,
+            "period": period,
+            "start_date": start_date,
+            "end_date": end_date,
             "prediction": prediction,
             "disclaimer": "Predictions are for educational purposes only. Not financial advice."
         }
@@ -213,20 +273,27 @@ def get_ml_prediction_endpoint(ticker: str = Query(..., description="Stock ticke
         raise HTTPException(status_code=500, detail=f"ML prediction failed: {str(e)}")
 
 @app.post("/api/retrain-model")
-def retrain_ml_model(ticker: str = Query(..., description="Stock ticker to retrain model for")):
+def retrain_ml_model(
+    ticker: str = Query(..., description="Stock ticker to retrain model for"),
+    period: str = Query("2y", description="Training data time period, e.g., 1y, 2y, 5y"),
+    start_date: str = Query(None, description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(None, description="End date in YYYY-MM-DD format")
+):
     """
     Force retrain the ML model with latest data for improved accuracy.
     """
     try:
         ticker_clean = ticker.strip().upper()
-        success, result = retrain_model(ticker_clean)
+        success, result = retrain_model(ticker_clean, period=period, start_date=start_date, end_date=end_date)
         
         if not success:
             raise HTTPException(status_code=400, detail=result)
         
         return {
             "ticker": ticker_clean,
-            "training_results": result,
+            "period": period,
+            "status": "success",
+            "metrics": result,
             "message": "Model retrained successfully"
         }
         
