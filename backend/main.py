@@ -593,7 +593,9 @@ def _compute_quick_metrics(ticker: str) -> dict | None:
         delta = close.diff()
         gain  = delta.clip(lower=0).ewm(com=13, adjust=False, min_periods=1).mean()
         loss  = (-delta).clip(lower=0).ewm(com=13, adjust=False, min_periods=1).mean()
-        rsi   = round(float(100 - 100 / (1 + gain / loss.replace(0, 1e-9))).iloc[-1], 1)
+        rsi_series = 100 - 100 / (1 + gain / loss.replace(0, 1e-9))
+        rsi   = round(float(rsi_series.iloc[-1]), 1)
+
 
         # 52-week high/low proximity
         high52 = float(close.max())
