@@ -176,7 +176,7 @@ export default function StockSearchModal({ isOpen, onClose, onSelect, currentTic
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
       {/* Modal card - Mobile Responsive */}
-      <div className="relative w-full max-w-xl bg-[#0d1424] border border-slate-700 rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-xl glass-card rounded-xl sm:rounded-2xl overflow-hidden">
 
         {/* Search Input - Mobile Responsive */}
         <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 sm:py-3.5 border-b border-slate-800">

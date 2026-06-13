@@ -348,8 +348,8 @@ def analyze_ticker(ticker, start_date=None, end_date=None):
         user_start = start_date
         start_dt   = datetime.strptime(start_date, '%Y-%m-%d')
 
-    # Fetch 2y to have enough history for MA100 + ADX warm-up
-    raw = get_history(ticker, period='2y', interval='1d')
+    # Fetch 5y to have enough history for 5-year charts and technical indicators
+    raw = get_history(ticker, period='5y', interval='1d')
     if raw.empty:
         return {"error": f"No data found for ticker {ticker}."}
 

@@ -11,3 +11,6 @@ scipy==1.14.1
 slowapi==0.1.9
 python-multipart==0.0.12
 pydantic==2.10.3
+hmmlearn==0.3.3
+arch==8.0.0
+

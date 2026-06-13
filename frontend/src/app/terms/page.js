@@ -16,7 +16,12 @@ export default function TermsAndConditions() {
             <ArrowLeft className="h-4 w-4" />
             Back to Dashboard
           </Link>
-          <span className="text-xs text-slate-500 font-mono">Created: June 10, 2026 by Vishesh Sanghvi</span>
+          <span className="text-xs text-slate-500 font-mono">
+            Created: June 10, 2026 by{' '}
+            <a href="https://visheshsanghvi.qzz.io/" target="_blank" rel="noopener noreferrer" className="underline text-slate-400 hover:text-white transition">
+              Vishesh Sanghvi
+            </a>
+          </span>
         </div>
       </header>
 
@@ -115,7 +120,12 @@ export default function TermsAndConditions() {
         {/* Contact Info Footer */}
         <div className="mt-16 pt-8 border-t border-[#111] text-center text-xs text-slate-600 flex flex-col items-center gap-2">
           <Globe className="h-4 w-4 text-slate-500" />
-          <span>Created on June 10, 2026 by Vishesh Sanghvi</span>
+          <span>
+            Created on June 10, 2026 by{' '}
+            <a href="https://visheshsanghvi.qzz.io/" target="_blank" rel="noopener noreferrer" className="underline text-slate-400 hover:text-white transition">
+              Vishesh Sanghvi
+            </a>
+          </span>
           <span>© 2026 StockIQ Pro · Professional Stock Analysis Platform · All rights reserved. Use at your own risk.</span>
         </div>
       </main>

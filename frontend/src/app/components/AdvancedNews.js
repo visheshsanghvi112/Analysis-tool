@@ -78,7 +78,7 @@ export default function AdvancedNews({ ticker, companyName }) {
   };
 
   return (
-    <div className="bg-[#0d1424] rounded-xl sm:rounded-2xl border border-slate-800 p-4 sm:p-6 shadow-xl">
+    <div className="glass-card p-4 sm:p-6">
       
       {/* Header */}
       <div className="flex items-center justify-between mb-4 sm:mb-5">
@@ -118,7 +118,7 @@ export default function AdvancedNews({ ticker, companyName }) {
         <>
           {/* Sentiment Overview */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-            <div className="text-center p-3 bg-[#111827]/50 rounded-lg border border-slate-800/80">
+            <div className="text-center p-3 rounded-lg bg-white/[0.03] border border-white/[0.06]">
               <div className="flex items-center justify-center gap-1 mb-1">
                 {getSentimentIcon(newsData.sentiment.overall_sentiment)}
                 <span className={`font-bold text-sm ${getSentimentColor(newsData.sentiment.overall_sentiment)}`}>
@@ -129,7 +129,7 @@ export default function AdvancedNews({ ticker, companyName }) {
               <p className="text-[9px] text-slate-600 mt-0.5">{newsData.sentiment.sentiment_label}</p>
             </div>
             
-            <div className="text-center p-3 bg-[#111827]/50 rounded-lg border border-slate-800/80">
+            <div className="text-center p-3 rounded-lg bg-white/[0.03] border border-white/[0.06]">
               <div className="flex items-center justify-center gap-1 mb-1">
                 <BarChart3 className="h-3 w-3 text-indigo-400" />
                 <span className="font-bold text-sm text-indigo-400">
@@ -140,7 +140,7 @@ export default function AdvancedNews({ ticker, companyName }) {
               <p className="text-[9px] text-slate-600 mt-0.5">0-100 scale</p>
             </div>
             
-            <div className="text-center p-3 bg-[#111827]/50 rounded-lg border border-slate-800/80">
+            <div className="text-center p-3 rounded-lg bg-white/[0.03] border border-white/[0.06]">
               <div className="flex items-center justify-center gap-1 mb-1">
                 <TrendingUp className="h-3 w-3 text-emerald-400" />
                 <span className="font-bold text-sm text-emerald-400">
@@ -150,7 +150,7 @@ export default function AdvancedNews({ ticker, companyName }) {
               <p className="text-[10px] text-slate-500">Positive</p>
             </div>
             
-            <div className="text-center p-3 bg-[#111827]/50 rounded-lg border border-slate-800/80">
+            <div className="text-center p-3 rounded-lg bg-white/[0.03] border border-white/[0.06]">
               <div className="flex items-center justify-center gap-1 mb-1">
                 <span className="font-bold text-sm text-rose-400">
                   {newsData.sentiment.negative_count}
@@ -216,7 +216,7 @@ export default function AdvancedNews({ ticker, companyName }) {
                     href={article.link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block p-3 rounded-lg bg-[#111827]/50 border border-slate-800/80 active:bg-slate-800/50 transition group"
+                    className="block p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition group"
                   >
                     <div className="flex items-start gap-2">
                       <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${getSentimentColor(article.sentiment) === 'text-emerald-400' ? 'bg-emerald-400' : getSentimentColor(article.sentiment) === 'text-rose-400' ? 'bg-rose-400' : 'bg-slate-500'}`} />

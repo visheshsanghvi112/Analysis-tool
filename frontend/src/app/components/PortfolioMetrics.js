@@ -58,7 +58,7 @@ export default function PortfolioMetrics({ ticker }) {
   };
 
   return (
-    <div className="bg-[#0d1424] rounded-xl sm:rounded-2xl border border-slate-800 p-4 sm:p-6 shadow-xl">
+    <div className="glass-card p-4 sm:p-6">
       
       {/* Header */}
       <div className="flex items-center justify-between mb-4 sm:mb-5">
@@ -105,7 +105,7 @@ export default function PortfolioMetrics({ ticker }) {
             </div>
             
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
-              <div className="p-3 bg-[#111827]/50 rounded-lg border border-slate-800/80 text-center">
+              <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center">
                 <div className={`font-bold text-sm mb-1 ${getRiskColor(metrics.risk_metrics.var_95_daily, {good: 2, moderate: 4})}`}>
                   {metrics.risk_metrics.var_95_daily}%
                 </div>
@@ -113,7 +113,7 @@ export default function PortfolioMetrics({ ticker }) {
                 <p className="text-[9px] text-slate-600 mt-0.5">Daily risk</p>
               </div>
               
-              <div className="p-3 bg-[#111827]/50 rounded-lg border border-slate-800/80 text-center">
+              <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center">
                 <div className={`font-bold text-sm mb-1 ${getRiskColor(metrics.risk_metrics.var_99_daily, {good: 3, moderate: 6})}`}>
                   {metrics.risk_metrics.var_99_daily}%
                 </div>
@@ -121,7 +121,7 @@ export default function PortfolioMetrics({ ticker }) {
                 <p className="text-[9px] text-slate-600 mt-0.5">Extreme risk</p>
               </div>
               
-              <div className="p-3 bg-[#111827]/50 rounded-lg border border-slate-800/80 text-center">
+              <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center">
                 <div className={`font-bold text-sm mb-1 ${getRiskColor(metrics.risk_metrics.max_drawdown, {good: 10, moderate: 25})}`}>
                   {metrics.risk_metrics.max_drawdown}%
                 </div>
@@ -129,7 +129,7 @@ export default function PortfolioMetrics({ ticker }) {
                 <p className="text-[9px] text-slate-600 mt-0.5">Peak-to-trough</p>
               </div>
               
-              <div className="p-3 bg-[#111827]/50 rounded-lg border border-slate-800/80 text-center">
+              <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center">
                 <div className="font-bold text-sm mb-1 text-slate-200">
                   {metrics.risk_metrics.annual_volatility}%
                 </div>
@@ -137,7 +137,7 @@ export default function PortfolioMetrics({ ticker }) {
                 <p className="text-[9px] text-slate-600 mt-0.5">Price volatility</p>
               </div>
               
-              <div className="p-3 bg-[#111827]/50 rounded-lg border border-slate-800/80 text-center">
+              <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center">
                 <div className="font-bold text-sm mb-1 text-slate-200">
                   {metrics.risk_metrics.skewness}
                 </div>
@@ -145,7 +145,7 @@ export default function PortfolioMetrics({ ticker }) {
                 <p className="text-[9px] text-slate-600 mt-0.5">Return asymmetry</p>
               </div>
               
-              <div className="p-3 bg-[#111827]/50 rounded-lg border border-slate-800/80 text-center">
+              <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center">
                 <div className={`font-bold text-sm mb-1 ${getPerformanceColor(metrics.risk_metrics.sharpe_ratio)}`}>
                   {metrics.risk_metrics.sharpe_ratio}
                 </div>
@@ -163,7 +163,7 @@ export default function PortfolioMetrics({ ticker }) {
             </div>
             
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-              <div className="p-3 bg-[#111827]/50 rounded-lg border border-slate-800/80 text-center">
+              <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center">
                 <div className={`font-bold text-sm mb-1 ${metrics.market_metrics.beta !== null ? (Math.abs(metrics.market_metrics.beta - 1) < 0.3 ? 'text-emerald-400' : Math.abs(metrics.market_metrics.beta - 1) < 0.7 ? 'text-yellow-400' : 'text-rose-400') : 'text-slate-400'}`}>
                   {metrics.market_metrics.beta || 'N/A'}
                 </div>
@@ -171,7 +171,7 @@ export default function PortfolioMetrics({ ticker }) {
                 <p className="text-[9px] text-slate-600 mt-0.5">vs Nifty</p>
               </div>
               
-              <div className="p-3 bg-[#111827]/50 rounded-lg border border-slate-800/80 text-center">
+              <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center">
                 <div className={`font-bold text-sm mb-1 ${metrics.market_metrics.correlation_with_nifty !== null ? (Math.abs(metrics.market_metrics.correlation_with_nifty) > 0.7 ? 'text-yellow-400' : 'text-emerald-400') : 'text-slate-400'}`}>
                   {metrics.market_metrics.correlation_with_nifty || 'N/A'}
                 </div>
@@ -179,7 +179,7 @@ export default function PortfolioMetrics({ ticker }) {
                 <p className="text-[9px] text-slate-600 mt-0.5">Market sync</p>
               </div>
               
-              <div className="p-3 bg-[#111827]/50 rounded-lg border border-slate-800/80 text-center col-span-2">
+              <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center col-span-2">
                 <div className={`font-bold text-sm mb-1 ${metrics.market_metrics.information_ratio !== null ? getPerformanceColor(Math.abs(metrics.market_metrics.information_ratio)) : 'text-slate-400'}`}>
                   {metrics.market_metrics.information_ratio || 'N/A'}
                 </div>
@@ -241,7 +241,7 @@ export default function PortfolioMetrics({ ticker }) {
               <h4 className="font-bold text-sm text-cyan-400">Risk Distribution</h4>
             </div>
             
-            <div className="p-4 bg-[#111827]/30 rounded-lg border border-slate-800/80">
+            <div className="p-4 rounded-lg bg-white/[0.03] border border-white/[0.06]">
               <div className="flex justify-between text-xs mb-2">
                 <span className="text-slate-400">Expected Shortfall (Tail Risk)</span>
                 <span className="text-slate-300">95% | 99%</span>

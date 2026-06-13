@@ -22,6 +22,15 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Enable CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.on_event("startup")
 def startup_event():
     """Preload the ticker list on startup to avoid delay on first search request."""
@@ -250,12 +259,28 @@ def get_ml_prediction_endpoint(
     end_date: str = Query(None, description="End date in YYYY-MM-DD format")
 ):
     """
-    Returns ML-powered price prediction with confidence intervals.
-    Uses Random Forest with technical indicators for next 5-day prediction.
+    Returns ML-powered price prediction with confidence intervals, diverse stacked ensemble,
+    walk-forward stats, and news sentiment fusion.
     """
     try:
         ticker_clean = ticker.strip().upper()
-        prediction, error = get_ml_prediction(ticker_clean, period=period, start_date=start_date, end_date=end_date)
+        
+        # Resolve sentiment score for fusion (default to neutral 0.0 if fetch fails or no news)
+        news_sentiment = 0.0
+        try:
+            news_res = get_advanced_news_analysis(ticker_clean)
+            if news_res and "sentiment" in news_res and "overall_sentiment" in news_res["sentiment"]:
+                news_sentiment = float(news_res["sentiment"]["overall_sentiment"])
+        except Exception:
+            pass
+
+        prediction, error = get_ml_prediction(
+            ticker_clean, 
+            period=period, 
+            start_date=start_date, 
+            end_date=end_date, 
+            news_sentiment=news_sentiment
+        )
         
         if error:
             raise HTTPException(status_code=400, detail=error)
@@ -269,6 +294,8 @@ def get_ml_prediction_endpoint(
             "disclaimer": "Predictions are for educational purposes only. Not financial advice."
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ML prediction failed: {str(e)}")
 
@@ -297,6 +324,8 @@ def retrain_ml_model(
             "message": "Model retrained successfully"
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Model retraining failed: {str(e)}")
 
@@ -318,6 +347,8 @@ def get_advanced_news_endpoint(
             "news_intelligence": news_analysis
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"News analysis failed: {str(e)}")
 
@@ -457,6 +488,8 @@ def get_portfolio_metrics(ticker: str = Query(..., description="Stock ticker sym
             "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Portfolio metrics calculation failed: {str(e)}")
 
@@ -517,4 +550,4 @@ def compare_peers(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

@@ -255,7 +255,19 @@ export default function Dashboard() {
               <TrendingUp style={{ width: '14px', height: '14px', color: '#000' }} />
             </div>
             <span style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>StockIQ Pro</span>
-            <span style={{ fontSize: '12px', color: '#444' }}>by Vishesh Sanghvi</span>
+            <span style={{ fontSize: '12px', color: '#444' }}>
+              by{' '}
+              <a 
+                href="https://visheshsanghvi.qzz.io/" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                style={{ color: '#aaa', textDecoration: 'underline', transition: 'color 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+                onMouseLeave={e => e.currentTarget.style.color = '#aaa'}
+              >
+                Vishesh Sanghvi
+              </a>
+            </span>
           </div>
           <p style={{ fontSize: '12px', color: '#666' }}>
             Data via Yahoo Finance (~15 min delay). Not financial advice.{' '}

@@ -16,7 +16,7 @@ const nextConfig = {
               "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: https:",
-              "connect-src 'self' https:",
+              "connect-src 'self' https: http://localhost:8000 http://127.0.0.1:8000 http://192.168.1.28:8000",
               "font-src 'self' https://fonts.gstatic.com",
               "object-src 'none'",
               "base-uri 'self'",
