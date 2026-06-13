@@ -600,23 +600,13 @@ def _compute_quick_metrics(ticker: str) -> dict | None:
         low52  = float(close.min())
         pct_from_high = round((current_price - high52) / high52 * 100, 2)
 
-        # ML signal from cache (non-blocking — only if already trained)
-        from ml_models import _MODEL_CACHE, _cache_key
+        # ML signal not available in quick metrics (use /api/ml-predict for full ML)
         ml_signal = None
         ml_return = None
         garch_vol = None
-        cached_key = _cache_key(ticker, '2y', None, None)
-        if cached_key in _MODEL_CACHE:
-            try:
-                res, _ = _MODEL_CACHE[cached_key].predict(ticker)
-                if res:
-                    ml_signal = res.get('signal')
-                    ml_return = res.get('predicted_return')
-                    garch_vol = res.get('garch_volatility')
-            except Exception:
-                pass
 
         return {
+
             'ticker':        ticker,
             'current_price': round(current_price, 2),
             'ret_1m':        ret_1m,
