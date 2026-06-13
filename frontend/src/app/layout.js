@@ -31,7 +31,7 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${inter.variable} ${poppins.variable} h-full dark`} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${poppins.variable} h-full dark`} suppressHydrationWarning data-scroll-behavior="smooth">
       <body className="min-h-full bg-black text-slate-100 antialiased" suppressHydrationWarning>
         <ErrorBoundary>
           {children}

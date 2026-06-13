@@ -548,6 +548,285 @@ def compare_peers(
             })
     return {"comparison": comparison_results}
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Peer Data Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+from peer_data import get_peers, get_all_sector_members, SECTOR_PEERS
+
+
+def _compute_quick_metrics(ticker: str) -> dict | None:
+    """
+    Compute lightweight per-stock metrics without full ML training.
+    Uses 1Y price history to derive returns, volatility, RSI, and Sharpe.
+    """
+    try:
+        df = get_history(ticker, period='1y')
+        if df is None or df.empty or len(df) < 30:
+            return None
+
+        close = df['Close']
+        returns = close.pct_change().dropna()
+
+        current_price = float(close.iloc[-1])
+
+        # Returns over multiple horizons
+        def safe_ret(n):
+            if len(close) > n:
+                return round((close.iloc[-1] / close.iloc[-n] - 1) * 100, 2)
+            return None
+
+        ret_1m  = safe_ret(22)
+        ret_3m  = safe_ret(66)
+        ret_6m  = safe_ret(132)
+        ret_1y  = safe_ret(len(close) - 1) if len(close) > 5 else None
+
+        # Annualized Volatility
+        annual_vol = round(float(returns.std() * np.sqrt(252) * 100), 2)
+
+        # Sharpe (India risk-free ~6.5%)
+        rf_daily = 0.065 / 252
+        excess = returns - rf_daily
+        sharpe = round(float(excess.mean() / excess.std() * np.sqrt(252)), 3) if excess.std() > 0 else 0.0
+
+        # RSI (14)
+        delta = close.diff()
+        gain  = delta.clip(lower=0).ewm(com=13, adjust=False, min_periods=1).mean()
+        loss  = (-delta).clip(lower=0).ewm(com=13, adjust=False, min_periods=1).mean()
+        rsi   = round(float(100 - 100 / (1 + gain / loss.replace(0, 1e-9))).iloc[-1], 1)
+
+        # 52-week high/low proximity
+        high52 = float(close.max())
+        low52  = float(close.min())
+        pct_from_high = round((current_price - high52) / high52 * 100, 2)
+
+        # ML signal from cache (non-blocking — only if already trained)
+        from ml_models import _MODEL_CACHE, _cache_key
+        ml_signal = None
+        ml_return = None
+        garch_vol = None
+        cached_key = _cache_key(ticker, '2y', None, None)
+        if cached_key in _MODEL_CACHE:
+            try:
+                res, _ = _MODEL_CACHE[cached_key].predict(ticker)
+                if res:
+                    ml_signal = res.get('signal')
+                    ml_return = res.get('predicted_return')
+                    garch_vol = res.get('garch_volatility')
+            except Exception:
+                pass
+
+        return {
+            'ticker':        ticker,
+            'current_price': round(current_price, 2),
+            'ret_1m':        ret_1m,
+            'ret_3m':        ret_3m,
+            'ret_6m':        ret_6m,
+            'ret_1y':        ret_1y,
+            'annual_vol':    annual_vol,
+            'sharpe':        sharpe,
+            'rsi':           rsi,
+            'pct_from_high': pct_from_high,
+            'ml_signal':     ml_signal,
+            'ml_return':     ml_return,
+            'garch_vol':     garch_vol,
+        }
+    except Exception as e:
+        print(f"[PEER] quick_metrics failed for {ticker}: {e}")
+        return None
+
+
+def _sector_composite_score(metrics: dict, all_metrics: list[dict]) -> float:
+    """
+    Compute a 0–100 composite score for one stock relative to its sector peers.
+    Weights: Sharpe (30%), 3M return rank (25%), Low Vol (20%), RSI health (15%), 1Y return (10%)
+    """
+    def percentile_rank(val, values):
+        valid = [v for v in values if v is not None]
+        if not valid or val is None:
+            return 50.0
+        below = sum(1 for v in valid if v < val)
+        return round(below / len(valid) * 100, 1)
+
+    sharpes  = [m.get('sharpe')   for m in all_metrics]
+    ret3ms   = [m.get('ret_3m')   for m in all_metrics]
+    ret1ys   = [m.get('ret_1y')   for m in all_metrics]
+    vols     = [m.get('annual_vol') for m in all_metrics]
+
+    sharpe_rank  = percentile_rank(metrics.get('sharpe'),      sharpes)
+    ret3m_rank   = percentile_rank(metrics.get('ret_3m'),      ret3ms)
+    ret1y_rank   = percentile_rank(metrics.get('ret_1y'),      ret1ys)
+    # Lower vol = better → invert
+    vol_rank     = 100 - percentile_rank(metrics.get('annual_vol'), vols)
+
+    # RSI health: 40–65 is ideal (momentum without being overbought)
+    rsi = metrics.get('rsi') or 50
+    if 45 <= rsi <= 65:
+        rsi_score = 100
+    elif 35 <= rsi < 45 or 65 < rsi <= 75:
+        rsi_score = 65
+    else:
+        rsi_score = 25
+
+    score = (
+        sharpe_rank  * 0.30 +
+        ret3m_rank   * 0.25 +
+        vol_rank     * 0.20 +
+        rsi_score    * 0.15 +
+        ret1y_rank   * 0.10
+    )
+    return round(score, 1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /api/peers  — Returns sector name + suggested peers for a ticker
+# ─────────────────────────────────────────────────────────────────────────────
+@app.get("/api/peers")
+def get_peers_endpoint(ticker: str = Query(...)):
+    try:
+        ticker = ticker.upper().strip()
+        result = get_peers(ticker)
+        return {
+            "ticker":  ticker,
+            "sector":  result["sector"],
+            "peers":   result["peers"],
+            "found":   result["found"],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /api/peer-compare  — Side-by-side metrics for two stocks
+# ─────────────────────────────────────────────────────────────────────────────
+@app.get("/api/peer-compare")
+def peer_compare_endpoint(
+    ticker: str = Query(...),
+    peer:   str = Query(...),
+):
+    try:
+        ticker = ticker.upper().strip()
+        peer   = peer.upper().strip()
+
+        m_a = _compute_quick_metrics(ticker)
+        m_b = _compute_quick_metrics(peer)
+
+        if not m_a:
+            raise HTTPException(status_code=404, detail=f"No data for {ticker}")
+        if not m_b:
+            raise HTTPException(status_code=404, detail=f"No data for {peer}")
+
+        # Determine winner on each metric
+        def winner(key, higher_is_better=True):
+            a, b = m_a.get(key), m_b.get(key)
+            if a is None or b is None:
+                return None
+            if higher_is_better:
+                return ticker if a > b else peer if b > a else "tie"
+            else:
+                return ticker if a < b else peer if b < a else "tie"
+
+        winners = {
+            'current_price': None,           # N/A — not comparable
+            'ret_1m':        winner('ret_1m'),
+            'ret_3m':        winner('ret_3m'),
+            'ret_6m':        winner('ret_6m'),
+            'ret_1y':        winner('ret_1y'),
+            'sharpe':        winner('sharpe'),
+            'annual_vol':    winner('annual_vol', higher_is_better=False),
+            'rsi':           None,           # context-dependent
+            'ml_return':     winner('ml_return'),
+        }
+
+        peer_info_a = get_peers(ticker)
+        peer_info_b = get_peers(peer)
+
+        return {
+            "ticker_a":  ticker,
+            "ticker_b":  peer,
+            "sector_a":  peer_info_a["sector"],
+            "sector_b":  peer_info_b["sector"],
+            "metrics_a": m_a,
+            "metrics_b": m_b,
+            "winners":   winners,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /api/sector-rank  — Ranks all sector peers with composite scores + insights
+# ─────────────────────────────────────────────────────────────────────────────
+@app.get("/api/sector-rank")
+def sector_rank_endpoint(ticker: str = Query(...)):
+    try:
+        ticker = ticker.upper().strip()
+        peer_info = get_peers(ticker)
+        sector    = peer_info["sector"]
+        peers     = peer_info["peers"]
+
+        all_tickers = [ticker] + peers
+
+        # Compute metrics for all tickers in parallel-ish
+        all_metrics = []
+        for t in all_tickers:
+            m = _compute_quick_metrics(t)
+            if m:
+                all_metrics.append(m)
+
+        if not all_metrics:
+            raise HTTPException(status_code=503, detail="Could not fetch sector data")
+
+        # Score all
+        for m in all_metrics:
+            m['score'] = _sector_composite_score(m, all_metrics)
+
+        # Sort by composite score descending
+        ranked = sorted(all_metrics, key=lambda x: x['score'], reverse=True)
+
+        # Assign ranks
+        for i, m in enumerate(ranked):
+            m['rank'] = i + 1
+
+        # Sector insights
+        valid = [m for m in ranked if m.get('ret_3m') is not None]
+        best_momentum   = max(valid, key=lambda x: x.get('ret_3m', -999))  if valid else None
+        best_sharpe     = max(all_metrics, key=lambda x: x.get('sharpe', -999))
+        best_ml         = max([m for m in all_metrics if m.get('ml_return') is not None],
+                               key=lambda x: x.get('ml_return', -999), default=None)
+        lowest_vol      = min(all_metrics, key=lambda x: x.get('annual_vol', 999))
+
+        # Find rank of the queried ticker
+        queried_rank = next((m['rank'] for m in ranked if m['ticker'] == ticker), None)
+        total        = len(ranked)
+
+        insights = {
+            'sector':           sector,
+            'total_peers':      total,
+            'queried_rank':     queried_rank,
+            'best_momentum':    best_momentum['ticker'] if best_momentum else None,
+            'best_risk_adj':    best_sharpe['ticker'],
+            'best_ml_signal':   best_ml['ticker'] if best_ml else None,
+            'lowest_vol':       lowest_vol['ticker'],
+        }
+
+        return {
+            "ticker":   ticker,
+            "sector":   sector,
+            "ranked":   ranked,
+            "insights": insights,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+

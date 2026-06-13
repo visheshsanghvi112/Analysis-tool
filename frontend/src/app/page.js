@@ -8,10 +8,12 @@ import StockChart from './components/StockChart';
 import MLPrediction from './components/MLPrediction';
 import AdvancedNews from './components/AdvancedNews';
 import PortfolioMetrics from './components/PortfolioMetrics';
+import PeerComparison from './components/PeerComparison';
+import SectorIntelligence from './components/SectorIntelligence';
 import {
   TrendingUp, Brain, Newspaper, PieChart,
   Activity, ArrowRight, CheckCircle, Clock, AlertTriangle,
-  LayoutGrid,
+  LayoutGrid, BarChart2, Trophy,
 } from 'lucide-react';
 
 /* ── Status badge ─────────────────────────────────────────────────── */
@@ -174,6 +176,48 @@ const WelcomeScreen = () => (
   </section>
 );
 
+/* ── Peer & Sector Intelligence Tabs ─────────────────────────── */
+const PEER_TABS = [
+  { id: 'compare',  label: 'Peer-to-Peer',       icon: BarChart2, desc: 'Compare vs a specific stock' },
+  { id: 'sector',   label: 'Sector Intelligence', icon: Trophy,    desc: 'Rank all sector peers' },
+];
+
+const PeerSectorTabs = ({ ticker }) => {
+  const [activeTab, setActiveTab] = useState('compare');
+  return (
+    <div>
+      {/* Tab row */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', background: '#0a0a0a', border: '1px solid #1c1c1c', borderRadius: '10px', padding: '6px' }}>
+        {PEER_TABS.map(tab => {
+          const Icon = tab.icon;
+          const isA = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
+                padding: '9px 14px',
+                background: isA ? '#1a1a1a' : 'transparent',
+                border: `1px solid ${isA ? '#2a2a2a' : 'transparent'}`,
+                borderRadius: '8px',
+                color: isA ? '#fff' : '#555',
+                fontSize: '12px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
+              }}
+            >
+              <Icon style={{ width: '13px', height: '13px', color: isA ? (tab.id === 'compare' ? '#3b82f6' : '#f59e0b') : '#555' }} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      {/* Tab panels */}
+      {activeTab === 'compare' && <PeerComparison ticker={ticker} />}
+      {activeTab === 'sector'  && <SectorIntelligence ticker={ticker} />}
+    </div>
+  );
+};
+
 /* ── Loading ──────────────────────────────────────────────────────── */
 const LoadingState = ({ ticker }) => (
   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '120px 16px', gap: '16px' }}>
@@ -243,6 +287,9 @@ export default function Dashboard() {
                 </div>
               </div>
               <PortfolioMetrics ticker={selectedTicker} />
+
+              {/* ── Peer & Sector Intelligence Tabs ───────────────────── */}
+              <PeerSectorTabs ticker={selectedTicker} />
             </div>
           </div>
         )}
