@@ -1,19 +1,18 @@
 <div align="center">
 
+![StockIQ Pro Banner](./stockiq_pro_banner.png)
+
+# StockIQ Pro 📈
+
+### Institutional-grade stock intelligence & quantitative analytics for the Indian equity market — powered by Machine Learning, Hidden Markov Models, and GARCH volatility forecasting.
+
 <br/>
 
-# StockIQ Pro
-
-### Professional-grade stock intelligence for the Indian market — powered by Machine Learning and real-time data.
-
-<br/>
-
-[![Next.js](https://img.shields.io/badge/Next.js_16-black?style=flat-square&logo=next.js)](https://nextjs.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Python](https://img.shields.io/badge/Python_3.9+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
-[![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?style=flat-square&logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
-[![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-black?style=flat-square&logo=vercel)](https://vercel.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js_16-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Python](https://img.shields.io/badge/Python_3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
+[![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/)
 
 <br/>
 
@@ -160,39 +159,23 @@ Searches across the full NSE equity list (~1,900 stocks) loaded on startup. Resu
 
 ---
 
-## Project Structure
+## 📂 Project Architecture & Codebase Overview
 
-```
-Analysis-tool/
-├── frontend/                          # Next.js 16 application
-│   ├── src/app/
-│   │   ├── components/
-│   │   │   ├── Header.js              # Search bar (debounced, AbortController)
-│   │   │   ├── LivePrice.js           # Real-time quote with auto-refresh
-│   │   │   ├── StockChart.js          # Multi-panel interactive charts
-│   │   │   ├── MLPrediction.js        # AI forecast card
-│   │   │   ├── AdvancedNews.js        # News sentiment feed
-│   │   │   ├── PortfolioMetrics.js    # Risk analytics dashboard
-│   │   │   ├── StockSearchModal.js    # Full-screen search modal
-│   │   │   └── ErrorBoundary.js       # React error boundary
-│   │   ├── globals.css                # Design system (professional dark theme)
-│   │   ├── layout.js                  # Root layout + metadata
-│   │   └── page.js                    # Main dashboard
-│   ├── next.config.mjs
-│   ├── tailwind.config.js
-│   └── package.json
-│
-├── backend/                           # FastAPI application
-│   ├── main.py                        # Routes + startup ticker preload
-│   ├── engine.py                      # Technical analysis engine
-│   ├── ml_models.py                   # Random Forest training & inference
-│   ├── news_intelligence.py           # News aggregation + NLP sentiment
-│   ├── yf_client.py                   # Yahoo Finance direct REST client
-│   ├── requirements.txt
-│   └── vercel.json
-│
-└── README.md
-```
+The repository is structured as a decoupled full-stack application composed of a Next.js frontend client and a high-performance FastAPI backend.
+
+### 💻 Client Application (`/frontend`)
+*   ⚛️ **Next.js 16 (App Router)** & React 19 framework using TypeScript-ready patterns.
+*   📊 **StockChart.js:** Interactively displays multi-panel technical charts (Candlesticks, volume histograms, RSI, MACD, and ADX) using customized `ResizeObserver` layout-shift-free wrappers.
+*   🧠 **MLPrediction.js:** Visualizes 5-day stacked ensemble projections, confidence levels, out-of-sample walk-forward hit rates, SHAP feature importance scales, and the GARCH volatility badge.
+*   💼 **PortfolioMetrics.js:** High-fidelity dashboard rendering risk metrics (Value at Risk, Information Ratio, Maximum Drawdowns) and real-time options Greeks pricing via Black-Scholes.
+*   📰 **AdvancedNews.js:** Live news intelligence tracker featuring TextBlob sentiment nudges and relative impact weights.
+*   🔍 **StockSearchModal.js:** Full-featured symbol lookup with caching, abort controllers, and fuzzy search over 1,900+ NSE listings.
+
+### ⚙️ Analytics Backend (`/backend`)
+*   ⚡ **FastAPI:** Python microframework optimized with asynchronous route pooling and clean exception handling.
+*   📈 **ml_models.py:** Training pipeline for 5 base learners stacked via Ridge regression, walk-forward folding, 3-state Gaussian Hidden Markov Models (HMM), and GARCH(1,1) volatility models.
+*   🔧 **engine.py:** Core financial mathematics engine computing technical indicators (Bollinger Bands, Average True Range, MACD, and Stochastic Oscillators).
+*   💰 **yf_client.py:** Direct, REST-based connection to Yahoo Finance's native JSON endpoints, guaranteeing stable serverless execution.
 
 ---
 
