@@ -44,18 +44,41 @@ A user can search any of the **1,900+ NSE-listed stocks**, and instantly get:
 Real-time NSE/BSE price quotes fetched via Yahoo Finance's undocumented-but-stable chart API (`v8/finance/chart`). Includes current price, day high/low, previous close, volume, and market cap. Data is ~15 minutes delayed for NSE stocks (Yahoo Finance standard). A visual range bar shows where the current price sits within the day's trading range.
 
 ### 🧠 Machine Learning Predictions (6-Model Stacked Ensemble)
-A state-of-the-art **Stacked Ensemble Model** is trained on-demand for each requested ticker using 2 years of historical daily data, featuring:
-*   **Base Learners:** Random Forest, Gradient Boosting, XGBoost, LightGBM, and Extra Trees.
-*   **Meta-Learner:** Ridge Regression combining base forecasts to prevent overfitting.
-*   **Financial Validation:** Expanding Walk-Forward backtest calculating out-of-sample metrics (Directional Hit Rate, Profit Factor, Avg Win/Loss ratios, and the Ensemble Advantage over a standalone XGBoost baseline).
-*   **Regime-Aware Thresholds:** Signal trigger margins are dynamically adjusted based on the current market volatility regime.
+To generate highly reliable price projections, StockIQ Pro utilizes a multi-stage **Stacked Ensemble Regressor** trained on 2 years of daily historical data. Naive machine learning models often fail in finance due to high noise-to-signal ratios. Our ensemble architecture overcomes this by combining diverse model families:
+1.  **Base Learners (Diverse Feature Spaces):**
+    *   **Random Forest Regressor:** Handles bagging and reduces variance.
+    *   **Gradient Boosting Regressor:** Sequentially fits trees to minimize residuals.
+    *   **XGBoost:** Implements regularized (L1/L2) tree boosting for maximum tabular speed and accuracy.
+    *   **LightGBM:** Uses leaf-wise growth (GOSS) to efficiently capture deep feature interactions.
+    *   **Extra Trees Regressor:** Extremely randomized trees that add high variance reduction to shield the ensemble from price anomalies.
+2.  **Meta-Learner (Ridge Stacking):**
+    *   Base learners' out-of-sample predictions are combined by a **Ridge Regressor (L2 Regularization)**. The Ridge meta-learner restricts the regression weights to prevent multicollinearity and overfitting, providing a stable final 5-day return prediction.
+3.  **Features Engineered (40+ Indicators):**
+    *   **Momentum:** RSI (14), Williams %R, Stochastic %K/%D.
+    *   **Trend:** MACD, MACD Signal, MACD Histogram, EMA Cross (9/21), MA Ratios (5, 10, 20, 50, 100).
+    *   **Volatility:** ATR Ratio, Bollinger Band Position & Width, 20d & 60d standard deviation.
+    *   **Volume:** Volume Ratio, OBV Ratio.
+    *   **Moments & Calendars:** Rolling skewness/kurtosis (20d), 52-week proximity, calendar effects (day of week, month), and multi-day lagged returns.
 
-The model is engineered with **40+ features**, including ATR, Stochastic %K/%D, Williams %R, Rate of Change (ROC 5, 10, 20), On-Balance Volume (OBV), Bollinger Bands, skewness/kurtosis moments, calendar effects, and multi-day lagged returns.
+### 📐 Out-of-Sample Walk-Forward Backtesting
+Standard cross-validation (like K-Fold) leaks future data into the past, producing artificially high backtest metrics. We implement an **Expanding Walk-Forward Backtest** (5 folds) to simulate real-world trading performance:
+*   **Directional Hit Rate:** Measures the percentage of times the model correctly predicted the sign (direction) of the 5-day return.
+*   **Profit Factor:** The ratio of gross profits to gross losses:
+$$\text{Profit Factor} = \frac{\sum \text{Wins}}{\sum |\text{Losses}|}$$
+*   **Ensemble Advantage:** The absolute accuracy improvement of the stacked ensemble over a standalone baseline XGBoost model, demonstrating the statistical edge of stacking.
 
-### 📐 Advanced Mathematical Volatility & Regime Modeling (HMM + GARCH)
-Instead of static rules, the backend uses advanced quantitative models to evaluate market risk:
-*   **Gaussian Hidden Markov Model (HMM):** Fits a 3-state HMM on log returns to classify the current market state into **LOW_VOLATILITY**, **MEDIUM_VOLATILITY**, or **HIGH_VOLATILITY** regimes.
-*   **GARCH(1,1) Volatility Forecasting:** Fits a GARCH volatility model on returns to forecast the average annualized volatility over the next 5 trading days.
+### 🏛️ Advanced Volatility & Regime Modeling (HMM + GARCH)
+Markets are non-stationary and fluctuate between structural periods. StockIQ Pro models these periods using advanced econometrics:
+1.  **Gaussian Hidden Markov Model (HMM):**
+    *   Instead of arbitrary moving average crossovers, a 3-state HMM is fitted directly to the stock's log returns. The model identifies hidden latent states: **LOW_VOLATILITY** (stable bull), **MEDIUM_VOLATILITY** (neutral/orderly), and **HIGH_VOLATILITY** (bearish/panic).
+    *   The model solves the transition probability matrix to classify the current day's active regime.
+2.  **GARCH(1,1) Volatility Forecasting:**
+    *   Models the conditional variance ($\sigma_t^2$) of returns using the standard GARCH(1,1) specification to capture volatility clustering:
+$$\sigma_t^2 = \omega + \alpha \epsilon_{t-1}^2 + \beta \sigma_{t-1}^2$$
+    *   The forecasted variance over the 5-day horizon is annualized to yield the expected forward-looking volatility.
+3.  **Regime-Aware Decision Engine:**
+    *   During a **HIGH_VOLATILITY** regime, the model automatically widens the prediction signal thresholds (widening to $3.0\%$ expected return) to prevent false trading signals caused by noise. In stable regimes, the threshold narrows to $1.8\%$.
+
 
 
 ### 📈 Technical Analysis Charts
