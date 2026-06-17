@@ -173,9 +173,24 @@ export default function Backtesting({ ticker }) {
       )}
 
       {error && (
-        <div className="flex items-center gap-3 p-4 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-400 text-sm">
-          <AlertCircle className="h-5 w-5 shrink-0" />
-          <span>{error}</span>
+        <div className={`flex items-start gap-3 p-4 rounded-lg text-sm border ${
+          error.includes('404') || error.includes('Not Found')
+            ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+            : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+        }`}>
+          <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+          <div>
+            {error.includes('404') || error.includes('Not Found') ? (
+              <>
+                <p className="font-bold mb-0.5">Backend deploying…</p>
+                <p className="text-[11px] opacity-80">
+                  The backtest endpoint is being deployed to Vercel. Try again in ~2 minutes.
+                </p>
+              </>
+            ) : (
+              <span>{error}</span>
+            )}
+          </div>
         </div>
       )}
 

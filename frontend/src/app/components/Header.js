@@ -12,6 +12,7 @@ import {
   Zap,
   ChevronRight,
   Loader2,
+  Briefcase,
 } from 'lucide-react';
 
 const Header = ({ onTickerSelect, currentTicker }) => {
@@ -279,6 +280,19 @@ const Header = ({ onTickerSelect, currentTicker }) => {
               >
                 Browse Stocks
               </Link>
+              <Link
+                href="/portfolio"
+                style={{
+                  fontSize: '13px', fontWeight: 500, color: '#888',
+                  textDecoration: 'none', transition: 'color 0.15s',
+                  whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px',
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+                onMouseLeave={e => e.currentTarget.style.color = '#888'}
+              >
+                <Briefcase style={{ width: '13px', height: '13px' }} />
+                Portfolio
+              </Link>
               <div style={{ width: '1px', height: '16px', background: '#2a2a2a' }} />
               <span className="v-badge v-badge-green">
                 <span className="live-dot" style={{ marginRight: '2px' }} />
@@ -399,6 +413,20 @@ const Header = ({ onTickerSelect, currentTicker }) => {
               onClick={() => setMobileMenuOpen(false)}
             >
               Browse all sectors →
+            </Link>
+            <Link
+              href="/portfolio"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                width: '100%', padding: '12px',
+                background: '#0d0d18', border: '1px solid #2a2a40', borderRadius: '8px',
+                color: '#818cf8', fontSize: '13px', fontWeight: 500,
+                textDecoration: 'none', marginBottom: '16px',
+              }}
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Briefcase style={{ width: '14px', height: '14px' }} />
+              Portfolio Tracker
             </Link>
             <p style={{ fontSize: '11px', color: '#555', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Quick access

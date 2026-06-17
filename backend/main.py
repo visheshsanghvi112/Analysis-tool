@@ -1012,6 +1012,176 @@ def run_backtest(
         raise HTTPException(status_code=500, detail=f"Backtest failed: {str(e)}")
 
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /api/portfolio-analyze  — Multi-stock portfolio analytics
+# ─────────────────────────────────────────────────────────────────────────────
+from pydantic import BaseModel
+from typing import List
+
+class Holding(BaseModel):
+    ticker: str
+    qty: float
+    buy_price: float
+
+class PortfolioRequest(BaseModel):
+    holdings: List[Holding]
+
+@app.post("/api/portfolio-analyze")
+def analyze_portfolio(req: PortfolioRequest):
+    """
+    Accepts a list of holdings and returns:
+    - Per-holding: live price, P&L, return%, current value
+    - Portfolio: total value, total P&L, allocation weights
+    - Risk: covariance-matrix VaR (95%/99%), portfolio Sharpe, max drawdown
+    - Correlation matrix across holdings
+    - 1Y return history for each ticker (for equity curve)
+    """
+    if not req.holdings:
+        raise HTTPException(status_code=400, detail="No holdings provided")
+    if len(req.holdings) > 15:
+        raise HTTPException(status_code=400, detail="Max 15 holdings supported")
+
+    # ── Step 1: fetch live prices ──────────────────────────────────────────
+    holdings_out = []
+    total_cost   = 0.0
+    total_value  = 0.0
+
+    for h in req.holdings:
+        tk = h.ticker.strip().upper()
+        try:
+            q = get_quote(tk)
+            live_px = float(q.get("price") or h.buy_price)
+        except Exception:
+            live_px = h.buy_price
+
+        cost        = h.qty * h.buy_price
+        curr_val    = h.qty * live_px
+        pnl         = curr_val - cost
+        pnl_pct     = (pnl / cost * 100) if cost > 0 else 0.0
+
+        holdings_out.append({
+            "ticker":      tk,
+            "qty":         h.qty,
+            "buy_price":   round(h.buy_price, 2),
+            "live_price":  round(live_px, 2),
+            "cost":        round(cost, 2),
+            "curr_value":  round(curr_val, 2),
+            "pnl":         round(pnl, 2),
+            "pnl_pct":     round(pnl_pct, 2),
+        })
+        total_cost  += cost
+        total_value += curr_val
+
+    total_pnl     = total_value - total_cost
+    total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0.0
+
+    # ── Step 2: allocation weights ────────────────────────────────────────
+    for h in holdings_out:
+        h["weight_pct"] = round(h["curr_value"] / total_value * 100, 2) if total_value > 0 else 0.0
+
+    # ── Step 3: 1-year returns for risk calculations ──────────────────────
+    returns_map  = {}
+    history_map  = {}
+
+    for h in holdings_out:
+        try:
+            df = get_history(h["ticker"], period="1y")
+            if df is not None and not df.empty and len(df) > 30:
+                r = df["Close"].pct_change().dropna()
+                returns_map[h["ticker"]]  = r
+                # Weekly-sampled close for equity curve (cap payload)
+                wk = df["Close"].resample("W").last().dropna()
+                history_map[h["ticker"]] = [
+                    {"date": str(d.date()), "price": round(float(v), 2)}
+                    for d, v in wk.items()
+                ]
+        except Exception:
+            pass
+
+    # ── Step 4: portfolio-level risk ──────────────────────────────────────
+    portfolio_risk = {}
+    if len(returns_map) >= 2:
+        try:
+            tickers_in  = list(returns_map.keys())
+            ret_df      = pd.DataFrame(returns_map).dropna()
+            weights     = np.array([
+                next(h["weight_pct"] for h in holdings_out if h["ticker"] == t) / 100
+                for t in tickers_in
+            ])
+
+            cov_matrix  = ret_df.cov().values
+            port_var    = float(weights @ cov_matrix @ weights)
+            port_std    = float(np.sqrt(port_var))
+
+            # VaR (parametric, normal assumption)
+            z95, z99    = 1.645, 2.326
+            var_95      = round(-z95 * port_std * total_value, 2)
+            var_99      = round(-z99 * port_std * total_value, 2)
+            ann_vol     = round(port_std * np.sqrt(252) * 100, 2)
+
+            # Portfolio daily return series
+            port_ret    = ret_df @ weights
+            rf_daily    = 0.065 / 252
+            sharpe      = float((port_ret.mean() - rf_daily) / (port_ret.std() + 1e-9) * np.sqrt(252))
+
+            # Max drawdown on weighted portfolio
+            cum         = (1 + port_ret).cumprod()
+            roll_max    = cum.cummax()
+            dd          = (cum - roll_max) / roll_max
+            max_dd      = round(float(dd.min() * 100), 2)
+
+            # Correlation matrix
+            corr        = ret_df.corr().round(3)
+            corr_list   = [
+                {"a": a, "b": b, "corr": float(corr.loc[a, b])}
+                for a in corr.index for b in corr.columns
+            ]
+
+            portfolio_risk = {
+                "ann_volatility_pct":  ann_vol,
+                "var_95_rupees":       var_95,
+                "var_99_rupees":       var_99,
+                "sharpe_ratio":        round(sharpe, 3),
+                "max_drawdown_pct":    max_dd,
+                "correlation_pairs":   corr_list,
+            }
+        except Exception as e:
+            portfolio_risk = {"error": str(e)}
+    elif len(returns_map) == 1:
+        try:
+            tk = list(returns_map.keys())[0]
+            r  = returns_map[tk]
+            rf = 0.065 / 252
+            sharpe = float((r.mean() - rf) / (r.std() + 1e-9) * np.sqrt(252))
+            vol    = round(float(r.std() * np.sqrt(252) * 100), 2)
+            var95  = round(-1.645 * float(r.std()) * total_value, 2)
+            portfolio_risk = {
+                "ann_volatility_pct": vol,
+                "var_95_rupees":      var95,
+                "var_99_rupees":      round(-2.326 * float(r.std()) * total_value, 2),
+                "sharpe_ratio":       round(sharpe, 3),
+                "max_drawdown_pct":   None,
+                "correlation_pairs":  [],
+            }
+        except Exception:
+            portfolio_risk = {}
+
+    return {
+        "holdings":       holdings_out,
+        "summary": {
+            "total_cost":      round(total_cost, 2),
+            "total_value":     round(total_value, 2),
+            "total_pnl":       round(total_pnl, 2),
+            "total_pnl_pct":   round(total_pnl_pct, 2),
+            "num_holdings":    len(holdings_out),
+        },
+        "risk":           portfolio_risk,
+        "price_history":  history_map,
+        "as_of":          datetime.now().isoformat(),
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
