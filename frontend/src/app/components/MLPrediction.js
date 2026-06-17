@@ -1,14 +1,144 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Brain, TrendingUp, TrendingDown, Target, Zap, AlertCircle, RefreshCw } from 'lucide-react';
+import { Brain, TrendingUp, TrendingDown, Target, Zap, AlertCircle, RefreshCw, BarChart2, Info } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://stock-analysis-backend-seven.vercel.app';
+
+// ─────────────────────────────────────────────────────────────
+// SHAP Waterfall Chart
+// Renders signed feature contributions as a horizontal bar chart.
+// Green = feature pushed signal toward BUY
+// Red   = feature pushed signal toward SELL
+// ─────────────────────────────────────────────────────────────
+function SHAPWaterfallChart({ features, shapPowered }) {
+  if (!features || features.length === 0) return null;
+
+  // Normalise bars to the largest absolute value = 100%
+  const maxAbs = Math.max(...features.map(f => f.abs_value), 1e-9);
+
+  const isBullish = (v) => v > 0;
+  const totalPositive = features.filter(f => f.value > 0).reduce((s, f) => s + f.abs_value, 0);
+  const totalNegative = features.filter(f => f.value < 0).reduce((s, f) => s + f.abs_value, 0);
+  const netBias = totalPositive > totalNegative ? 'bullish' : totalNegative > totalPositive ? 'bearish' : 'neutral';
+
+  return (
+    <div className="mb-4 rounded-xl bg-white/[0.03] border border-white/[0.06] overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/[0.05]">
+        <div className="flex items-center gap-2">
+          <div className="h-6 w-6 rounded bg-violet-500/20 flex items-center justify-center">
+            <BarChart2 className="h-3.5 w-3.5 text-violet-400" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-white">
+              {shapPowered ? 'SHAP Feature Contributions' : 'Feature Importance'}
+            </p>
+            <p className="text-[9px] text-slate-500">
+              {shapPowered
+                ? 'How each feature pushed this prediction'
+                : 'Tree-based feature importance (install shap for signed values)'}
+            </p>
+          </div>
+        </div>
+        {/* Net bias pill */}
+        <div className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
+          netBias === 'bullish'
+            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+            : netBias === 'bearish'
+            ? 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+            : 'bg-slate-500/10 border-slate-500/30 text-slate-400'
+        }`}>
+          Net {netBias}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 px-3 pt-2.5 pb-1">
+        <div className="flex items-center gap-1.5">
+          <div className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
+          <span className="text-[9px] text-slate-400">Bullish push</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="h-2.5 w-2.5 rounded-sm bg-rose-500" />
+          <span className="text-[9px] text-slate-400">Bearish push</span>
+        </div>
+        <div className="ml-auto flex items-center gap-1 text-[9px] text-slate-500">
+          <Info className="h-3 w-3" />
+          Bar width = relative impact
+        </div>
+      </div>
+
+      {/* Bars */}
+      <div className="px-3 pb-3 space-y-2 mt-1">
+        {features.map((feat, idx) => {
+          const barPct = (feat.abs_value / maxAbs) * 100;
+          const positive = isBullish(feat.value);
+          const barColor = positive
+            ? 'bg-gradient-to-r from-emerald-600 to-emerald-400'
+            : 'bg-gradient-to-r from-rose-600 to-rose-400';
+          const textColor = positive ? 'text-emerald-400' : 'text-rose-400';
+          const valStr = positive
+            ? `+${feat.abs_value.toFixed(4)}`
+            : `-${feat.abs_value.toFixed(4)}`;
+
+          return (
+            <div key={feat.name}>
+              {/* Label row */}
+              <div className="flex items-center justify-between mb-0.5">
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-[8px] font-bold w-4 text-center ${
+                    positive ? 'text-emerald-500' : 'text-rose-500'
+                  }`}>
+                    {positive ? '▲' : '▼'}
+                  </span>
+                  <span className="text-[10px] text-slate-300 font-medium">{feat.label}</span>
+                </div>
+                <span className={`text-[10px] font-bold tabular-nums ${textColor}`}>{valStr}</span>
+              </div>
+              {/* Bar track */}
+              <div className="ml-5 w-[calc(100%-1.25rem)] h-2 bg-white/[0.04] rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${barColor}`}
+                  style={{
+                    width: `${barPct}%`,
+                    transition: `width 0.5s cubic-bezier(0.4,0,0.2,1) ${idx * 60}ms`,
+                    boxShadow: positive
+                      ? '0 0 6px rgba(52,211,153,0.35)'
+                      : '0 0 6px rgba(251,113,133,0.35)',
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Summary row */}
+      <div className="flex items-center justify-between px-3 py-2 border-t border-white/[0.04] bg-white/[0.01]">
+        <div className="flex items-center gap-3 text-[9px]">
+          <span className="text-slate-500">Bullish weight:</span>
+          <span className="text-emerald-400 font-bold">
+            {totalPositive > 0 ? ((totalPositive / (totalPositive + totalNegative)) * 100).toFixed(0) : 0}%
+          </span>
+        </div>
+        <div className="flex items-center gap-3 text-[9px]">
+          <span className="text-slate-500">Bearish weight:</span>
+          <span className="text-rose-400 font-bold">
+            {totalNegative > 0 ? ((totalNegative / (totalPositive + totalNegative)) * 100).toFixed(0) : 0}%
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 export default function MLPrediction({ ticker }) {
   const [prediction, setPrediction] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
   const [selectedPeriod, setSelectedPeriod] = useState('2y');
   const [predictionCache, setPredictionCache] = useState({});
 
@@ -280,49 +410,55 @@ export default function MLPrediction({ ticker }) {
             </div>
           </div>
 
-          {/* Prediction Details */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-4 animate-fadeIn">
-            <div className="rounded-lg p-2.5 bg-white/[0.03] border border-white/[0.06]">
-              <p className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-0.5">Current Price</p>
-              <p className="font-bold text-xs sm:text-sm text-slate-200">Rs.{prediction.current_price?.toLocaleString()}</p>
-            </div>
-            
-            <div className="rounded-lg p-2.5 bg-white/[0.03] border border-white/[0.06]">
-              <p className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-0.5">Horizon</p>
-              <p className="font-bold text-xs sm:text-sm text-slate-200">{prediction.prediction_horizon_days} Days</p>
+          {/* Prediction Details — 3-col grid, no overflow */}
+          <div className="grid grid-cols-3 gap-2 mb-4 animate-fadeIn">
+            <div className="rounded-lg p-2 bg-white/[0.03] border border-white/[0.06] min-w-0">
+              <p className="text-[8px] text-slate-500 uppercase tracking-wider font-bold mb-0.5 truncate">Price</p>
+              <p className="font-bold text-xs text-slate-200 truncate">₹{prediction.current_price?.toLocaleString()}</p>
             </div>
 
-            <div className="rounded-lg p-2.5 bg-white/[0.03] border border-white/[0.06]">
-              <p className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-0.5">HMM Regime</p>
-              <p className={`font-bold text-[9px] uppercase tracking-wider ${
+            <div className="rounded-lg p-2 bg-white/[0.03] border border-white/[0.06] min-w-0">
+              <p className="text-[8px] text-slate-500 uppercase tracking-wider font-bold mb-0.5 truncate">Horizon</p>
+              <p className="font-bold text-xs text-slate-200">{prediction.prediction_horizon_days}d</p>
+            </div>
+
+            <div className="rounded-lg p-2 bg-white/[0.03] border border-white/[0.06] min-w-0">
+              <p className="text-[8px] text-slate-500 uppercase tracking-wider font-bold mb-0.5 truncate">HMM Regime</p>
+              <p className={`font-bold text-[9px] leading-tight ${
                 prediction.regime === 'LOW_VOLATILITY' ? 'text-emerald-400' :
                 prediction.regime === 'MEDIUM_VOLATILITY' ? 'text-indigo-400' :
                 prediction.regime === 'HIGH_VOLATILITY' ? 'text-rose-400' : 'text-slate-400'
               }`}>
-                {prediction.regime?.replace('_', ' ') || 'SIDEWAYS'}
+                {prediction.regime === 'LOW_VOLATILITY' ? 'Low Vol' :
+                 prediction.regime === 'MEDIUM_VOLATILITY' ? 'Med Vol' :
+                 prediction.regime === 'HIGH_VOLATILITY' ? 'High Vol' :
+                 (prediction.regime || 'Sideways')}
               </p>
             </div>
 
-            <div className="rounded-lg p-2.5 bg-white/[0.03] border border-white/[0.06]">
-              <p className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-0.5">GARCH Volatility</p>
-              <p className="font-bold text-xs sm:text-sm text-slate-200">
+            <div className="rounded-lg p-2 bg-white/[0.03] border border-white/[0.06] min-w-0">
+              <p className="text-[8px] text-slate-500 uppercase tracking-wider font-bold mb-0.5 truncate">GARCH Vol</p>
+              <p className="font-bold text-xs text-slate-200 truncate">
                 {prediction.garch_volatility ? `${prediction.garch_volatility}%` : 'N/A'}
               </p>
             </div>
 
-            <div className="rounded-lg p-2.5 bg-white/[0.03] border border-white/[0.06]">
-              <p className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-0.5">Consensus</p>
-              <p className={`font-bold text-[9px] uppercase tracking-wider ${
+            <div className="rounded-lg p-2 bg-white/[0.03] border border-white/[0.06] min-w-0">
+              <p className="text-[8px] text-slate-500 uppercase tracking-wider font-bold mb-0.5 truncate">Consensus</p>
+              <p className={`font-bold text-[9px] leading-tight ${
                 prediction.stability === 'STABLE CONSENSUS' ? 'text-emerald-400' :
                 prediction.stability === 'MODERATE VOLATILITY' ? 'text-yellow-500' : 'text-rose-400'
               }`}>
-                {prediction.stability?.replace(' CONSENSUS', '')?.replace(' VOLATILITY', '') || 'STABLE'}
+                {prediction.stability === 'STABLE CONSENSUS' ? 'Stable' :
+                 prediction.stability === 'MODERATE VOLATILITY' ? 'Moderate' :
+                 prediction.stability === 'HIGH UNCERTAINTY' ? 'Uncertain' :
+                 (prediction.stability || 'N/A')}
               </p>
             </div>
 
-            <div className="rounded-lg p-2.5 bg-white/[0.03] border border-white/[0.06]">
-              <p className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-0.5">Risk/Reward</p>
-              <p className={`font-bold text-xs sm:text-sm ${
+            <div className="rounded-lg p-2 bg-white/[0.03] border border-white/[0.06] min-w-0">
+              <p className="text-[8px] text-slate-500 uppercase tracking-wider font-bold mb-0.5 truncate">Risk/Reward</p>
+              <p className={`font-bold text-xs ${
                 prediction.risk_reward_ratio >= 2.0 ? 'text-emerald-400' :
                 prediction.risk_reward_ratio >= 1.0 ? 'text-yellow-500' : 'text-rose-400'
               }`}>
@@ -333,11 +469,11 @@ export default function MLPrediction({ ticker }) {
 
           {/* Walk-Forward Validation Metrics */}
           <div className="mb-4 p-3 rounded-lg bg-white/[0.03] border border-white/[0.06]">
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Walk-Forward Backtest (Out-of-Sample)</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Walk-Forward Backtest (OOS)</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <div className="text-center p-2 rounded bg-white/[0.01] border border-white/[0.04]">
                 <span className="text-xs font-bold text-slate-200">{prediction.direction_accuracy}%</span>
-                <p className="text-[9px] text-slate-500 mt-0.5">Hit Rate (Dir)</p>
+                <p className="text-[9px] text-slate-500 mt-0.5">Hit Rate</p>
               </div>
               <div className="text-center p-2 rounded bg-white/[0.01] border border-white/[0.04]">
                 <span className="text-xs font-bold text-slate-200">{prediction.profit_factor}x</span>
@@ -353,10 +489,12 @@ export default function MLPrediction({ ticker }) {
               </div>
             </div>
             {prediction.ensemble_vs_xgb_delta !== undefined && (
-              <div className="mt-2 text-[10px] text-slate-400 flex items-center justify-between px-1">
-                <span>Ensemble Advantage vs Standalone XGBoost:</span>
-                <span className={`font-semibold ${prediction.ensemble_vs_xgb_delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {prediction.ensemble_vs_xgb_delta >= 0 ? '+' : ''}{prediction.ensemble_vs_xgb_delta}% Direction Accuracy
+              <div className="mt-2 pt-2 border-t border-white/[0.04] flex flex-col gap-0.5">
+                <p className="text-[9px] text-slate-500">Ensemble vs Standalone XGBoost</p>
+                <span className={`text-[10px] font-bold ${
+                  prediction.ensemble_vs_xgb_delta >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                }`}>
+                  {prediction.ensemble_vs_xgb_delta >= 0 ? '+' : ''}{prediction.ensemble_vs_xgb_delta}% direction accuracy
                 </span>
               </div>
             )}
@@ -365,16 +503,18 @@ export default function MLPrediction({ ticker }) {
           {/* Sentiment Fusion & Risk/Reward */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
             {/* Sentiment Fusion */}
-            <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Sentiment Fusion Nudges</p>
-              <div className="space-y-1.5">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Raw ML Model Return:</span>
-                  <span className="font-semibold text-slate-300">{prediction.ml_raw_return >= 0 ? '+' : ''}{prediction.ml_raw_return}%</span>
+            <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Sentiment Fusion</p>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <span className="text-[10px] text-slate-500 shrink-0">ML Raw Return</span>
+                  <span className="text-[10px] font-semibold text-slate-300 ml-auto">
+                    {prediction.ml_raw_return >= 0 ? '+' : ''}{prediction.ml_raw_return}%
+                  </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">News Sentiment Score:</span>
-                  <span className={`font-semibold ${
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <span className="text-[10px] text-slate-500 shrink-0">News Sentiment</span>
+                  <span className={`text-[10px] font-semibold ml-auto ${
                     prediction.news_sentiment_used > 0.1 ? 'text-emerald-400' :
                     prediction.news_sentiment_used < -0.1 ? 'text-rose-400' : 'text-slate-400'
                   }`}>
@@ -384,29 +524,34 @@ export default function MLPrediction({ ticker }) {
               </div>
             </div>
 
-            {/* Risk Reward */}
-            <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Volatility & Risk Profile</p>
-              <div className="space-y-1.5">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">GARCH Volatility (5d):</span>
-                  <span className="font-semibold text-slate-200">
-                    {prediction.garch_volatility ? `${prediction.garch_volatility}% (Ann.)` : 'Calculating...'}
+            {/* Volatility & Risk */}
+            <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Volatility & Risk</p>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <span className="text-[10px] text-slate-500 shrink-0">GARCH Vol (5d)</span>
+                  <span className="text-[10px] font-semibold text-slate-200 ml-auto">
+                    {prediction.garch_volatility ? `${prediction.garch_volatility}% ann.` : 'N/A'}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Markov Regime State:</span>
-                  <span className={`font-semibold ${
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <span className="text-[10px] text-slate-500 shrink-0">Markov Regime</span>
+                  <span className={`text-[10px] font-semibold ml-auto ${
                     prediction.regime === 'LOW_VOLATILITY' ? 'text-emerald-400' :
                     prediction.regime === 'MEDIUM_VOLATILITY' ? 'text-indigo-400' :
                     prediction.regime === 'HIGH_VOLATILITY' ? 'text-rose-400' : 'text-slate-300'
                   }`}>
-                    {prediction.regime?.replace('_', ' ') || 'SIDEWAYS'}
+                    {prediction.regime === 'LOW_VOLATILITY' ? 'Low Vol' :
+                     prediction.regime === 'MEDIUM_VOLATILITY' ? 'Med Vol' :
+                     prediction.regime === 'HIGH_VOLATILITY' ? 'High Vol' :
+                     (prediction.regime || 'N/A')}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Risk/Reward (ATR-based):</span>
-                  <span className={`font-semibold ${prediction.risk_reward_ratio >= 1.5 ? 'text-emerald-400' : 'text-slate-300'}`}>
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <span className="text-[10px] text-slate-500 shrink-0">Risk/Reward</span>
+                  <span className={`text-[10px] font-semibold ml-auto ${
+                    prediction.risk_reward_ratio >= 1.5 ? 'text-emerald-400' : 'text-slate-300'
+                  }`}>
                     {prediction.risk_reward_ratio}x
                   </span>
                 </div>
@@ -414,33 +559,25 @@ export default function MLPrediction({ ticker }) {
             </div>
           </div>
 
-          {/* Model Interpretability (SHAP / Feature Importance) */}
-          {prediction.top_features && Object.keys(prediction.top_features).length > 0 && (
-            <div className="mb-4 p-3 rounded-lg bg-white/[0.03] border border-white/[0.06]">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">
-                Feature Influence ({prediction.shap_powered ? 'SHAP Contribution' : 'Tree Importance'})
-              </p>
-              <div className="space-y-2">
-                {Object.entries(prediction.top_features).map(([feat, val]) => {
-                  // Normalize value for display bar
-                  const pct = Math.min(100, Math.max(1, val * 100));
-                  return (
-                    <div key={feat} className="text-[11px]">
-                      <div className="flex justify-between text-slate-300 mb-0.5">
-                        <span className="font-mono">{feat}</span>
-                        <span className="text-slate-500">{val.toFixed(4)}</span>
-                      </div>
-                      <div className="w-full bg-white/[0.04] h-1.5 rounded-full overflow-hidden">
-                        <div 
-                          className="bg-purple-500 h-full rounded-full" 
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+          {/* Model Interpretability — SHAP Waterfall Chart */}
+          {prediction.top_features && (
+            Array.isArray(prediction.top_features)
+              ? prediction.top_features.length > 0
+              : Object.keys(prediction.top_features).length > 0
+          ) && (
+            <SHAPWaterfallChart
+              features={
+                Array.isArray(prediction.top_features)
+                  ? prediction.top_features
+                  : Object.entries(prediction.top_features).map(([name, val]) => ({
+                      name,
+                      label: name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                      value: val,
+                      abs_value: Math.abs(val),
+                    }))
+              }
+              shapPowered={prediction.shap_powered}
+            />
           )}
 
           {/* Multi-Model Stacking Breakdown */}

@@ -334,25 +334,92 @@ def _walk_forward_metrics(X: np.ndarray, y: np.ndarray,
 
 
 # ─────────────────────────────────────────────────────────────
-# SHAP explanation (top-5 features)
+# Human-readable feature label map
 # ─────────────────────────────────────────────────────────────
-def _shap_top_features(model, X_sample: np.ndarray, feature_names: list) -> dict:
-    if not HAS_SHAP:
-        return {}
-    try:
-        explainer = shap.TreeExplainer(model)
-        vals      = explainer.shap_values(X_sample)
-        mean_abs  = np.abs(vals).mean(axis=0)
-        top_idx   = np.argsort(mean_abs)[-5:][::-1]
-        return {feature_names[i]: round(float(mean_abs[i]), 4) for i in top_idx}
-    except Exception:
-        # Fallback: raw importance if tree model
+_FEATURE_LABELS = {
+    'rsi':            'RSI (14)',
+    'macd':           'MACD Line',
+    'macd_histogram': 'MACD Histogram',
+    'macd_signal':    'MACD Signal',
+    'bb_pos':         'Bollinger Band Position',
+    'bb_width':       'Bollinger Band Width',
+    'atr_ratio':      'ATR Ratio',
+    'vol_regime':     'Volatility Regime',
+    'vol_20':         '20d Volatility',
+    'vol_60':         '60d Volatility',
+    'stoch_k':        'Stochastic %K',
+    'stoch_d':        'Stochastic %D',
+    'williams_r':     'Williams %R',
+    'ema_cross_9_21': 'EMA Cross (9/21)',
+    'returns':        'Daily Returns',
+    'log_returns':    'Log Returns',
+    'obv_ratio':      'OBV Ratio',
+    'vol_ratio':      'Volume Ratio',
+    'pct_52w_h':      '52-Week High Proximity',
+    'pct_52w_l':      '52-Week Low Proximity',
+    'skew_20':        'Return Skewness (20d)',
+    'kurt_20':        'Return Kurtosis (20d)',
+    'price_range':    'Daily Price Range',
+    'gap':            'Opening Gap',
+    'close_to_high':  'Close-to-High Ratio',
+    'close_to_low':   'Close-to-Low Ratio',
+    'roc_5':          'Rate of Change (5d)',
+    'roc_10':         'Rate of Change (10d)',
+    'roc_20':         'Rate of Change (20d)',
+    'ret_lag_1':      'Return Lag 1d',
+    'ret_lag_2':      'Return Lag 2d',
+    'ret_lag_3':      'Return Lag 3d',
+    'ret_lag_5':      'Return Lag 5d',
+    'ret_lag_10':     'Return Lag 10d',
+    'day_of_week':    'Day of Week',
+    'month':          'Calendar Month',
+    'ma_ratio_5':     'MA Ratio (5d)',
+    'ma_ratio_10':    'MA Ratio (10d)',
+    'ma_ratio_20':    'MA Ratio (20d)',
+    'ma_ratio_50':    'MA Ratio (50d)',
+    'ma_ratio_100':   'MA Ratio (100d)',
+}
+
+
+# ─────────────────────────────────────────────────────────────
+# SHAP explanation — returns signed values for waterfall chart
+# ─────────────────────────────────────────────────────────────
+def _shap_top_features(model, X_sample: np.ndarray, feature_names: list, top_n: int = 8) -> list:
+    """
+    Returns a list of dicts sorted by |shap_value| desc:
+      { name, label, value (signed), abs_value }
+    Value sign: positive pushes toward BUY, negative toward SELL.
+    Falls back to unsigned feature_importances_ if SHAP unavailable.
+    """
+    def _make_entry(name, signed_val):
+        return {
+            'name':      name,
+            'label':     _FEATURE_LABELS.get(name, name.replace('_', ' ').title()),
+            'value':     round(float(signed_val), 5),
+            'abs_value': round(abs(float(signed_val)), 5),
+        }
+
+    if HAS_SHAP:
         try:
-            imp     = model.feature_importances_
-            top_idx = np.argsort(imp)[-5:][::-1]
-            return {feature_names[i]: round(float(imp[i]), 4) for i in top_idx}
-        except Exception:
-            return {}
+            explainer = shap.TreeExplainer(model)
+            vals = explainer.shap_values(X_sample)     # shape: (n_samples, n_features)
+            # If single sample, squeeze to 1-D
+            if vals.ndim == 2:
+                signed = vals[0]
+            else:
+                signed = vals
+            top_idx = np.argsort(np.abs(signed))[-top_n:][::-1]
+            return [_make_entry(feature_names[i], signed[i]) for i in top_idx]
+        except Exception as e:
+            print(f"[SHAP] TreeExplainer failed: {e}")
+
+    # Fallback: unsigned importances (no direction)
+    try:
+        imp     = model.feature_importances_
+        top_idx = np.argsort(imp)[-top_n:][::-1]
+        return [_make_entry(feature_names[i], imp[i]) for i in top_idx]
+    except Exception:
+        return []
 
 
 # ─────────────────────────────────────────────────────────────
@@ -458,11 +525,11 @@ class StockPredictor:
             # ── Walk-forward financial metrics ──
             wf = _walk_forward_metrics(X, y, dict(pool), Ridge(alpha=1.0))
 
-            # ── SHAP on best tree model ──
+            # ── SHAP on best tree model (use test set for realistic signed values) ──
             shap_model = (self.models.get('xgboost')
                           or self.models.get('random_forest')
                           or next(iter(self.models.values())))
-            self.shap_features = _shap_top_features(shap_model, X_tr[:200], avail)
+            self.shap_features = _shap_top_features(shap_model, X_te[:100], avail)
 
             self.ticker, self.period = ticker, period
             self.start_date, self.end_date = start_date, end_date
@@ -582,14 +649,14 @@ class StockPredictor:
             risk_reward   = round(expected_gain / (atr + 1e-9), 2)
 
             # ── SHAP top features (live explanation on latest point) ──
-            live_shap = {}
-            if HAS_SHAP and self.models:
+            live_shap = []
+            if self.models:
                 best = (self.models.get('xgboost')
                         or self.models.get('random_forest')
                         or next(iter(self.models.values())))
                 live_shap = _shap_top_features(best, X_latest, avail)
 
-            top_features = live_shap or self.shap_features
+            top_features = live_shap if live_shap else self.shap_features
 
             return {
                 'predicted_return':       round(fused_return * 100, 2),

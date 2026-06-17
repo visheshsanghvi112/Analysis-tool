@@ -818,7 +818,202 @@ def sector_rank_endpoint(ticker: str = Query(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /api/backtest  — Signal-based backtesting engine
+# Strategy: RSI(14) + MACD crossover with regime filter
+# ─────────────────────────────────────────────────────────────────────────────
+@app.get("/api/backtest")
+def run_backtest(
+    ticker: str = Query(..., description="Stock ticker symbol, e.g. HDFCBANK.NS"),
+    period: str = Query("2y", description="Lookback period: 1y, 2y, 5y"),
+    initial_capital: float = Query(100000, description="Starting capital in INR"),
+):
+    """
+    Simulates a RSI+MACD momentum strategy on historical data.
+    Returns per-trade log, equity curve vs Nifty benchmark, and aggregate stats.
+    """
+    try:
+        ticker_clean = ticker.strip().upper()
+
+        df = get_history(ticker_clean, period=period)
+        if df is None or df.empty or len(df) < 60:
+            raise HTTPException(status_code=400, detail="Insufficient historical data")
+
+        close = df["Close"].copy()
+        high  = df["High"].copy()
+        low   = df["Low"].copy()
+
+        # ── Technical indicators ──────────────────────────────────────────
+        # RSI(14)
+        delta    = close.diff()
+        gain     = delta.clip(lower=0).ewm(com=13, adjust=False, min_periods=1).mean()
+        loss     = (-delta).clip(lower=0).ewm(com=13, adjust=False, min_periods=1).mean()
+        rsi      = 100 - 100 / (1 + gain / loss.replace(0, 1e-9))
+
+        # MACD(12,26,9)
+        ema12    = close.ewm(span=12, adjust=False).mean()
+        ema26    = close.ewm(span=26, adjust=False).mean()
+        macd     = ema12 - ema26
+        signal   = macd.ewm(span=9, adjust=False).mean()
+
+        # ATR(14) for stop-loss width
+        tr = pd.concat([
+            high - low,
+            (high - close.shift()).abs(),
+            (low  - close.shift()).abs(),
+        ], axis=1).max(axis=1)
+        atr = tr.ewm(span=14, adjust=False).mean()
+
+        # ── Signal generation ─────────────────────────────────────────────
+        # BUY  : RSI crosses above 35 from below AND MACD > Signal
+        # SELL : RSI crosses below 65 from above OR  MACD < Signal
+        positions = pd.Series(0, index=close.index)
+        in_trade  = False
+        entry_px  = 0.0
+        stop_loss = 0.0
+
+        for i in range(1, len(close)):
+            prev_rsi = rsi.iloc[i - 1]
+            curr_rsi = rsi.iloc[i]
+            macd_bull = macd.iloc[i] > signal.iloc[i]
+            macd_bear = macd.iloc[i] < signal.iloc[i]
+
+            if not in_trade:
+                # Entry: RSI recovering from oversold + MACD bullish
+                if prev_rsi < 35 and curr_rsi >= 35 and macd_bull:
+                    in_trade = True
+                    entry_px  = float(close.iloc[i])
+                    stop_loss = entry_px - 2.0 * float(atr.iloc[i])
+                    positions.iloc[i] = 1
+                else:
+                    positions.iloc[i] = 0
+            else:
+                curr_px = float(close.iloc[i])
+                # Exit: RSI overbought, MACD bearish, or stop-loss triggered
+                if curr_rsi >= 65 or macd_bear or curr_px < stop_loss:
+                    in_trade = False
+                    positions.iloc[i] = 0
+                else:
+                    positions.iloc[i] = 1
+
+        # ── Returns calculation ───────────────────────────────────────────
+        daily_returns    = close.pct_change().fillna(0)
+        strategy_returns = positions.shift(1).fillna(0) * daily_returns
+
+        equity           = (1 + strategy_returns).cumprod() * initial_capital
+        bh_equity        = (1 + daily_returns).cumprod() * initial_capital   # buy-and-hold
+
+        # Nifty benchmark
+        try:
+            nifty_raw    = get_history("^NSEI", period=period)
+            nifty_r      = nifty_raw["Close"].pct_change().fillna(0)
+            # align
+            common       = strategy_returns.index.intersection(nifty_r.index)
+            nifty_equity = (1 + nifty_r.loc[common]).cumprod() * initial_capital
+        except Exception:
+            nifty_equity = None
+
+        # ── Aggregate stats ───────────────────────────────────────────────
+        total_return   = float((equity.iloc[-1] / initial_capital - 1) * 100)
+        bh_return      = float((bh_equity.iloc[-1] / initial_capital - 1) * 100)
+
+        ann_factor     = 252
+        strat_ann      = float(strategy_returns.mean() * ann_factor * 100)
+        strat_vol      = float(strategy_returns.std() * np.sqrt(ann_factor) * 100)
+        rf_daily       = 0.065 / 252
+        sharpe         = float((strategy_returns - rf_daily).mean() / (strategy_returns.std() + 1e-9) * np.sqrt(ann_factor))
+
+        # Max drawdown
+        roll_max       = equity.cummax()
+        drawdown       = (equity - roll_max) / roll_max
+        max_dd         = float(drawdown.min() * 100)
+        calmar         = (strat_ann / abs(max_dd)) if abs(max_dd) > 0 else 0.0
+
+        # Trade-level analysis
+        trades         = []
+        in_t           = False
+        t_entry_date   = None
+        t_entry_px     = 0.0
+
+        for i in range(1, len(positions)):
+            if not in_t and positions.iloc[i] == 1 and positions.iloc[i - 1] == 0:
+                in_t         = True
+                t_entry_date = str(close.index[i].date())
+                t_entry_px   = float(close.iloc[i])
+            elif in_t and positions.iloc[i] == 0 and positions.iloc[i - 1] == 1:
+                in_t         = False
+                exit_date    = str(close.index[i].date())
+                exit_px      = float(close.iloc[i])
+                ret          = (exit_px - t_entry_px) / t_entry_px * 100
+                trades.append({
+                    "entry_date": t_entry_date,
+                    "exit_date":  exit_date,
+                    "entry_price": round(t_entry_px, 2),
+                    "exit_price":  round(exit_px,    2),
+                    "return_pct":  round(ret, 2),
+                    "result":     "WIN" if ret > 0 else "LOSS",
+                })
+
+        wins      = [t for t in trades if t["result"] == "WIN"]
+        losses    = [t for t in trades if t["result"] == "LOSS"]
+        win_rate  = (len(wins) / len(trades) * 100) if trades else 0
+        avg_win   = float(np.mean([t["return_pct"] for t in wins]))   if wins   else 0.0
+        avg_loss  = float(np.mean([t["return_pct"] for t in losses])) if losses else 0.0
+        profit_factor = (
+            abs(sum(t["return_pct"] for t in wins) / sum(t["return_pct"] for t in losses))
+            if losses and sum(t["return_pct"] for t in losses) != 0 else float("inf")
+        )
+
+        # ── Equity curve series (sampled for payload size) ────────────────
+        def _curve(series, label):
+            sampled = series.resample("W").last().dropna() if len(series) > 200 else series
+            return [
+                {"date": str(d.date()), "value": round(float(v), 2), "label": label}
+                for d, v in sampled.items()
+            ]
+
+        strategy_curve = _curve(equity,    "Strategy")
+        bh_curve       = _curve(bh_equity, "Buy & Hold")
+        nifty_curve    = _curve(nifty_equity, "Nifty 50") if nifty_equity is not None else []
+
+        return {
+            "ticker": ticker_clean,
+            "period": period,
+            "strategy": "RSI(14) + MACD Crossover + ATR Stop-Loss",
+            "stats": {
+                "initial_capital":  round(initial_capital, 2),
+                "final_value":      round(float(equity.iloc[-1]), 2),
+                "total_return_pct": round(total_return, 2),
+                "bh_return_pct":    round(bh_return, 2),
+                "alpha":            round(total_return - bh_return, 2),
+                "annualized_return": round(strat_ann, 2),
+                "annualized_vol":   round(strat_vol, 2),
+                "sharpe_ratio":     round(sharpe, 3),
+                "max_drawdown_pct": round(max_dd, 2),
+                "calmar_ratio":     round(calmar, 3),
+                "total_trades":     len(trades),
+                "win_rate_pct":     round(win_rate, 1),
+                "avg_win_pct":      round(avg_win, 2),
+                "avg_loss_pct":     round(avg_loss, 2),
+                "profit_factor":    round(min(profit_factor, 99.9), 2),
+            },
+            "equity_curves": {
+                "strategy": strategy_curve,
+                "buy_and_hold": bh_curve,
+                "nifty": nifty_curve,
+            },
+            "trades": trades[-30:],   # Last 30 trades to cap payload
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Backtest failed: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
 

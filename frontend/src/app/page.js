@@ -10,6 +10,7 @@ import AdvancedNews from './components/AdvancedNews';
 import PortfolioMetrics from './components/PortfolioMetrics';
 import PeerComparison from './components/PeerComparison';
 import SectorIntelligence from './components/SectorIntelligence';
+import Backtesting from './components/Backtesting';
 import {
   TrendingUp, Brain, Newspaper, PieChart,
   Activity, ArrowRight, CheckCircle, Clock, AlertTriangle,
@@ -287,6 +288,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <PortfolioMetrics ticker={selectedTicker} />
+              <Backtesting ticker={selectedTicker} />
 
               {/* ── Peer & Sector Intelligence Tabs ───────────────────── */}
               <PeerSectorTabs ticker={selectedTicker} />
