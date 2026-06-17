@@ -1182,8 +1182,169 @@ def analyze_portfolio(req: PortfolioRequest):
     }
 
 
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# /api/portfolio-insight — Recovery Advisor
+# Per holding: RSI signal + news sentiment + recommendation + avg-down calc
+# ─────────────────────────────────────────────────────────────────────────────
+@app.post("/api/portfolio-insight")
+def portfolio_insight(req: PortfolioRequest):
+    """
+    For each holding returns:
+    - RSI-based signal (OVERSOLD / NEUTRAL / OVERBOUGHT)
+    - News sentiment score
+    - Recommendation: AVERAGE_DOWN / HOLD_MONITOR / CUT_LOSS / BOOK_PROFIT
+    - Break-even metrics and averaging-down calculator
+    Portfolio-level: total capital to average down, priority action list
+    """
+    insights = []
+
+    for h in req.holdings:
+        tk = h.ticker.strip().upper()
+
+        # ── Live price ─────────────────────────────────────────────────────
+        try:
+            q       = get_quote(tk)
+            live_px = float(q.get("price") or h.buy_price)
+        except Exception:
+            live_px = h.buy_price
+
+        pnl_pct = (live_px - h.buy_price) / h.buy_price * 100
+        in_loss = pnl_pct < -0.5   # >0.5% loss to avoid noise
+
+        # ── RSI(14) from 3-month history ───────────────────────────────────
+        rsi_val = None
+        signal  = "NEUTRAL"
+        try:
+            df = get_history(tk, period="3mo")
+            if df is not None and len(df) > 20:
+                delta = df["Close"].diff()
+                gain  = delta.clip(lower=0).ewm(com=13, adjust=False).mean()
+                loss  = (-delta).clip(lower=0).ewm(com=13, adjust=False).mean()
+                rsi   = 100 - 100 / (1 + gain / loss.replace(0, 1e-9))
+                rsi_val = round(float(rsi.iloc[-1]), 1)
+                if rsi_val < 35:
+                    signal = "OVERSOLD"
+                elif rsi_val > 65:
+                    signal = "OVERBOUGHT"
+        except Exception:
+            pass
+
+        # ── News sentiment ─────────────────────────────────────────────────
+        sentiment = 0.0
+        try:
+            nd = get_advanced_news_analysis(tk, max_articles=5)
+            sentiment = float(nd.get("aggregate", {}).get("avg_sentiment", 0))
+        except Exception:
+            pass
+
+        # ── Recovery metrics ───────────────────────────────────────────────
+        gain_to_breakeven = round(((h.buy_price / live_px) - 1) * 100, 2) if in_loss else 0.0
+
+        # Averaging down: buy same qty again at current price
+        avg_down_info = None
+        if in_loss:
+            add_qty        = h.qty
+            new_avg        = (h.qty * h.buy_price + add_qty * live_px) / (h.qty + add_qty)
+            add_cost       = add_qty * live_px
+            new_gain_to_be = round(((new_avg / live_px) - 1) * 100, 2)
+            pct_reduction  = round(((h.buy_price - new_avg) / h.buy_price) * 100, 2)
+            avg_down_info  = {
+                "add_qty":             add_qty,
+                "add_cost":            round(add_cost, 2),
+                "new_avg_price":       round(new_avg, 2),
+                "new_gain_to_breakeven_pct": new_gain_to_be,
+                "avg_cost_reduction_pct":    pct_reduction,
+            }
+
+        # ── Recommendation logic ───────────────────────────────────────────
+        if in_loss:
+            if signal == "OVERSOLD" and sentiment >= 0.0:
+                rec        = "AVERAGE_DOWN"
+                rec_label  = "Average Down"
+                rec_color  = "emerald"
+                rec_reason = (
+                    f"RSI at {rsi_val} (oversold) with "
+                    + ("positive" if sentiment > 0.1 else "neutral")
+                    + " news sentiment. Technically the stock is near a potential reversal — buying more lowers your average cost."
+                )
+            elif signal == "OVERBOUGHT" or sentiment < -0.25:
+                rec        = "CUT_LOSS"
+                rec_label  = "Cut Loss"
+                rec_color  = "rose"
+                rec_reason = (
+                    ("RSI overbought despite price being below cost — unusual, momentum may not support a bounce. " if signal == "OVERBOUGHT" else "")
+                    + ("Negative news sentiment suggests further downside pressure. " if sentiment < -0.25 else "")
+                    + "Consider exiting to redeploy capital into stronger opportunities."
+                )
+            else:
+                rec        = "HOLD_MONITOR"
+                rec_label  = "Hold & Monitor"
+                rec_color  = "amber"
+                rec_reason = (
+                    f"Mixed signals (RSI: {rsi_val}, sentiment: {round(sentiment,2)}). "
+                    + "No clear catalyst for recovery yet. Hold and wait for RSI to drop below 35 or sentiment to improve before adding."
+                )
+        else:
+            if signal == "OVERBOUGHT" and pnl_pct > 15:
+                rec        = "BOOK_PROFIT"
+                rec_label  = "Book Partial Profit"
+                rec_color  = "indigo"
+                rec_reason = (
+                    f"You're up {round(pnl_pct,1)}% and RSI is overbought at {rsi_val}. "
+                    + "Consider booking 30–50% to lock in gains while leaving room for further upside."
+                )
+            else:
+                rec        = "STAY_INVESTED"
+                rec_label  = "Stay Invested"
+                rec_color  = "emerald"
+                rec_reason = (
+                    f"Profitable position with RSI at {rsi_val}. "
+                    + ("Positive sentiment supports continued holding." if sentiment > 0 else "Monitor sentiment for any negative shifts.")
+                )
+
+        insights.append({
+            "ticker":               tk,
+            "live_price":           round(live_px, 2),
+            "buy_price":            h.buy_price,
+            "qty":                  h.qty,
+            "pnl_pct":              round(pnl_pct, 2),
+            "in_loss":              in_loss,
+            "rsi":                  rsi_val,
+            "signal":               signal,
+            "news_sentiment":       round(sentiment, 3),
+            "gain_to_breakeven_pct": gain_to_breakeven,
+            "avg_down":             avg_down_info,
+            "recommendation":       rec,
+            "rec_label":            rec_label,
+            "rec_color":            rec_color,
+            "rec_reason":           rec_reason,
+        })
+
+    # ── Portfolio-level summary ────────────────────────────────────────────
+    loss_items   = [i for i in insights if i["in_loss"]]
+    profit_items = [i for i in insights if not i["in_loss"]]
+    sentiments   = [i["news_sentiment"] for i in insights]
+    avg_sent     = round(float(np.mean(sentiments)), 3) if sentiments else 0.0
+    total_avg_down_capital = round(
+        sum(i["avg_down"]["add_cost"] for i in insights if i.get("avg_down")), 2
+    )
+    priority = sorted(loss_items, key=lambda x: x["pnl_pct"])[:3]
+
+    return {
+        "insights": insights,
+        "portfolio_summary": {
+            "total_holdings":           len(insights),
+            "in_loss":                  len(loss_items),
+            "in_profit":                len(profit_items),
+            "avg_portfolio_sentiment":  avg_sent,
+            "sentiment_label":          "Positive" if avg_sent > 0.1 else "Negative" if avg_sent < -0.1 else "Neutral",
+            "total_capital_to_avg_down": total_avg_down_capital,
+            "priority_actions":         priority,
+        },
+    }

@@ -7,7 +7,8 @@ import {
 } from 'recharts';
 import {
   Plus, Trash2, RefreshCw, TrendingUp, TrendingDown,
-  AlertCircle, Briefcase, BarChart2, ShieldAlert, Search, X,
+  AlertCircle, Briefcase, ShieldAlert, Search, X,
+  Lightbulb, Zap, Target, ArrowDownRight,
 } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://stock-analysis-backend-seven.vercel.app';
@@ -60,32 +61,45 @@ function TickerSearch({ value, onChange }) {
   };
 
   return (
-    <div ref={ref} className="relative">
-      <div className="flex items-center gap-2 px-2.5 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded-lg">
+    <div ref={ref} className="relative w-full">
+      <div className="flex items-center gap-2 px-2.5 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded-lg focus-within:border-indigo-500/50 transition">
         <Search className="h-3.5 w-3.5 text-slate-500 shrink-0" />
         <input
           value={query}
           onChange={e => { setQuery(e.target.value); onChange(e.target.value); }}
-          placeholder="HDFCBANK.NS"
-          className="bg-transparent text-xs text-white placeholder-slate-600 outline-none w-28"
+          onBlur={() => {
+            // auto-append .NS if no suffix given
+            if (query && !query.includes('.')) {
+              const sym = query.toUpperCase() + '.NS';
+              setQuery(sym);
+              onChange(sym);
+            }
+          }}
+          placeholder="Search stock…"
+          className="bg-transparent text-xs text-white placeholder-slate-600 outline-none flex-1 min-w-0"
         />
         {query && (
-          <button onClick={() => { setQuery(''); onChange(''); setResults([]); }}>
-            <X className="h-3 w-3 text-slate-600" />
+          <button onClick={() => { setQuery(''); onChange(''); setResults([]); }} className="shrink-0">
+            <X className="h-3 w-3 text-slate-600 hover:text-slate-300" />
           </button>
         )}
       </div>
       {open && results.length > 0 && (
-        <div className="absolute z-50 top-full mt-1 w-64 bg-[#0e0e0e] border border-white/[0.08] rounded-lg shadow-xl overflow-hidden">
-          {results.map(t => (
+        <div className="absolute z-[999] top-full mt-1 left-0 w-72 bg-[#111] border border-white/[0.12] rounded-xl shadow-2xl" style={{boxShadow:'0 20px 60px rgba(0,0,0,0.8)'}}>
+          {results.map((t, i) => (
             <button
               key={t.symbol}
-              onMouseDown={() => pick(t)}
-              className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/[0.05] text-left transition"
+              onMouseDown={e => { e.preventDefault(); pick(t); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/[0.07] text-left transition ${i < results.length-1 ? 'border-b border-white/[0.05]' : ''}`}
             >
-              <span className="text-[11px] font-bold text-white">{t.symbol.replace('.NS','').replace('.BO','')}</span>
-              <span className="text-[10px] text-slate-500 truncate">{t.name}</span>
-              {t.sector && <span className="ml-auto text-[9px] text-indigo-400 shrink-0">{t.sector}</span>}
+              <div className="h-7 w-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                <span className="text-[8px] font-black text-indigo-400">{t.symbol.replace('.NS','').replace('.BO','').slice(0,3)}</span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold text-white">{t.symbol.replace('.NS','').replace('.BO','')}</p>
+                <p className="text-[9px] text-slate-500 truncate">{t.name}</p>
+              </div>
+              {t.sector && <span className="ml-auto text-[9px] text-indigo-400 shrink-0 bg-indigo-500/10 px-1.5 py-0.5 rounded">{t.sector}</span>}
             </button>
           ))}
         </div>
@@ -241,10 +255,12 @@ function PriceHistoryChart({ history, holdings }) {
 export default function PortfolioTracker() {
   const emptyRow = () => ({ id: Date.now(), ticker: '', qty: '', buy_price: '' });
 
-  const [rows, setRows]     = useState([emptyRow()]);
-  const [result, setResult] = useState(null);
+  const [rows, setRows]       = useState([emptyRow()]);
+  const [result, setResult]   = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError]   = useState(null);
+  const [error, setError]     = useState(null);
+  const [advice, setAdvice]   = useState(null);
+  const [advLoading, setAdvLoading] = useState(false);
 
   // Persist to localStorage
   useEffect(() => {
@@ -292,6 +308,31 @@ export default function PortfolioTracker() {
     }
   }, [validRows]);
 
+  const getAdvice = useCallback(async () => {
+    if (!validRows.length) return;
+    setAdvLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/portfolio-insight`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          holdings: validRows.map(r => ({
+            ticker: r.ticker.trim().toUpperCase(),
+            qty: +r.qty,
+            buy_price: +r.buy_price,
+          })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.detail || 'Failed');
+      setAdvice(json);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setAdvLoading(false);
+    }
+  }, [validRows]);
+
   const s   = result?.summary;
   const risk = result?.risk;
 
@@ -311,14 +352,14 @@ export default function PortfolioTracker() {
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
 
         {/* Holdings input table */}
-        <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] overflow-hidden">
+        <div className="rounded-xl bg-white/[0.02] border border-white/[0.06]">
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.05]">
             <p className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Your Holdings</p>
             <p className="text-[10px] text-slate-600">{validRows.length} valid · max 15</p>
           </div>
 
           {/* Column headers */}
-          <div className="grid grid-cols-[1fr_80px_100px_36px] gap-2 px-4 py-2 border-b border-white/[0.04]">
+          <div className="grid grid-cols-[2fr_90px_120px_36px] gap-3 px-4 py-2 border-b border-white/[0.04]">
             <p className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Stock</p>
             <p className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Qty</p>
             <p className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Buy Price (₹)</p>
@@ -328,7 +369,7 @@ export default function PortfolioTracker() {
           {/* Rows */}
           <div className="divide-y divide-white/[0.03]">
             {rows.map((row) => (
-              <div key={row.id} className="grid grid-cols-[1fr_80px_100px_36px] gap-2 px-4 py-2 items-center">
+              <div key={row.id} className="grid grid-cols-[2fr_90px_120px_36px] gap-3 px-4 py-3 items-center">
                 <TickerSearch value={row.ticker} onChange={v => updateRow(row.id, 'ticker', v)} />
                 <input
                   type="number" min="0" value={row.qty}
@@ -483,6 +524,158 @@ export default function PortfolioTracker() {
                 tickers={result.holdings.map(h => h.ticker)}
               />
             )}
+
+            {/* Recovery Advisor */}
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-amber-500/10">
+                <div className="flex items-center gap-2">
+                  <Lightbulb className="h-4 w-4 text-amber-400" />
+                  <p className="text-sm font-bold text-white">Recovery Advisor</p>
+                  <span className="text-[9px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">AI</span>
+                </div>
+                <button
+                  onClick={getAdvice}
+                  disabled={advLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-[11px] font-bold rounded-lg transition cursor-pointer"
+                >
+                  <Zap className={`h-3 w-3 ${advLoading ? 'animate-pulse' : ''}`} />
+                  {advLoading ? 'Analysing…' : advice ? 'Refresh' : 'Get Advice'}
+                </button>
+              </div>
+
+              {!advice && !advLoading && (
+                <div className="px-4 py-8 text-center">
+                  <Lightbulb className="h-8 w-8 mx-auto mb-2 text-amber-500/30" />
+                  <p className="text-sm text-slate-400 mb-1">Smart recovery analysis for your portfolio</p>
+                  <p className="text-[11px] text-slate-600">RSI signals · News sentiment · Averaging down calculator</p>
+                </div>
+              )}
+
+              {advLoading && (
+                <div className="px-4 py-8 text-center text-slate-500">
+                  <div className="h-6 w-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                  <p className="text-xs">Fetching signals and sentiment for each holding…</p>
+                </div>
+              )}
+
+              {advice && !advLoading && (() => {
+                const ps = advice.portfolio_summary;
+                const sentColor = ps.sentiment_label === 'Positive' ? 'text-emerald-400' : ps.sentiment_label === 'Negative' ? 'text-rose-400' : 'text-amber-400';
+                return (
+                  <div className="p-4 space-y-4">
+                    {/* Portfolio sentiment banner */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {[{
+                        label: 'In Loss', value: ps.in_loss, color: ps.in_loss > 0 ? 'text-rose-400' : 'text-slate-400',
+                      }, {
+                        label: 'In Profit', value: ps.in_profit, color: 'text-emerald-400',
+                      }, {
+                        label: 'Market Mood', value: ps.sentiment_label, color: sentColor,
+                      }, {
+                        label: 'Capital to Avg Down', value: fmtINR(ps.total_capital_to_avg_down), color: 'text-amber-400',
+                      }].map(item => (
+                        <div key={item.label} className="rounded-lg bg-white/[0.03] border border-white/[0.06] p-2.5 text-center">
+                          <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">{item.label}</p>
+                          <p className={`text-sm font-bold ${item.color}`}>{item.value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Per-holding cards */}
+                    <div className="space-y-3">
+                      {advice.insights.map(ins => {
+                        const colors = {
+                          emerald: { bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', text: 'text-emerald-400', badge: 'bg-emerald-500/20' },
+                          rose:    { bg: 'bg-rose-500/10',    border: 'border-rose-500/20',    text: 'text-rose-400',    badge: 'bg-rose-500/20' },
+                          amber:   { bg: 'bg-amber-500/10',   border: 'border-amber-500/20',   text: 'text-amber-400',   badge: 'bg-amber-500/20' },
+                          indigo:  { bg: 'bg-indigo-500/10',  border: 'border-indigo-500/20',  text: 'text-indigo-400',  badge: 'bg-indigo-500/20' },
+                        };
+                        const c = colors[ins.rec_color] || colors.amber;
+                        const short = ins.ticker.replace('.NS','').replace('.BO','');
+                        return (
+                          <div key={ins.ticker} className={`rounded-xl border ${c.border} ${c.bg} p-3`}>
+                            <div className="flex items-start justify-between gap-3 mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className="h-8 w-8 rounded-lg bg-white/[0.05] border border-white/[0.08] flex items-center justify-center shrink-0">
+                                  <span className="text-[9px] font-black text-white">{short.slice(0,3)}</span>
+                                </div>
+                                <div>
+                                  <p className="text-[12px] font-bold text-white">{short}</p>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span className={`text-[10px] font-bold ${ins.pnl_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                      {ins.pnl_pct >= 0 ? '+' : ''}{fmt(ins.pnl_pct)}%
+                                    </span>
+                                    {ins.rsi != null && (
+                                      <span className="text-[9px] text-slate-500">· RSI {ins.rsi}</span>
+                                    )}
+                                    <span className={`text-[9px] ${
+                                      ins.signal === 'OVERSOLD' ? 'text-emerald-400' :
+                                      ins.signal === 'OVERBOUGHT' ? 'text-rose-400' : 'text-slate-500'
+                                    }`}>
+                                      · {ins.signal}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <span className={`shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-full ${c.badge} ${c.text} border ${c.border}`}>
+                                {ins.rec_label}
+                              </span>
+                            </div>
+
+                            <p className="text-[10px] text-slate-400 leading-relaxed mb-2">{ins.rec_reason}</p>
+
+                            {/* Metrics row */}
+                            <div className="flex flex-wrap gap-2">
+                              <div className="flex items-center gap-1 text-[9px] text-slate-500">
+                                <Target className="h-3 w-3" />
+                                Sentiment: <span className={`font-bold ml-0.5 ${
+                                  ins.news_sentiment > 0.1 ? 'text-emerald-400' :
+                                  ins.news_sentiment < -0.1 ? 'text-rose-400' : 'text-slate-400'
+                                }`}>{ins.news_sentiment > 0 ? '+' : ''}{ins.news_sentiment}</span>
+                              </div>
+                              {ins.in_loss && (
+                                <div className="flex items-center gap-1 text-[9px] text-slate-500">
+                                  <ArrowDownRight className="h-3 w-3" />
+                                  Need <span className="font-bold text-rose-400 ml-0.5">+{fmt(ins.gain_to_breakeven_pct)}%</span> to break even
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Avg down box */}
+                            {ins.avg_down && (
+                              <div className="mt-2.5 p-2.5 rounded-lg bg-white/[0.04] border border-white/[0.06]">
+                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-1.5">Averaging Down Calculator</p>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                                  {[{
+                                    label: 'Add Qty', value: ins.avg_down.add_qty,
+                                  }, {
+                                    label: 'Capital Needed', value: fmtINR(ins.avg_down.add_cost),
+                                  }, {
+                                    label: 'New Avg Cost', value: `₹${ins.avg_down.new_avg_price.toLocaleString('en-IN')}`,
+                                  }, {
+                                    label: 'Need to Break Even', value: `+${fmt(ins.avg_down.new_gain_to_breakeven_pct)}%`,
+                                  }].map(m => (
+                                    <div key={m.label} className="rounded bg-white/[0.03] p-1.5">
+                                      <p className="text-[8px] text-slate-600 mb-0.5">{m.label}</p>
+                                      <p className="text-[10px] font-bold text-white">{m.value}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                                <p className="text-[9px] text-slate-600 mt-1.5">
+                                  Buying {ins.avg_down.add_qty} more shares reduces your avg cost by <span className="text-amber-400 font-bold">{ins.avg_down.avg_cost_reduction_pct}%</span>
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <p className="text-[9px] text-slate-700 text-center">Not financial advice. For educational purposes only.</p>
+                  </div>
+                );
+              })()}
+            </div>
 
             {/* As of */}
             <p className="text-[10px] text-slate-700 text-center">
