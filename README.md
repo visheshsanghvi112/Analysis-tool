@@ -4,7 +4,10 @@
 
 # StockIQ Pro 📈
 
-### Institutional-grade stock intelligence & quantitative analytics for the Indian equity market — powered by Machine Learning, Hidden Markov Models, and GARCH volatility forecasting.
+### _Institutional-grade stock intelligence for the individual Indian investor_
+
+**The same analytical firepower used by hedge funds and quant desks —  
+made free, open-source, and built for NSE & BSE.**
 
 <br/>
 
@@ -16,112 +19,216 @@
 
 <br/>
 
-**[🌐 Live Demo](https://your-app.vercel.app)** · **[📖 API Docs](https://your-backend.vercel.app/docs)** · **[🐛 Report Bug](https://github.com/visheshsanghvi112/Analysis-tool/issues)** · **[✨ Request Feature](https://github.com/visheshsanghvi112/Analysis-tool/issues)**
+**[🌐 Live Demo](https://stockiq-pro.vercel.app)** · **[📖 API Docs](https://stock-analysis-backend-seven.vercel.app/docs)** · **[🐛 Report Bug](https://github.com/visheshsanghvi112/Analysis-tool/issues)**
 
 </div>
 
 ---
 
-## What is StockIQ Pro?
+## The Problem: You're Investing Blind
 
-StockIQ Pro is a **full-stack stock analysis platform** built for the Indian equity market (NSE & BSE). It brings institutional-quality financial analytics — typically locked behind Bloomberg Terminal ($24,000/year) or expensive quant platforms — and makes them **completely free and open-source**.
+You open Zerodha or Groww. You see a price chart and a buy button.  
+But **what is that price actually telling you?**
 
-A user can search any of the **1,900+ NSE-listed stocks**, and instantly get:
+- Is the stock overbought or building momentum?
+- Is the recent rally backed by volume or just noise?
+- What does the market *feel* about this stock right now — fear or greed?
+- Is a correction coming, or is there more upside?
+- How much could you lose on a bad day — statistically?
 
-- A **live price quote** with day range visualization (auto-refreshes every 30 seconds)
-- **Full technical analysis** — RSI, MACD, Bollinger Bands, ADX, Moving Averages — plotted on interactive charts
-- **5-day AI price predictions** from a trained Random Forest model with confidence scores
-- **Professional portfolio risk metrics** — VaR (95% & 99%), Sharpe Ratio, Maximum Drawdown, Beta vs Nifty
-- **Black-Scholes options pricing** with Greeks (Delta, Gamma, Vega, Theta) for any stock
-- **AI-powered news intelligence** — multi-source aggregation with real-time sentiment scoring and impact analysis
+**Most retail investors don't have answers to these questions.** Not because they're not smart — but because the tools that answer them cost ₹2,00,000+/year (Bloomberg Terminal), require a CFA to interpret, or simply don't exist for Indian markets.
+
+**StockIQ Pro changes that.**
 
 ---
 
-## Features In Depth
+## What StockIQ Pro Does For You As An Investor
 
-### 📊 Live Market Data
-Real-time NSE/BSE price quotes fetched via Yahoo Finance's undocumented-but-stable chart API (`v8/finance/chart`). Includes current price, day high/low, previous close, volume, and market cap. Data is ~15 minutes delayed for NSE stocks (Yahoo Finance standard). A visual range bar shows where the current price sits within the day's trading range.
+Imagine you're considering buying HDFC Bank. Here's what StockIQ Pro gives you in under 60 seconds:
 
-### 🧠 Machine Learning Predictions (6-Model Stacked Ensemble)
-To generate highly reliable price projections, StockIQ Pro utilizes a multi-stage **Stacked Ensemble Regressor** trained on 2 years of daily historical data. Naive machine learning models often fail in finance due to high noise-to-signal ratios. Our ensemble architecture overcomes this by combining diverse model families:
-1.  **Base Learners (Diverse Feature Spaces):**
-    *   **Random Forest Regressor:** Handles bagging and reduces variance.
-    *   **Gradient Boosting Regressor:** Sequentially fits trees to minimize residuals.
-    *   **XGBoost:** Implements regularized (L1/L2) tree boosting for maximum tabular speed and accuracy.
-    *   **LightGBM:** Uses leaf-wise growth (GOSS) to efficiently capture deep feature interactions.
-    *   **Extra Trees Regressor:** Extremely randomized trees that add high variance reduction to shield the ensemble from price anomalies.
-2.  **Meta-Learner (Ridge Stacking):**
-    *   Base learners' out-of-sample predictions are combined by a **Ridge Regressor (L2 Regularization)**. The Ridge meta-learner restricts the regression weights to prevent multicollinearity and overfitting, providing a stable final 5-day return prediction.
-3.  **Features Engineered (40+ Indicators):**
-    *   **Momentum:** RSI (14), Williams %R, Stochastic %K/%D.
-    *   **Trend:** MACD, MACD Signal, MACD Histogram, EMA Cross (9/21), MA Ratios (5, 10, 20, 50, 100).
-    *   **Volatility:** ATR Ratio, Bollinger Band Position & Width, 20d & 60d standard deviation.
-    *   **Volume:** Volume Ratio, OBV Ratio.
-    *   **Moments & Calendars:** Rolling skewness/kurtosis (20d), 52-week proximity, calendar effects (day of week, month), and multi-day lagged returns.
+```
+✅ Live price with intraday range — where is it trading right now?
+✅ Full technical picture — RSI, MACD, Bollinger Bands, ADX on one dashboard
+✅ 5-day AI price prediction — where is it likely headed?
+✅ Market sentiment — what is the news saying, and does it support the trade?
+✅ Risk profile — how much can I lose? What's my risk-adjusted return?
+✅ Strategy backtest — if I had followed this signal in the past, would I have made money?
+✅ Peer comparison — is HDFC Bank actually better than ICICI Bank right now?
+✅ Market regime — is the broader environment bullish or are we in a volatile phase?
+```
 
-### 📐 Out-of-Sample Walk-Forward Backtesting
-Standard cross-validation (like K-Fold) leaks future data into the past, producing artificially high backtest metrics. We implement an **Expanding Walk-Forward Backtest** (5 folds) to simulate real-world trading performance:
-*   **Directional Hit Rate:** Measures the percentage of times the model correctly predicted the sign (direction) of the 5-day return.
-*   **Profit Factor:** The ratio of gross profits to gross losses:
-$$\text{Profit Factor} = \frac{\sum \text{Wins}}{\sum |\text{Losses}|}$$
-*   **Ensemble Advantage:** The absolute accuracy improvement of the stacked ensemble over a standalone baseline XGBoost model, demonstrating the statistical edge of stacking.
+This is not a simple screener. This is a **decision-support system** — built for investors who want to go beyond price and make informed, evidence-based decisions.
 
-### 🏛️ Advanced Volatility & Regime Modeling (HMM + GARCH)
-Markets are non-stationary and fluctuate between structural periods. StockIQ Pro models these periods using advanced econometrics:
-1.  **Gaussian Hidden Markov Model (HMM):**
-    *   Instead of arbitrary moving average crossovers, a 3-state HMM is fitted directly to the stock's log returns. The model identifies hidden latent states: **LOW_VOLATILITY** (stable bull), **MEDIUM_VOLATILITY** (neutral/orderly), and **HIGH_VOLATILITY** (bearish/panic).
-    *   The model solves the transition probability matrix to classify the current day's active regime.
-2.  **GARCH(1,1) Volatility Forecasting:**
-    *   Models the conditional variance ($\sigma_t^2$) of returns using the standard GARCH(1,1) specification to capture volatility clustering:
-$$\sigma_t^2 = \omega + \alpha \epsilon_{t-1}^2 + \beta \sigma_{t-1}^2$$
-    *   The forecasted variance over the 5-day horizon is annualized to yield the expected forward-looking volatility.
-3.  **Regime-Aware Decision Engine:**
-    *   During a **HIGH_VOLATILITY** regime, the model automatically widens the prediction signal thresholds (widening to $3.0\%$ expected return) to prevent false trading signals caused by noise. In stable regimes, the threshold narrows to $1.8\%$.
+---
 
+## How It's Different
 
+| Feature | StockIQ Pro | Zerodha / Groww | Moneycontrol | Bloomberg |
+|---|---|---|---|---|
+| ML Price Predictions | ✅ 5-model ensemble | ❌ | ❌ | ✅ (₹2L/yr) |
+| Explainable AI (SHAP) | ✅ See *why* the model predicted | ❌ | ❌ | ❌ |
+| Signal Backtesting | ✅ RSI+MACD strategy, equity curve | ❌ | ❌ | ✅ (₹2L/yr) |
+| Market Regime (HMM) | ✅ 3-state Hidden Markov Model | ❌ | ❌ | Limited |
+| GARCH Volatility Forecast | ✅ 5-day forward vol | ❌ | ❌ | ✅ (₹2L/yr) |
+| News Sentiment AI | ✅ Per-article impact scoring | ❌ | Manual tags | ✅ |
+| Options Greeks | ✅ Full Black-Scholes + Greeks | Limited | Limited | ✅ |
+| VaR / Expected Shortfall | ✅ 95% & 99% | ❌ | ❌ | ✅ |
+| Sector Peer Ranking | ✅ Composite score vs peers | Basic | Basic | ✅ |
+| NSE Coverage | ✅ 1,900+ stocks | ✅ | ✅ | ✅ |
+| **Cost** | **Free & Open Source** | Free (basic) | Free (ads) | ₹2,00,000/yr |
 
-### 📈 Technical Analysis Charts
-Interactive charts rendered via Recharts, built on a `ComposedChart` with:
-- **Price chart**: Candlestick-style close price with MA20, MA50, MA100 overlays and Bollinger Bands
-- **Volume histogram**: Color-coded green/red vs rolling average, with a Volume MA20 line
-- **RSI (14)**: With overbought (70) and oversold (30) reference lines
-- **MACD + Histogram**: Signal line crossover visualization
-- **ADX**: Trend strength gauge with 15 and 25 threshold references
+---
 
-### 💼 Portfolio & Risk Analytics
-Computes institutional-grade metrics from 1 year of daily return history:
+## Feature Deep-Dive
 
-| Metric | Description |
+### 🧠 AI Price Prediction — 6-Model Stacked Ensemble
+
+> _"Single models fail in finance. Markets are noisy, non-linear, and regime-dependent. The solution is ensemble stacking."_
+
+StockIQ Pro trains **5 diverse base learners** simultaneously on 2 years of daily data, then combines them using a **Ridge meta-learner** that learns the optimal weight for each model's output:
+
+| Model | What it captures |
 |---|---|
-| **VaR 95% / 99%** | Maximum expected daily loss at 95% / 99% confidence |
-| **Expected Shortfall** | Average loss when VaR threshold is breached (tail risk) |
-| **Max Drawdown** | Peak-to-trough loss over the trailing year |
-| **Sharpe Ratio** | Risk-adjusted return (6.5% India risk-free rate) |
-| **Beta vs Nifty 50** | Systematic risk relative to the broad market |
-| **Correlation** | Price co-movement with the Nifty 50 index |
-| **Information Ratio** | Active management skill vs the benchmark |
-| **Skewness / Kurtosis** | Return distribution shape (fat-tail analysis) |
-| **Annual Volatility** | Annualized standard deviation of daily returns |
+| **Random Forest** | Non-linear price patterns via bagging |
+| **Gradient Boosting** | Sequential error correction |
+| **XGBoost** | Regularized tree boosting (L1/L2) |
+| **LightGBM** | Leaf-wise growth for deep feature interactions |
+| **Extra Trees** | High-variance reduction via extreme randomization |
+| **Ridge Meta-Learner** | Combines all 5, prevents multicollinearity |
 
-### ⚙️ Black-Scholes Options Pricing
-For any given stock, the platform computes at-the-money (ATM) European options pricing for a 30-day horizon, including:
-- **Call price** and **Put price** in ₹
-- **Delta** (directional exposure)
-- **Gamma** (rate of delta change)
-- **Vega** (sensitivity to volatility)
-- **Theta** (time decay per day)
-- **Implied Volatility** (derived from the trailing year's annualized vol)
+**40+ engineered features** feed into the ensemble:
+- **Momentum**: RSI(14), Williams %R, Stochastic %K/%D
+- **Trend**: MACD, EMA Cross (9/21), MA Ratios (5/10/20/50/100d)
+- **Volatility**: ATR Ratio, Bollinger Band Position & Width, 20d/60d σ
+- **Volume**: Volume Ratio, OBV Ratio
+- **Statistical**: Rolling Skewness & Kurtosis (20d), 52-week high/low proximity
+- **Calendar**: Day-of-week effect, month effect
+- **Lagged returns**: 1d, 2d, 3d, 5d, 10d lags
+
+**News sentiment fusion** — the final prediction is an 80/20 blend of ML signal and live news sentiment, so breaking news nudges the model the same way it moves real markets.
+
+---
+
+### 🔍 SHAP Explainability — _Why_ Did the Model Predict That?
+
+Most AI tools are black boxes. StockIQ Pro is not.
+
+Every prediction comes with a **SHAP (SHapley Additive exPlanations) waterfall chart** showing exactly which features pushed the model toward a BUY signal and which pushed it toward SELL:
+
+```
+▲ RSI (14)              +0.0312   ████████████████████ → Bullish push
+▲ Bollinger Band Pos    +0.0187   ████████████         → Bullish push  
+▼ MACD Histogram        -0.0241   ███████████████████  → Bearish push
+▲ Volume Ratio          +0.0094   ██████               → Bullish push
+▼ 20d Volatility        -0.0156   ████████████         → Bearish push
+```
+
+**Net Bullish → BUY signal.** Now you understand *why*, not just *what*.
+
+For an investor, this means: *"The model is bullish primarily because RSI is recovering from oversold levels and volume is picking up — but MACD and rising volatility are concerns."*  
+That's a sentence you can actually act on.
+
+---
+
+### 🏛️ Market Regime Detection (Hidden Markov Model)
+
+Markets don't behave the same every day. There are distinct **structural regimes**:
+- 📈 **Low Volatility** — stable bull market, trending up
+- ➡️ **Medium Volatility** — sideways/neutral, consolidating
+- 📉 **High Volatility** — panic, selling pressure, high risk
+
+StockIQ Pro fits a **3-state Gaussian Hidden Markov Model** directly to a stock's log-return series. The HMM learns transition probabilities between states and classifies which regime the stock is currently in — **without any hardcoded rules**.
+
+**Why this matters for you:** In a High Volatility regime, the prediction thresholds widen automatically (from 1.8% to 3.0% expected return required to trigger a signal). This prevents false buy signals in choppy markets.
+
+---
+
+### 📊 GARCH(1,1) Volatility Forecasting
+
+Volatility clusters — calm periods are followed by calm periods, and turbulent periods by turbulent ones. **GARCH(1,1)** models this conditional variance:
+
+$$\sigma_t^2 = \omega + \alpha \epsilon_{t-1}^2 + \beta \sigma_{t-1}^2$$
+
+StockIQ Pro fits GARCH to each stock's return series and forecasts **expected annualized volatility over the next 5 days**. This forward-looking vol estimate is displayed alongside the prediction — so you know not just the direction, but how rough the ride might be.
+
+---
+
+### 🧪 Signal Backtesting — Did This Strategy Actually Work?
+
+> _"Past performance doesn't guarantee future results — but understanding the past is the only rational basis for future decisions."_
+
+The backtesting engine runs a **RSI(14) + MACD Crossover + ATR Stop-Loss** strategy on historical data and shows:
+
+**Entry signal:** RSI crosses above 35 from oversold + MACD line above signal line  
+**Exit signal:** RSI reaches 65 (overbought) OR MACD turns bearish OR price drops below 2×ATR stop
+
+**What you get:**
+- 📈 **Equity curve** — your ₹1,00,000 vs buy-and-hold vs Nifty 50, plotted over time
+- 📊 **Alpha** — did the strategy beat simply holding the stock?
+- 🏆 **Sharpe Ratio** — risk-adjusted return
+- 📉 **Max Drawdown** — worst-case loss from peak
+- 🎯 **Calmar Ratio** — return per unit of drawdown risk
+- 📋 **Full trade log** — every buy/sell date, entry price, exit price, P&L
+
+**For the investor:** This tells you whether a momentum-based entry strategy would have worked historically on this specific stock — before you risk real money.
+
+---
 
 ### 📰 AI News Intelligence
-Aggregates news from multiple RSS and API sources. Each article is scored by:
-- **Sentiment** (-1.0 to +1.0) using TextBlob NLP
-- **Impact score** (0–100) based on keyword relevance and recency
-- **Breaking news detection** — flags high-impact, recent articles
 
-Summary stats include: overall sentiment, positive/negative count, and a market impact score.
+Every news article about a stock is scored in real time:
 
-### 🔍 Smart Stock Search
-Searches across the full NSE equity list (~1,900 stocks) loaded on startup. Results prioritize **symbol matches** over name matches, with sector badges (IT, Banking, FMCG, etc.) and keyboard navigation support.
+| Metric | What it measures |
+|---|---|
+| **Sentiment Score** | -1.0 (very bearish) to +1.0 (very bullish) |
+| **Impact Score** | 0–100 based on keyword relevance and recency |
+| **Breaking News Flag** | High-impact articles less than 6 hours old |
+
+Aggregate stats give you: overall market mood, positive vs negative article count, and a composite market impact score. This sentiment score is then **fused directly into the ML prediction** — a strongly negative news day will nudge the model's signal accordingly.
+
+---
+
+### 💼 Portfolio Risk Analytics
+
+For every stock, StockIQ Pro computes institutional-grade risk metrics from 1 year of daily return history:
+
+| Metric | What it tells you |
+|---|---|
+| **VaR 95% / 99%** | "On 95% of days, I won't lose more than X%" |
+| **Expected Shortfall** | Average loss when things *do* go bad |
+| **Max Drawdown** | Worst peak-to-trough loss over the trailing year |
+| **Sharpe Ratio** | How much return per unit of risk (6.5% India risk-free) |
+| **Beta vs Nifty 50** | How much does this stock amplify the market's moves? |
+| **Information Ratio** | Skill of the stock vs the benchmark |
+| **Skewness / Kurtosis** | Are returns normally distributed, or are there fat tails? |
+
+---
+
+### ⚙️ Black-Scholes Options Pricing
+
+For any NSE stock, StockIQ Pro computes at-the-money (ATM) European options for a 30-day horizon:
+
+- **Call & Put prices** in ₹
+- **Delta** — directional exposure (how much the option moves per ₹1 stock move)
+- **Gamma** — rate of delta change
+- **Vega** — sensitivity to volatility
+- **Theta** — time decay per day
+- **Implied Volatility** — the market's forward-looking volatility estimate
+
+---
+
+### 🏆 Peer Comparison & Sector Ranking
+
+**Head-to-head:** Compare any two stocks on 8 metrics — 1M/3M/6M/1Y returns, Sharpe ratio, volatility, RSI, ML signal. Winner is highlighted per metric.
+
+**Sector leaderboard:** Rank all stocks in a sector using a **composite score**:
+- Sharpe Ratio weight: 30%
+- 3M Return rank: 25%
+- Low Volatility rank: 20%
+- RSI health (40–65 ideal): 15%
+- 1Y Return rank: 10%
+
+This tells you: within IT stocks, TCS vs Infosys vs HCL — which is actually the strongest right now on a risk-adjusted basis?
 
 ---
 
@@ -134,8 +241,9 @@ Searches across the full NSE equity list (~1,900 stocks) loaded on startup. Resu
 │   ┌────────────────────────────────────────────────────────┐   │
 │   │              Next.js 16 Frontend (React 19)             │   │
 │   │                                                         │   │
-│   │  Header (Search)  →  StockChart  →  LivePrice           │   │
-│   │  MLPrediction     →  AdvancedNews →  PortfolioMetrics   │   │
+│   │  LivePrice → StockChart → MLPrediction (SHAP chart)    │   │
+│   │  Backtesting → PortfolioMetrics → AdvancedNews         │   │
+│   │  PeerComparison → SectorIntelligence                   │   │
 │   └──────────────────────────┬─────────────────────────────┘   │
 └─────────────────────────────-│──────────────────────────────────┘
                                │ REST API (JSON)
@@ -145,45 +253,27 @@ Searches across the full NSE equity list (~1,900 stocks) loaded on startup. Resu
 │                                                                 │
 │   /api/live          → yf_client.get_quote()                   │
 │   /api/analyze       → engine.analyze_ticker()                 │
-│   /api/ml-predict    → ml_models.get_ml_prediction()           │
+│   /api/ml-predict    → 6-model stacked ensemble + SHAP         │
+│   /api/backtest      → RSI+MACD strategy simulation            │
 │   /api/portfolio-metrics → VaR, Sharpe, Beta, Black-Scholes    │
-│   /api/advanced-news → news_intelligence.get_advanced_news()   │
-│   /api/tickers       → NSE EQUITY_L.csv (in-memory cache)      │
+│   /api/advanced-news → sentiment scoring + impact analysis     │
+│   /api/peer-compare  → head-to-head metrics                    │
+│   /api/sector-rank   → composite peer ranking                  │
+│   /api/tickers       → 1,900+ NSE stocks (in-memory cache)     │
 │                                                                 │
-│   External Calls:                                               │
+│   External:                                                     │
 │   ├── Yahoo Finance v8/v10 API (OHLCV, quote, fundamentals)    │
-│   ├── NSE India CSV (ticker list, cached at startup)           │
-│   └── RSS feeds + News APIs (news aggregation)                 │
+│   ├── NSE India CSV (EQUITY_L.csv — ticker universe)           │
+│   └── RSS feeds + News APIs (multi-source aggregation)         │
 └─────────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## 📂 Project Architecture & Codebase Overview
-
-The repository is structured as a decoupled full-stack application composed of a Next.js frontend client and a high-performance FastAPI backend.
-
-### 💻 Client Application (`/frontend`)
-*   ⚛️ **Next.js 16 (App Router)** & React 19 framework using TypeScript-ready patterns.
-*   📊 **StockChart.js:** Interactively displays multi-panel technical charts (Candlesticks, volume histograms, RSI, MACD, and ADX) using customized `ResizeObserver` layout-shift-free wrappers.
-*   🧠 **MLPrediction.js:** Visualizes 5-day stacked ensemble projections, confidence levels, out-of-sample walk-forward hit rates, SHAP feature importance scales, and the GARCH volatility badge.
-*   💼 **PortfolioMetrics.js:** High-fidelity dashboard rendering risk metrics (Value at Risk, Information Ratio, Maximum Drawdowns) and real-time options Greeks pricing via Black-Scholes.
-*   📰 **AdvancedNews.js:** Live news intelligence tracker featuring TextBlob sentiment nudges and relative impact weights.
-*   🔍 **StockSearchModal.js:** Full-featured symbol lookup with caching, abort controllers, and fuzzy search over 1,900+ NSE listings.
-
-### ⚙️ Analytics Backend (`/backend`)
-*   ⚡ **FastAPI:** Python microframework optimized with asynchronous route pooling and clean exception handling.
-*   📈 **ml_models.py:** Training pipeline for 5 base learners stacked via Ridge regression, walk-forward folding, 3-state Gaussian Hidden Markov Models (HMM), and GARCH(1,1) volatility models.
-*   🔧 **engine.py:** Core financial mathematics engine computing technical indicators (Bollinger Bands, Average True Range, MACD, and Stochastic Oscillators).
-*   💰 **yf_client.py:** Direct, REST-based connection to Yahoo Finance's native JSON endpoints, guaranteeing stable serverless execution.
 
 ---
 
 ## Quick Start
 
 ### Prerequisites
-- **Node.js** 18+
-- **Python** 3.9+
+- Node.js 18+ and Python 3.9+
 
 ### 1. Clone
 ```bash
@@ -195,27 +285,20 @@ cd Analysis-tool
 ```bash
 cd backend
 pip install -r requirements.txt
-
-# Optional: set allowed frontend origin
 cp .env.example .env
-
-# Start the API server
 python main.py
+# → API at http://localhost:8000
+# → Docs at http://localhost:8000/docs
 ```
-→ API running at `http://localhost:8000`  
-→ Interactive docs at `http://localhost:8000/docs`
 
 ### 3. Frontend
 ```bash
 cd frontend
 npm install
-
-# Point at your local backend
 echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
-
 npm run dev
+# → App at http://localhost:3000
 ```
-→ App running at `http://localhost:3000`
 
 ---
 
@@ -224,108 +307,15 @@ npm run dev
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/health` | Health check |
-| `GET` | `/api/tickers?q=hdfc` | Search NSE stocks |
+| `GET` | `/api/tickers?q=hdfc` | Search 1,900+ NSE stocks |
 | `GET` | `/api/live?ticker=HDFCBANK.NS` | Live price quote |
-| `GET` | `/api/analyze?ticker=HDFCBANK.NS` | Full technical analysis + chart data |
-| `GET` | `/api/ml-predict?ticker=HDFCBANK.NS` | 5-day ML price prediction |
-| `GET` | `/api/portfolio-metrics?ticker=HDFCBANK.NS` | VaR, Sharpe, options, Greeks |
+| `GET` | `/api/analyze?ticker=HDFCBANK.NS` | Full technical analysis |
+| `GET` | `/api/ml-predict?ticker=HDFCBANK.NS` | 5-day prediction + SHAP |
+| `GET` | `/api/backtest?ticker=HDFCBANK.NS&period=2y` | RSI+MACD backtest |
+| `GET` | `/api/portfolio-metrics?ticker=HDFCBANK.NS` | VaR, Sharpe, Greeks |
 | `GET` | `/api/advanced-news?ticker=HDFCBANK.NS` | News + AI sentiment |
-| `GET` | `/api/compare?tickers=TCS.NS,INFY.NS` | Peer comparison |
-
-<details>
-<summary><b>Example: ML Prediction Response</b></summary>
-
-```json
-{
-  "ticker": "HDFCBANK.NS",
-  "prediction": {
-    "predicted_price": 1785.40,
-    "current_price": 1763.20,
-    "predicted_return": 1.26,
-    "signal": "BUY",
-    "signal_strength": 67,
-    "confidence": 72.4,
-    "prediction_horizon_days": 5,
-    "timestamp": "2026-06-13T08:00:00"
-  },
-  "disclaimer": "Predictions are for educational purposes only. Not financial advice."
-}
-```
-
-</details>
-
-<details>
-<summary><b>Example: Portfolio Metrics Response</b></summary>
-
-```json
-{
-  "ticker": "HDFCBANK.NS",
-  "risk_metrics": {
-    "var_95_daily": -1.83,
-    "var_99_daily": -2.91,
-    "expected_shortfall_95": -2.34,
-    "max_drawdown": -14.72,
-    "sharpe_ratio": 0.847,
-    "annual_volatility": 21.6
-  },
-  "market_metrics": {
-    "beta": 1.12,
-    "correlation_with_nifty": 0.74,
-    "information_ratio": 0.312
-  },
-  "options_pricing": {
-    "call_price": 42.80,
-    "put_price": 35.10,
-    "delta": 0.523,
-    "gamma": 0.0041,
-    "theta": -1.24,
-    "vega": 3.87,
-    "implied_volatility": 21.6
-  }
-}
-```
-
-</details>
-
----
-
-## Deployment (Vercel)
-
-Both the frontend and backend deploy independently to Vercel.
-
-**Backend:**
-```bash
-cd backend
-vercel --prod
-```
-
-**Frontend** — set your backend URL first:
-```bash
-# In Vercel dashboard, add environment variable:
-# NEXT_PUBLIC_API_URL = https://your-backend.vercel.app
-
-cd frontend
-vercel --prod
-```
-
-**Backend environment variables (`.env`):**
-```env
-ENVIRONMENT=production
-ALLOWED_ORIGINS=https://your-frontend.vercel.app
-RATE_LIMIT_PER_MINUTE=30
-```
-
----
-
-## Security
-
-| Protection | Implementation |
-|---|---|
-| Rate Limiting | `slowapi` — 30 req/min per IP on all data endpoints |
-| Input Validation | Regex-based ticker validation (`[A-Z0-9&.-]{1,15}`) |
-| CORS | Origin whitelist via environment variable |
-| AbortController | Client-side: stale search requests are cancelled |
-| Error Handling | No internal stack traces or sensitive data in error responses |
+| `GET` | `/api/peer-compare?ticker=TCS.NS&peer=INFY.NS` | Head-to-head comparison |
+| `GET` | `/api/sector-rank?ticker=HDFCBANK.NS` | Sector leaderboard |
 
 ---
 
@@ -334,36 +324,72 @@ RATE_LIMIT_PER_MINUTE=30
 | Layer | Technology |
 |---|---|
 | **Frontend** | Next.js 16, React 19, Tailwind CSS 3, Recharts, Lucide Icons |
-| **Backend** | FastAPI, Python 3.9+, uvicorn |
-| **ML / Analytics** | scikit-learn (RandomForest), NumPy, Pandas, SciPy |
-| **NLP** | TextBlob (sentiment analysis) |
-| **Data Sources** | Yahoo Finance REST API (v8/v10), NSE India CSV, RSS feeds |
-| **Deployment** | Vercel (serverless, edge CDN) |
+| **Backend** | FastAPI, Python 3.9+, uvicorn (ASGI) |
+| **ML / Quantitative** | scikit-learn, XGBoost, LightGBM, SHAP, hmmlearn, arch (GARCH) |
+| **NLP / Sentiment** | TextBlob, feedparser, multi-source RSS aggregation |
+| **Data Sources** | Yahoo Finance REST API (v8/v10), NSE India EQUITY_L.csv |
+| **Deployment** | Vercel (serverless, edge CDN, global) |
+| **Security** | slowapi rate limiting, input regex validation, CORS whitelist |
 
 ---
 
-## Contributing
+## Security
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Commit with a clear message: `git commit -m 'feat: add peer comparison chart'`
-4. Push and open a Pull Request
-
-**Code standards:**
-- JavaScript: follow ESLint config (`eslint-config-next`)
-- Python: format with `black`, lint with `ruff`
-- Commit messages: follow [Conventional Commits](https://www.conventionalcommits.org/)
+| Protection | Implementation |
+|---|---|
+| Rate Limiting | `slowapi` — 30 req/min per IP on data endpoints |
+| Input Validation | Regex ticker validation `[A-Z0-9&.-]{1,15}` |
+| CORS | Origin whitelist via environment variable |
+| AbortController | Client-side stale request cancellation |
+| Error Handling | No stack traces or sensitive data in API responses |
 
 ---
 
 ## Roadmap
 
-- [ ] WebSocket-based true real-time price streaming
-- [ ] Multi-stock portfolio tracker with P&L
-- [ ] Backtesting engine for ML signals
-- [ ] Sector heatmap and screener
-- [ ] User accounts + watchlist (auth via Clerk or Supabase)
-- [ ] Mobile app (React Native)
+- [ ] **WebSocket real-time streaming** — true live prices without polling
+- [ ] **Multi-stock portfolio tracker** — P&L, efficient frontier, correlation heatmap
+- [ ] **DCF Valuation model** — intrinsic value vs market price
+- [ ] **Sector heatmap** — Finviz-style treemap for all NSE stocks
+- [ ] **Altman Z-Score** — financial health / bankruptcy risk gauge
+- [ ] **User accounts + watchlist** — auth via Clerk or Supabase
+- [ ] **Earnings surprise predictor** — beat/miss classifier
+- [ ] **Mobile app** — React Native
+
+---
+
+## Deployment
+
+Both services deploy independently to Vercel.
+
+```bash
+# Backend
+cd backend && vercel --prod
+
+# Frontend (set NEXT_PUBLIC_API_URL in Vercel dashboard first)
+cd frontend && vercel --prod
+```
+
+**Backend `.env` variables:**
+```env
+ENVIRONMENT=production
+ALLOWED_ORIGINS=https://your-frontend.vercel.app
+RATE_LIMIT_PER_MINUTE=30
+```
+
+---
+
+## Contributing
+
+1. Fork the repo
+2. Create a feature branch: `git checkout -b feature/sector-heatmap`
+3. Commit: `git commit -m 'feat: add sector heatmap component'`
+4. Push and open a Pull Request
+
+**Code standards:**
+- JavaScript: ESLint (`eslint-config-next`)
+- Python: `black` formatter, `ruff` linter
+- Commits: [Conventional Commits](https://www.conventionalcommits.org/)
 
 ---
 
@@ -379,7 +405,10 @@ Built by **[Vishesh Sanghvi](https://github.com/visheshsanghvi112)**
 
 [![GitHub](https://img.shields.io/badge/GitHub-visheshsanghvi112-181717?style=flat-square&logo=github)](https://github.com/visheshsanghvi112)
 [![Email](https://img.shields.io/badge/Email-visheshsanghvi112@gmail.com-D14836?style=flat-square&logo=gmail&logoColor=white)](mailto:visheshsanghvi112@gmail.com)
+[![Portfolio](https://img.shields.io/badge/Portfolio-visheshsanghvi.qzz.io-6366f1?style=flat-square&logo=vercel&logoColor=white)](https://visheshsanghvi.qzz.io)
 
-⭐ If this project is useful to you, please star it — it helps others discover it.
+⭐ **If StockIQ Pro helps your investment decisions, please star the repo** — it helps others discover it.
+
+_"The goal of this project is simple: every individual investor deserves the same analytical tools as a hedge fund. Free, transparent, and built for Indian markets."_
 
 </div>
