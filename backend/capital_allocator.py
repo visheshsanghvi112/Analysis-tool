@@ -99,7 +99,7 @@ def _compute_stock_profile(ticker: str, buy_price: float, qty: float) -> dict:
             if len(close) >= 150:
                 ema200 = close.ewm(span=200, min_periods=150, adjust=False).mean()
                 e200   = float(ema200.iloc[-1])
-                above_ema200    = close.iloc[-1] > e200
+                above_ema200    = bool(close.iloc[-1] > e200)
                 pct_from_ema200 = round((float(close.iloc[-1]) / e200 - 1) * 100, 2)
 
             # ── Volume spike: today > 1.5× 20-day avg ────────────────────────
