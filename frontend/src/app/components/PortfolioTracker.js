@@ -8,8 +8,9 @@ import {
 import {
   Plus, Trash2, RefreshCw, TrendingUp, TrendingDown,
   AlertCircle, Briefcase, ShieldAlert, Search, X,
-  Lightbulb, Zap, Target, ArrowDownRight,
+  Lightbulb, Zap, Target, ArrowDownRight, Sparkles, Wallet,
 } from 'lucide-react';
+import SmartCapitalAdvisor from './SmartCapitalAdvisor';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://stock-analysis-backend-seven.vercel.app';
 
@@ -255,12 +256,13 @@ function PriceHistoryChart({ history, holdings }) {
 export default function PortfolioTracker() {
   const emptyRow = () => ({ id: Date.now(), ticker: '', qty: '', buy_price: '' });
 
-  const [rows, setRows]       = useState([emptyRow()]);
-  const [result, setResult]   = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState(null);
-  const [advice, setAdvice]   = useState(null);
+  const [rows, setRows]           = useState([emptyRow()]);
+  const [result, setResult]       = useState(null);
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState(null);
+  const [advice, setAdvice]       = useState(null);
   const [advLoading, setAdvLoading] = useState(false);
+  const [showAdvisor, setShowAdvisor] = useState(false);
 
   // Persist to localStorage
   useEffect(() => {
@@ -337,6 +339,7 @@ export default function PortfolioTracker() {
   const risk = result?.risk;
 
   return (
+    <>
     <div className="min-h-screen bg-black text-white" style={{ fontFamily: 'var(--font-inter, Inter, sans-serif)' }}>
       {/* Header */}
       <div className="border-b border-white/[0.06] px-6 py-4 flex items-center gap-3">
@@ -525,6 +528,26 @@ export default function PortfolioTracker() {
               />
             )}
 
+            {/* Smart Capital Advisor CTA — show when any holding is in loss */}
+            {result.holdings.some(h => h.pnl_pct < -0.5) && (
+              <div className="rounded-xl border border-violet-500/25 bg-gradient-to-br from-violet-500/8 to-indigo-500/5 p-4 flex items-center gap-4">
+                <div className="h-10 w-10 rounded-xl bg-violet-500/15 border border-violet-500/25 flex items-center justify-center shrink-0">
+                  <Wallet className="h-5 w-5 text-violet-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-white">Got spare cash sitting idle?</p>
+                  <p className="text-[11px] text-slate-400">Tell us how much floating money you have and your time horizon — we'll build a precision recovery plan.</p>
+                </div>
+                <button
+                  onClick={() => setShowAdvisor(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-lg shadow-violet-500/20 shrink-0"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Get Plan
+                </button>
+              </div>
+            )}
+
             {/* Recovery Advisor */}
             <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-amber-500/10">
@@ -685,5 +708,14 @@ export default function PortfolioTracker() {
         )}
       </div>
     </div>
+
+    {/* Smart Capital Advisor Modal */}
+    {showAdvisor && (
+      <SmartCapitalAdvisor
+        holdings={validRows}
+        onClose={() => setShowAdvisor(false)}
+      />
+    )}
+    </>
   );
 }

@@ -1017,7 +1017,8 @@ def run_backtest(
 # /api/portfolio-analyze  — Multi-stock portfolio analytics
 # ─────────────────────────────────────────────────────────────────────────────
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
+from capital_allocator import allocate_capital
 
 class Holding(BaseModel):
     ticker: str
@@ -1026,6 +1027,11 @@ class Holding(BaseModel):
 
 class PortfolioRequest(BaseModel):
     holdings: List[Holding]
+
+class CapitalAllocatorRequest(BaseModel):
+    holdings: List[Holding]
+    floating_capital: float          # INR available to invest
+    horizon_days: int                # Investment horizon in days
 
 @app.post("/api/portfolio-analyze")
 def analyze_portfolio(req: PortfolioRequest):
@@ -1348,3 +1354,46 @@ def portfolio_insight(req: PortfolioRequest):
             "priority_actions":         priority,
         },
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /api/capital-allocate — Smart Capital Allocation Engine
+# Takes floating money + investment horizon → ranked allocation plan
+# ─────────────────────────────────────────────────────────────────────────────
+@app.post("/api/capital-allocate")
+def capital_allocate(req: CapitalAllocatorRequest):
+    """
+    Given the user's floating (spare) capital and investment horizon,
+    scores every losing position in the portfolio and returns a
+    prioritised, confidence-weighted allocation plan telling the user
+    exactly how many shares to buy of each stock and why.
+
+    Factors used:
+    - RSI(14) signal (oversold ↑ score)
+    - 3-month news sentiment
+    - 1-month price momentum
+    - Loss depth vs horizon suitability
+    - Volatility fit for the given time window
+    """
+    if not req.holdings:
+        raise HTTPException(status_code=400, detail="No holdings provided")
+    if len(req.holdings) > 15:
+        raise HTTPException(status_code=400, detail="Max 15 holdings supported")
+    if req.floating_capital <= 0:
+        raise HTTPException(status_code=400, detail="floating_capital must be > 0")
+    if req.horizon_days <= 0:
+        raise HTTPException(status_code=400, detail="horizon_days must be > 0")
+
+    try:
+        holdings_dicts = [
+            {"ticker": h.ticker.strip().upper(), "qty": h.qty, "buy_price": h.buy_price}
+            for h in req.holdings
+        ]
+        result = allocate_capital(
+            holdings=holdings_dicts,
+            floating_capital=req.floating_capital,
+            horizon_days=req.horizon_days,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Capital allocation failed: {str(e)}")
