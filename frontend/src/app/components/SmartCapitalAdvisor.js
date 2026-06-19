@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import {
   Wallet, Clock, Zap, Target, TrendingDown, ArrowRight,
   ChevronDown, ChevronUp, AlertTriangle, CheckCircle2,
-  BarChart3, ShieldCheck, Lightbulb, X, Sparkles, Info
+  BarChart3, ShieldCheck, Lightbulb, X, Sparkles, Info, Eye
 } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://stock-analysis-backend-seven.vercel.app';
@@ -139,6 +139,11 @@ function SuggestionCard({ s, rank }) {
 
           {/* Signal badges row */}
           <div className="flex flex-wrap gap-1.5">
+            {s.ml_propensity_score != null && (
+              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full border bg-violet-500/15 border-violet-500/30 text-violet-300 font-mono">
+                AI Buy Probability: {s.ml_propensity_score}%
+              </span>
+            )}
             {s.rsi != null && (
               <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
                 s.rsi < 35 ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
@@ -435,16 +440,23 @@ function ResultsPanel({ data, onReset }) {
       {data.skipped_positions?.length > 0 && (
         <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-3">
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-            <AlertTriangle className="h-3 w-3 text-amber-500" /> Positions Skipped (do not add capital now)
+            <Eye className="h-3 w-3 text-indigo-400" /> Watchlist & Alternates under Monitor
           </p>
           {data.skipped_positions.map(sp => (
             <div key={sp.ticker} className="flex items-start gap-2 py-2 border-b border-white/[0.04] last:border-0">
-              <div className="h-6 w-6 rounded-lg bg-rose-500/10 flex items-center justify-center shrink-0">
-                <span className="text-[8px] font-black text-rose-400">{sp.ticker.replace('.NS','').slice(0,3)}</span>
+              <div className="h-6 w-6 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+                <span className="text-[8px] font-black text-indigo-400">{sp.ticker.replace('.NS','').slice(0,3)}</span>
               </div>
-              <div>
-                <p className="text-[11px] font-bold text-rose-400">{sp.ticker.replace('.NS','').replace('.BO','')}</p>
-                <p className="text-[10px] text-slate-600 leading-relaxed">{sp.reason}</p>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-[11px] font-bold text-indigo-300">{sp.ticker.replace('.NS','').replace('.BO','')}</p>
+                  {sp.ml_propensity_score != null && (
+                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-violet-500/10 border border-violet-500/20 text-violet-300">
+                      AI Setup: {sp.ml_propensity_score}%
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-500 leading-relaxed mt-0.5">{sp.reason}</p>
               </div>
             </div>
           ))}

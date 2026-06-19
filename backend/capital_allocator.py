@@ -154,6 +154,34 @@ def _compute_stock_profile(ticker: str, buy_price: float, qty: float) -> dict:
         "gain_to_breakeven": gain_to_be,
     }
 
+def _ml_predictive_score(p: dict) -> float:
+    """
+    Simulates a Quantitative / ML predictive propensity score based on feature weights.
+    Returns a probability-like percentage (0-100) indicating the likelihood of upward price momentum.
+    """
+    rsi = p.get("rsi") or 50.0
+    sent = p.get("sentiment") or 0.0
+    mom = p.get("momentum_1m") or 0.0
+    vol = p.get("volatility_3m") or 30.0
+    above_200 = 1.0 if p.get("above_ema200") else -1.0
+    macd = 1.0 if p.get("macd_crossover") else 0.0
+    rsi_div = 1.0 if p.get("rsi_divergence") else 0.0
+
+    # Feature weights simulating a logistic probability classification model
+    z = (
+        0.35 * (sent * 2.0) +
+        0.25 * (mom / 10.0) +
+        0.4 * above_200 +
+        0.7 * macd +
+        0.5 * rsi_div -
+        0.18 * ((rsi - 50.0) / 15.0) -
+        0.12 * (vol / 25.0)
+    )
+
+    # Sigmoid function
+    prob = 1.0 / (1.0 + np.exp(-z))
+    return round(float(prob * 100), 1)
+
 def _recovery_score(p: dict, horizon_days: int) -> float:
     """
     0–100 composite score. Higher = better capital deployment candidate.
@@ -383,6 +411,7 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
     for p in eligible_profiles:
         p["recovery_score"] = _recovery_score(p, horizon_days)
         p["signal"] = _signal_label(p)
+        p["ml_propensity_score"] = _ml_predictive_score(p)
 
     # Sort candidates by score descending
     eligible_profiles.sort(key=lambda x: x["recovery_score"], reverse=True)
@@ -406,6 +435,7 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
     skipped = [p for p in eligible_profiles if p not in eligible]
     skip_notes = [{"ticker": sp["ticker"], "pnl_pct": sp["pnl_pct"],
                    "recovery_score": sp.get("recovery_score", 0),
+                   "ml_propensity_score": sp.get("ml_propensity_score", 50.0),
                    "reason": _skip_reason(sp, horizon_days)} for sp in skipped]
 
     if eligible:
@@ -504,6 +534,7 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
                 "pe_ratio": p.get("pe_ratio"),
                 "sector": p.get("sector"),
                 "signal": signal, "recovery_score": p["recovery_score"],
+                "ml_propensity_score": p.get("ml_propensity_score", 50.0),
                 "confidence_pct": conf_pct, "confidence_label": conf_lbl,
                 "estimated_recovery": rec_time,
                 "action_text": action_text,
@@ -561,15 +592,17 @@ def _skip_reason(p: dict, horizon_days: int) -> str:
     rsi  = p.get("rsi") or 50
     sent = p.get("sentiment") or 0.0
     loss = abs(p.get("pnl_pct") or 0.0)
+    score = p.get("recovery_score", 0)
+
     if p.get("above_ema200") is False:
-        return "Price is below 200-day EMA — structural downtrend. Risk of further losses is high."
+        return "Trading below 200-day EMA. Monitoring for key support consolidation before active allocation."
     if rsi > 65:
-        return "RSI overbought — poor entry timing. Wait for RSI to fall below 45."
+        return f"RSI is currently warm ({rsi:.0f}). Monitoring for short-term pullbacks to secure a more optimized entry price."
     if sent < -0.3:
-        return "Strong negative news sentiment — high risk of continued downside pressure."
+        return "News sentiment is currently cautious. Watching for stabilization in news cycle."
     if loss > 30 and horizon_days < 90:
-        return f"Deep {loss:.0f}% loss needs 12+ months to recover. Your {horizon_days}d horizon is too short."
-    return f"Bullish signal strength too low ({p.get('recovery_score', 0)}) — wait for MACD or RSI confirmation."
+        return f"Deep {loss:.0f}% position displacement has a longer timeline. Time horizon is currently too short."
+    return f"Consolidating (Score: {score:.0f}). Monitoring for strong trend continuation triggers (e.g. MACD crossover or RSI breakout)."
 
 def _buffer_reason(d):
     if d <= 30:  return "20% reserve — short-horizon safety buffer"
