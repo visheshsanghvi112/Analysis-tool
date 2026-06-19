@@ -1,21 +1,24 @@
 """
-capital_allocator.py  — v2
-──────────────────────────
+capital_allocator.py  — v3 (with fresh market buys support)
+─────────────────────────────────────────────────────────────
 Upgraded Smart Capital Allocation Engine for StockIQ Pro.
 
-Key improvements over v1 (research-backed):
-  - 200-day EMA trend filter  (catches "falling knife" stocks)
-  - MACD(12,26,9) crossover   (confirms RSI, cuts false signals 2x)
-  - RSI bullish divergence    (strongest reversal signal)
-  - Volume spike detection    (institutional buying confirmation)
-  - P/E vs sector benchmark   (avoids overvalued value traps)
-  - Softmax temperature = 5   (better concentration in top picks)
-  - 3-tranche entry plan      (industry-standard staggered buying)
+Key improvements over v2:
+  - Added "mode" parameter: "recovery" (averaging down) or "market_buys" (fresh market buys).
+  - Standardized scoring and logic to handle fresh buy opportunities (qty=0).
+  - Rich action text custom-tailored for fresh buys vs averaging down.
 """
 
 import numpy as np
 from yf_client import get_quote, get_history, get_info
 from news_intelligence import get_advanced_news_analysis
+
+# Curated list of top Nifty 50 leaders representing general market sentiment
+CURATED_MARKET_LEADERS = [
+    "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS",
+    "SBIN.NS", "BHARTIARTL.NS", "ITC.NS", "HINDUNILVR.NS", "LT.NS",
+    "TATAMOTORS.NS", "TATASTEEL.NS"
+]
 
 # ── Sector P/E benchmarks (India) ────────────────────────────────────────────
 SECTOR_PE = {
@@ -27,16 +30,11 @@ SECTOR_PE = {
 }
 DEFAULT_SECTOR_PE = 22
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Technical indicator helpers (all computed from yfinance OHLCV — no extra API)
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _rsi_series(close):
     delta = close.diff()
     gain  = delta.clip(lower=0).ewm(com=13, adjust=False, min_periods=1).mean()
     loss  = (-delta).clip(lower=0).ewm(com=13, adjust=False, min_periods=1).mean()
     return 100 - 100 / (1 + gain / loss.replace(0, 1e-9))
-
 
 def _macd(close):
     ema12  = close.ewm(span=12, adjust=False).mean()
@@ -45,18 +43,16 @@ def _macd(close):
     signal = macd.ewm(span=9, adjust=False).mean()
     return macd, signal
 
-
 def _compute_stock_profile(ticker: str, buy_price: float, qty: float) -> dict:
     """
     Builds a rich signal profile for one holding using yfinance data.
-    All indicators derived from the same 1Y OHLCV fetch — zero extra API calls.
     """
     try:
         live_px = float((get_quote(ticker) or {}).get("price") or buy_price)
     except Exception:
         live_px = buy_price
 
-    pnl_pct = (live_px - buy_price) / buy_price * 100
+    pnl_pct = (live_px - buy_price) / buy_price * 100 if buy_price > 0 else 0.0
     in_loss  = pnl_pct < -0.5
 
     # Defaults
@@ -158,21 +154,11 @@ def _compute_stock_profile(ticker: str, buy_price: float, qty: float) -> dict:
         "gain_to_breakeven": gain_to_be,
     }
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Scoring engine  (v2 — research-backed)
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _recovery_score(p: dict, horizon_days: int) -> float:
     """
-    0–100 composite score.  Higher = better capital deployment candidate.
-
-    Weights from research:
-      Technical (60%): EMA200 filter, MACD crossover, RSI, RSI divergence, volume
-      Fundamental (20%): P/E vs sector benchmark
-      Context (20%): horizon fit, volatility, sentiment (supporting role only)
+    0–100 composite score. Higher = better capital deployment candidate.
     """
-    score = 45.0  # neutral baseline (slightly lower than v1 = stricter)
+    score = 45.0  # baseline
 
     rsi  = p.get("rsi") or 50
     sent = p.get("sentiment") or 0.0
@@ -180,22 +166,21 @@ def _recovery_score(p: dict, horizon_days: int) -> float:
     vol  = p.get("volatility_3m") or 30.0
     loss = abs(p.get("pnl_pct") or 0.0)
 
-    # ── 1. 200-day EMA — MOST IMPORTANT FILTER ───────────────────────────────
-    # Research: below 200 EMA = structural downtrend = do NOT average down
+    # ── 1. 200-day EMA ────────────────────────────────────────────────────────
     above_200 = p.get("above_ema200")
     pct_200   = p.get("pct_from_ema200") or 0.0
     if above_200 is True:
-        score += 15                        # Uptrend intact — safe to accumulate
+        score += 15
     elif above_200 is False:
-        score -= 25                        # Strong penalty: structural downtrend
+        score -= 25
         if pct_200 < -15:
-            score -= 10                    # Extra penalty if far below EMA200
+            score -= 10
 
-    # ── 2. MACD bullish crossover — confirms momentum shift ──────────────────
+    # ── 2. MACD Crossover ─────────────────────────────────────────────────────
     if p.get("macd_crossover"):
-        score += 20                        # MACD crossed above signal in last 3 days
+        score += 20
 
-    # ── 3. RSI signal — now secondary (needs MACD confirmation) ──────────────
+    # ── 3. RSI ────────────────────────────────────────────────────────────────
     if rsi < 30:
         score += 20
     elif rsi < 40:
@@ -203,58 +188,62 @@ def _recovery_score(p: dict, horizon_days: int) -> float:
     elif rsi < 50:
         score += 5
     elif rsi > 70:
-        score -= 20                        # Overbought: very bad entry even in loss
+        score -= 20
     elif rsi > 60:
         score -= 8
 
-    # ── 4. RSI bullish divergence — strongest reversal signal ────────────────
+    # ── 4. RSI Bullish Divergence ─────────────────────────────────────────────
     if p.get("rsi_divergence"):
-        score += 18                        # Price falling but RSI rising = exhausted sellers
+        score += 18
 
-    # ── 5. Volume spike — institutional buying confirmation ───────────────────
+    # ── 5. Volume Spike ───────────────────────────────────────────────────────
     if p.get("vol_spike"):
         score += 12
 
-    # ── 6. P/E vs sector benchmark — avoid value traps ───────────────────────
+    # ── 6. P/E vs Sector ──────────────────────────────────────────────────────
     pe = p.get("pe_ratio")
     if pe and pe > 0:
         sec_pe = SECTOR_PE.get(p.get("sector") or "", DEFAULT_SECTOR_PE)
         pe_ratio_vs_sector = pe / sec_pe
         if pe_ratio_vs_sector < 0.7:
-            score += 15                    # Undervalued vs sector — strong buy
+            score += 15
         elif pe_ratio_vs_sector < 1.0:
             score += 7
         elif pe_ratio_vs_sector > 2.0:
-            score -= 20                    # Overvalued even after drop — value trap
+            score -= 20
         elif pe_ratio_vs_sector > 1.5:
             score -= 10
 
-    # ── 7. Momentum trend ────────────────────────────────────────────────────
+    # ── 7. Momentum ───────────────────────────────────────────────────────────
     if -2 < mom < 5:
-        score += 8     # Stabilising / recovering
+        score += 8
     elif mom >= 5:
         score += 3
     elif mom < -10:
-        score -= 12    # Still free-falling
+        score -= 12
 
-    # ── 8. Loss depth vs horizon fit ─────────────────────────────────────────
-    if loss > 30 and horizon_days < 180:
-        score -= 20
-    elif loss > 30 and horizon_days >= 365:
-        score += 8
-    elif loss > 15 and horizon_days < 90:
-        score -= 10
-    elif loss < 10:
-        score += 6
+    # ── 8. Loss depth (only if there is an existing loss) ─────────────────────
+    if loss > 0:
+        if loss > 30 and horizon_days < 180:
+            score -= 20
+        elif loss > 30 and horizon_days >= 365:
+            score += 8
+        elif loss > 15 and horizon_days < 90:
+            score -= 10
+        elif loss < 10:
+            score += 6
+    else:
+        # Fresh buys: reward low volatility + short-horizon combination
+        score += 5
 
-    # ── 9. Volatility vs horizon fit ─────────────────────────────────────────
+    # ── 9. Volatility vs Horizon ──────────────────────────────────────────────
     rf = _horizon_risk_factor(horizon_days)
     if vol > 50 and rf < 0.6:
         score -= 12
     elif vol < 20:
         score += 6
 
-    # ── 10. Sentiment — supporting role only (reduced weight vs v1) ──────────
+    # ── 10. Sentiment ─────────────────────────────────────────────────────────
     if sent > 0.3:
         score += 8
     elif sent > 0.1:
@@ -266,7 +255,6 @@ def _recovery_score(p: dict, horizon_days: int) -> float:
 
     return round(max(0.0, min(100.0, score)), 1)
 
-
 def _horizon_risk_factor(horizon_days: int) -> float:
     if horizon_days <= 30:   return 0.4
     if horizon_days <= 90:   return 0.6
@@ -274,15 +262,13 @@ def _horizon_risk_factor(horizon_days: int) -> float:
     if horizon_days <= 365:  return 0.90
     return 1.0
 
-
 def _signal_label(p: dict) -> str:
-    """v2: requires MACD OR divergence to reach STRONG_BUY (not just RSI alone)."""
     bullish = 0
     rsi = p.get("rsi") or 50
     if rsi < 40:
         bullish += 1
     if p.get("macd_crossover"):
-        bullish += 2    # MACD counts double — it's the key confirmation
+        bullish += 2
     if p.get("rsi_divergence"):
         bullish += 2
     if p.get("above_ema200"):
@@ -298,12 +284,11 @@ def _signal_label(p: dict) -> str:
         return "ACCUMULATE"
     return "WAIT"
 
-
 def _recovery_timeline(loss_pct, p: dict) -> str:
-    """v2: uses stock's own volatility to estimate realistic recovery window."""
     gain_needed = abs(loss_pct) / (1 - abs(loss_pct) / 100) if abs(loss_pct) < 99 else abs(loss_pct)
+    if gain_needed <= 0:
+        return "Immediate (Fresh Buy)"
     vol = p.get("volatility_3m") or 30.0
-    # Realistic monthly upside = ~30% of annualised vol (good months)
     monthly_upside = max(1.5, vol / 12 * 0.8)
     months = gain_needed / monthly_upside
     if months <= 1:   return "2–4 weeks"
@@ -313,18 +298,12 @@ def _recovery_timeline(loss_pct, p: dict) -> str:
     if months <= 12:  return "6–12 months"
     return "12+ months"
 
-
 def _confidence_band(score, horizon_days):
     conf = min(95.0, score + min(10, horizon_days / 365 * 10))
     label = "HIGH" if conf >= 70 else "MODERATE" if conf >= 50 else "LOW"
     return round(conf), label
 
-
 def _tranche_plan(live_px: float, alloc_amt: float, qty: float, buy_price: float, horizon_days: int) -> list:
-    """
-    Splits allocation into 2–3 tranches — industry standard staggered entry.
-    Short horizon → 2 tranches. Long horizon → 3 tranches.
-    """
     if horizon_days <= 90:
         splits = [0.60, 0.40]
         conditions = [
@@ -352,23 +331,42 @@ def _tranche_plan(live_px: float, alloc_amt: float, qty: float, buy_price: float
         })
     return plan
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Main entry point
-# ─────────────────────────────────────────────────────────────────────────────
-
-def allocate_capital(holdings: list, floating_capital: float, horizon_days: int) -> dict:
-    if not holdings or floating_capital <= 0 or horizon_days <= 0:
+def allocate_capital(holdings: list, floating_capital: float, horizon_days: int, mode: str = "recovery") -> dict:
+    if floating_capital <= 0 or horizon_days <= 0:
         return {"error": "Invalid inputs"}
 
+    # If fresh market buys mode, ignore user holdings and scan curated market leaders
+    if mode == "market_buys":
+        target_list = [{"ticker": ticker, "buy_price": 0.0, "qty": 0.0} for ticker in CURATED_MARKET_LEADERS]
+    else:
+        target_list = holdings
+
+    if not target_list:
+        return {
+            "floating_capital": round(floating_capital, 2),
+            "horizon_days": horizon_days,
+            "no_loss_positions": True,
+            "message": "No holdings provided for analysis.",
+            "suggestions": [],
+            "summary": {
+                "total_allocated": 0, "unallocated_cash": round(floating_capital, 2),
+                "positions_addressed": 0, "overall_confidence": "N/A",
+                "horizon_label": _horizon_label(horizon_days),
+            }
+        }
+
     profiles = []
-    for h in holdings:
+    for h in target_list:
         p = _compute_stock_profile(h["ticker"].strip().upper(), h["buy_price"], h["qty"])
         profiles.append(p)
 
-    loss_profiles = [p for p in profiles if p["in_loss"]]
+    # Filter based on mode
+    if mode == "recovery":
+        eligible_profiles = [p for p in profiles if p["in_loss"]]
+    else:
+        eligible_profiles = profiles  # all market leaders are candidates
 
-    if not loss_profiles:
+    if not eligible_profiles:
         return {
             "floating_capital": round(floating_capital, 2),
             "horizon_days": horizon_days,
@@ -382,16 +380,19 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int)
             }
         }
 
-    for p in loss_profiles:
+    for p in eligible_profiles:
         p["recovery_score"] = _recovery_score(p, horizon_days)
 
-    loss_profiles.sort(key=lambda x: x["recovery_score"], reverse=True)
+    # Sort candidates by score descending
+    eligible_profiles.sort(key=lambda x: x["recovery_score"], reverse=True)
 
-    threshold = 38.0
-    eligible  = [p for p in loss_profiles if p["recovery_score"] >= threshold] or [loss_profiles[0]]
+    # Determine thresholds
+    threshold = 38.0 if mode == "recovery" else 42.0
+    eligible = [p for p in eligible_profiles if p["recovery_score"] >= threshold]
+    if not eligible:
+        eligible = [eligible_profiles[0]]  # Fallback to the top candidate
 
     elig_scores = np.array([p["recovery_score"] for p in eligible], dtype=float)
-    # Temperature = 5 (v2 fix: was 10, caused near-uniform allocation)
     exp_s   = np.exp((elig_scores - elig_scores.max()) / 5.0)
     weights = exp_s / exp_s.sum()
 
@@ -409,18 +410,13 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int)
         shares = max(1 if i == 0 else 0, int(alloc_amt / live_px)) if live_px > 0 else 0
         actual = round(shares * live_px, 2)
 
-        total_qty = p["qty"] + shares
-        new_avg   = (p["qty"] * p["buy_price"] + shares * live_px) / total_qty if total_qty > 0 else live_px
-        new_be    = round(((new_avg / live_px) - 1) * 100, 2) if live_px > 0 else 0.0
-        avg_red   = round(((p["buy_price"] - new_avg) / p["buy_price"]) * 100, 2) if p["buy_price"] > 0 else 0.0
-
         signal              = _signal_label(p)
         conf_pct, conf_lbl  = _confidence_band(p["recovery_score"], horizon_days)
         rec_time            = _recovery_timeline(abs(p["pnl_pct"]), p)
         tranches            = _tranche_plan(live_px, actual, p["qty"], p["buy_price"], horizon_days)
 
-        priority_map = {0: ("🔥 Top Priority", "emerald"), 1: ("⚡ High Priority", "indigo"),
-                        2: ("📊 Medium Priority", "amber")}
+        priority_map = {0: ("🔥 Top Pick", "emerald"), 1: ("⚡ Strong Opportunity", "indigo"),
+                        2: ("📊 Moderate Opportunity", "amber")}
         pl, pc = priority_map.get(i, ("🔵 Consider", "slate"))
 
         # Signals explanation
@@ -432,16 +428,36 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int)
         if p.get("rsi") and p["rsi"] < 40: active.append(f"RSI oversold ({p['rsi']}) ✓")
         sigs = ", ".join(active) if active else "mixed signals"
 
-        if signal == "STRONG_BUY":
-            action_text = (f"Strong setup — {sigs}. Buying {shares} shares at ₹{live_px:,.0f} "
-                           f"cuts your avg from ₹{p['buy_price']:,.0f} → ₹{new_avg:,.1f} (-{avg_red}%). "
-                           f"New break-even: +{new_be}% (was +{p['gain_to_breakeven']}%).")
-        elif signal == "ACCUMULATE":
-            action_text = (f"Moderate setup — {sigs}. Partial entry of {shares} shares lowers "
-                           f"avg cost by {avg_red}%. Est. recovery: {rec_time}.")
+        if mode == "recovery":
+            total_qty = p["qty"] + shares
+            new_avg   = (p["qty"] * p["buy_price"] + shares * live_px) / total_qty if total_qty > 0 else live_px
+            new_be    = round(((new_avg / live_px) - 1) * 100, 2) if live_px > 0 else 0.0
+            avg_red   = round(((p["buy_price"] - new_avg) / p["buy_price"]) * 100, 2) if p["buy_price"] > 0 else 0.0
+
+            if signal == "STRONG_BUY":
+                action_text = (f"Strong setup — {sigs}. Buying {shares} shares at ₹{live_px:,.0f} "
+                               f"cuts your avg from ₹{p['buy_price']:,.0f} → ₹{new_avg:,.1f} (-{avg_red}%). "
+                               f"New break-even: +{new_be}% (was +{p['gain_to_breakeven']}%).")
+            elif signal == "ACCUMULATE":
+                action_text = (f"Moderate setup — {sigs}. Partial entry of {shares} shares lowers "
+                               f"avg cost by {avg_red}%. Est. recovery: {rec_time}.")
+            else:
+                action_text = (f"Weak signals ({sigs}). Small position of {shares} shares only. "
+                               f"Wait for MACD crossover or 200 EMA reclaim before committing more.")
         else:
-            action_text = (f"Weak signals ({sigs}). Small position of {shares} shares only. "
-                           f"Wait for MACD crossover or 200 EMA reclaim before committing more.")
+            # Fresh buys
+            new_avg = live_px
+            new_be = 0.0
+            avg_red = 0.0
+            if signal == "STRONG_BUY":
+                action_text = (f"Premium fresh entry setup — {sigs}. Strong momentum and low risk path. "
+                               f"Deploy first tranche of {shares} shares at ₹{live_px:,.0f}.")
+            elif signal == "ACCUMULATE":
+                action_text = (f"Solid accumulation setup — {sigs}. High sector resilience. "
+                               f"Start building position with {shares} shares at ₹{live_px:,.0f}.")
+            else:
+                action_text = (f"Neutral setup — {sigs}. Enter with caution. Buy {shares} shares and "
+                               f"deploy rest only after MACD crossover confirms.")
 
         suggestions.append({
             "ticker": p["ticker"], "priority_rank": i + 1,
@@ -470,7 +486,7 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int)
         })
         total_allocated += actual
 
-    skipped = [p for p in loss_profiles if not any(s["ticker"] == p["ticker"] for s in suggestions)]
+    skipped = [p for p in eligible_profiles if not any(s["ticker"] == p["ticker"] for s in suggestions)]
     skip_notes = [{"ticker": sp["ticker"], "pnl_pct": sp["pnl_pct"],
                    "recovery_score": sp.get("recovery_score", 0),
                    "reason": _skip_reason(sp, horizon_days)} for sp in skipped]
@@ -495,10 +511,7 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int)
         "strategy_note": _strategy_note(horizon_days, len(suggestions), total_allocated, floating_capital),
     }
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Label helpers
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Label helpers ─────────────────────────────────────────────────────────────
 
 def _horizon_label(d):
     if d <= 30:  return "Short-term (≤1 month)"
@@ -519,14 +532,14 @@ def _skip_reason(p: dict, horizon_days: int) -> str:
     sent = p.get("sentiment") or 0.0
     loss = abs(p.get("pnl_pct") or 0.0)
     if p.get("above_ema200") is False:
-        return "Price is below 200-day EMA — structural downtrend. Do not average down; risk of further losses is high."
+        return "Price is below 200-day EMA — structural downtrend. Risk of further losses is high."
     if rsi > 65:
-        return "RSI overbought despite being in loss — poor entry timing. Wait for RSI to fall below 45."
+        return "RSI overbought — poor entry timing. Wait for RSI to fall below 45."
     if sent < -0.3:
         return "Strong negative news sentiment — high risk of continued downside pressure."
     if loss > 30 and horizon_days < 90:
         return f"Deep {loss:.0f}% loss needs 12+ months to recover. Your {horizon_days}d horizon is too short."
-    return f"Recovery score too low ({p.get('recovery_score', 0)}) — no bullish signals confirmed yet."
+    return f"Bullish signal strength too low ({p.get('recovery_score', 0)}) — wait for MACD or RSI confirmation."
 
 def _buffer_reason(d):
     if d <= 30:  return "20% reserve — short-horizon safety buffer"
@@ -536,8 +549,8 @@ def _buffer_reason(d):
 def _strategy_note(horizon_days, n, alloc, capital):
     pct = round(alloc / capital * 100) if capital > 0 else 0
     if horizon_days <= 30:
-        return (f"Conservative: {pct}% deployed across {n} MACD+RSI confirmed positions. "
-                f"Short horizon — only high-signal stocks qualify.")
+        return (f"Conservative: {pct}% deployed across {n} top setups. "
+                f"Short horizon — only high-signal opportunities qualify.")
     if horizon_days <= 180:
         return (f"Medium-term accumulation: {pct}% across {n} positions. "
                 f"Stagger entry using the tranche plan. Reassess in 4 weeks.")

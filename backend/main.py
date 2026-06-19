@@ -1032,6 +1032,7 @@ class CapitalAllocatorRequest(BaseModel):
     holdings: List[Holding]
     floating_capital: float          # INR available to invest
     horizon_days: int                # Investment horizon in days
+    mode: Optional[str] = "recovery"  # "recovery" or "market_buys"
 
 @app.post("/api/portfolio-analyze")
 def analyze_portfolio(req: PortfolioRequest):
@@ -1375,9 +1376,9 @@ def capital_allocate(req: CapitalAllocatorRequest):
     - Loss depth vs horizon suitability
     - Volatility fit for the given time window
     """
-    if not req.holdings:
+    if req.mode != "market_buys" and not req.holdings:
         raise HTTPException(status_code=400, detail="No holdings provided")
-    if len(req.holdings) > 15:
+    if req.holdings and len(req.holdings) > 15:
         raise HTTPException(status_code=400, detail="Max 15 holdings supported")
     if req.floating_capital <= 0:
         raise HTTPException(status_code=400, detail="floating_capital must be > 0")
@@ -1388,11 +1389,12 @@ def capital_allocate(req: CapitalAllocatorRequest):
         holdings_dicts = [
             {"ticker": h.ticker.strip().upper(), "qty": h.qty, "buy_price": h.buy_price}
             for h in req.holdings
-        ]
+        ] if req.holdings else []
         result = allocate_capital(
             holdings=holdings_dicts,
             floating_capital=req.floating_capital,
             horizon_days=req.horizon_days,
+            mode=req.mode or "recovery",
         )
         return result
     except Exception as e:

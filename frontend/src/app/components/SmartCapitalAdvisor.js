@@ -82,8 +82,10 @@ function SuggestionCard({ s, rank }) {
               {s.priority_label}
             </span>
           </div>
-          <p className={`text-[10px] font-bold mt-0.5 ${s.current_pnl_pct < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-            {s.current_pnl_pct > 0 ? '+' : ''}{fmt(s.current_pnl_pct)}% current P&L
+          <p className={`text-[10px] font-bold mt-0.5 ${
+            s.current_pnl_pct < 0 ? 'text-rose-400' : s.current_pnl_pct > 0 ? 'text-emerald-400' : 'text-slate-500'
+          }`}>
+            {s.current_pnl_pct === 0 ? 'Fresh Entry Option' : `${s.current_pnl_pct > 0 ? '+' : ''}${fmt(s.current_pnl_pct)}% current P&L`}
           </p>
         </div>
 
@@ -106,18 +108,33 @@ function SuggestionCard({ s, rank }) {
 
           {/* Metrics grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {[
-              { label: 'Buy @ Price',     value: `₹${s.live_price.toLocaleString('en-IN')}`, sub: 'current LTP' },
-              { label: 'New Avg Cost',    value: `₹${s.new_avg_price.toLocaleString('en-IN')}`, sub: `was ₹${s.buy_price.toLocaleString('en-IN')}` },
-              { label: 'Break-Even Now',  value: `+${fmt(s.new_gain_to_be)}%`, sub: `was +${fmt(s.current_gain_to_be)}%` },
-              { label: 'Cost Reduced By', value: `${fmt(s.avg_cost_reduction_pct)}%`, sub: 'avg cost reduction' },
-            ].map(m => (
-              <div key={m.label} className="rounded-xl bg-white/[0.04] border border-white/[0.06] p-2.5 text-center">
-                <p className="text-[8px] text-slate-600 uppercase tracking-wider mb-1">{m.label}</p>
-                <p className="text-[12px] font-black text-white">{m.value}</p>
-                <p className="text-[9px] text-slate-600 mt-0.5">{m.sub}</p>
-              </div>
-            ))}
+            {s.current_pnl_pct === 0 ? (
+              [
+                { label: 'Buy @ Price',     value: `₹${s.live_price.toLocaleString('en-IN')}`, sub: 'current LTP' },
+                { label: '1M Momentum',     value: `${s.momentum_1m > 0 ? '+' : ''}${fmt(s.momentum_1m)}%`, sub: 'price change 30d' },
+                { label: 'P/E Ratio',       value: s.pe_ratio ? `${fmt(s.pe_ratio, 1)}` : 'N/A', sub: s.sector || 'Sector benchmark' },
+                { label: 'Sentiment',       value: s.sentiment > 0 ? 'Bullish' : s.sentiment < 0 ? 'Bearish' : 'Neutral', sub: `score: ${fmt(s.sentiment, 2)}` },
+              ].map(m => (
+                <div key={m.label} className="rounded-xl bg-white/[0.04] border border-white/[0.06] p-2.5 text-center">
+                  <p className="text-[8px] text-slate-600 uppercase tracking-wider mb-1">{m.label}</p>
+                  <p className="text-[12px] font-black text-white">{m.value}</p>
+                  <p className="text-[9px] text-slate-600 mt-0.5">{m.sub}</p>
+                </div>
+              ))
+            ) : (
+              [
+                { label: 'Buy @ Price',     value: `₹${s.live_price.toLocaleString('en-IN')}`, sub: 'current LTP' },
+                { label: 'New Avg Cost',    value: `₹${s.new_avg_price.toLocaleString('en-IN')}`, sub: `was ₹${s.buy_price.toLocaleString('en-IN')}` },
+                { label: 'Break-Even Now',  value: `+${fmt(s.new_gain_to_be)}%`, sub: `was +${fmt(s.current_gain_to_be)}%` },
+                { label: 'Cost Reduced By', value: `${fmt(s.avg_cost_reduction_pct)}%`, sub: 'avg cost reduction' },
+              ].map(m => (
+                <div key={m.label} className="rounded-xl bg-white/[0.04] border border-white/[0.06] p-2.5 text-center">
+                  <p className="text-[8px] text-slate-600 uppercase tracking-wider mb-1">{m.label}</p>
+                  <p className="text-[12px] font-black text-white">{m.value}</p>
+                  <p className="text-[9px] text-slate-600 mt-0.5">{m.sub}</p>
+                </div>
+              ))
+            )}
           </div>
 
           {/* Signal badges row */}
@@ -148,7 +165,7 @@ function SuggestionCard({ s, rank }) {
               <span className="text-[9px] font-bold px-2 py-0.5 rounded-full border bg-white/[0.05] border-white/[0.10] text-slate-400">P/E {fmt(s.pe_ratio, 1)}</span>
             )}
             <span className="text-[9px] px-2 py-0.5 rounded-full border bg-white/[0.04] border-white/[0.08] text-slate-500">
-              Recovery: {s.estimated_recovery}
+              {s.current_pnl_pct === 0 ? 'Fresh Entry Pick' : `Recovery: ${s.estimated_recovery}`}
             </span>
           </div>
 
@@ -184,12 +201,14 @@ function SuggestionCard({ s, rank }) {
 
 // ── Input panel (the "wizard") ─────────────────────────────────────────────
 function InputPanel({ holdings, onResult, loading, setLoading }) {
+  const [mode, setMode]         = useState('recovery'); // 'recovery' or 'market_buys'
   const [capital, setCapital]   = useState('');
   const [horizon, setHorizon]   = useState(null);
   const [customDays, setCustom] = useState('');
   const [error, setError]       = useState(null);
 
   const selectedDays = horizon?.days || (customDays ? parseInt(customDays) : null);
+  const hasHoldings = holdings && holdings.length > 0;
 
   const run = useCallback(async () => {
     if (!capital || !selectedDays) return;
@@ -199,13 +218,14 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          holdings: holdings.map(h => ({
+          holdings: mode === 'recovery' ? holdings.map(h => ({
             ticker: h.ticker.trim().toUpperCase(),
             qty: +h.qty,
             buy_price: +h.buy_price,
-          })),
+          })) : [],
           floating_capital: parseFloat(capital),
           horizon_days: selectedDays,
+          mode: mode,
         }),
       });
       const json = await res.json();
@@ -216,10 +236,46 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
     } finally {
       setLoading(false);
     }
-  }, [capital, selectedDays, holdings, onResult, setLoading]);
+  }, [capital, selectedDays, holdings, mode, onResult, setLoading]);
 
   return (
     <div className="space-y-5">
+      {/* Mode Toggle */}
+      <div className="flex gap-2 p-1 bg-white/[0.02] border border-white/[0.08] rounded-xl shrink-0">
+        <button
+          onClick={() => setMode('recovery')}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+            mode === 'recovery'
+              ? 'bg-violet-500/20 border border-violet-500/30 text-violet-300'
+              : 'text-slate-500 hover:text-slate-300 border border-transparent'
+          }`}
+        >
+          <TrendingDown className="h-3.5 w-3.5" />
+          Recover Positions
+        </button>
+        <button
+          onClick={() => setMode('market_buys')}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+            mode === 'market_buys'
+              ? 'bg-violet-500/20 border border-violet-500/30 text-violet-300'
+              : 'text-slate-500 hover:text-slate-300 border border-transparent'
+          }`}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          Fresh Market Buys
+        </button>
+      </div>
+
+      {mode === 'recovery' && !hasHoldings && (
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold">No holdings detected</p>
+            <p className="text-slate-400 mt-0.5">Please add stocks to your Portfolio Tracker first, or switch to <strong>Fresh Market Buys</strong> to find top market candidates.</p>
+          </div>
+        </div>
+      )}
+
       {/* Capital input */}
       <div>
         <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
@@ -298,7 +354,7 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
 
       <button
         onClick={run}
-        disabled={loading || !capital || !selectedDays}
+        disabled={loading || !capital || !selectedDays || (mode === 'recovery' && !hasHoldings)}
         className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40 text-white text-sm font-bold rounded-xl transition-all duration-200 cursor-pointer shadow-lg shadow-violet-500/20"
       >
         <Sparkles className={`h-4 w-4 ${loading ? 'animate-pulse' : ''}`} />
