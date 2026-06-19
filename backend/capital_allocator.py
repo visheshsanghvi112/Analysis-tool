@@ -359,7 +359,7 @@ def _tranche_plan(live_px: float, alloc_amt: float, qty: float, buy_price: float
         })
     return plan
 
-def allocate_capital(holdings: list, floating_capital: float, horizon_days: int, mode: str = "recovery") -> dict:
+def allocate_capital(holdings: list, floating_capital: float, horizon_days: int, mode: str = "recovery", max_stock_price: float = None, sector: str = None) -> dict:
     if floating_capital <= 0 or horizon_days <= 0:
         return {"error": "Invalid inputs"}
 
@@ -394,12 +394,20 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
     else:
         eligible_profiles = profiles  # all market leaders are candidates
 
+    # Apply category/sector filter if specified
+    if sector and sector != "All" and sector != "":
+        eligible_profiles = [p for p in eligible_profiles if p.get("sector") and p["sector"].lower() == sector.lower()]
+
+    # Apply max price filter if specified
+    if max_stock_price and max_stock_price > 0:
+        eligible_profiles = [p for p in eligible_profiles if p["live_price"] <= max_stock_price]
+
     if not eligible_profiles:
         return {
             "floating_capital": round(floating_capital, 2),
             "horizon_days": horizon_days,
             "no_loss_positions": True,
-            "message": "All your holdings are currently in profit! No averaging down needed.",
+            "message": "All your holdings are currently in profit! No averaging down needed." if mode == "recovery" else "No matching market candidates found for the specified filters.",
             "suggestions": [],
             "summary": {
                 "total_allocated": 0, "unallocated_cash": round(floating_capital, 2),

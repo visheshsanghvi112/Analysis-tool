@@ -81,6 +81,11 @@ function SuggestionCard({ s, rank }) {
             <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${c.badge}`}>
               {s.priority_label}
             </span>
+            {s.sector && (
+              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full border bg-violet-500/10 border-violet-500/20 text-violet-300">
+                📁 {s.sector}
+              </span>
+            )}
           </div>
           <p className={`text-[10px] font-bold mt-0.5 ${
             s.current_pnl_pct < 0 ? 'text-rose-400' : s.current_pnl_pct > 0 ? 'text-emerald-400' : 'text-slate-500'
@@ -210,6 +215,8 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
   const [capital, setCapital]   = useState('');
   const [horizon, setHorizon]   = useState(null);
   const [customDays, setCustom] = useState('');
+  const [maxPrice, setMaxPrice] = useState('Any');
+  const [selectedSector, setSelectedSector] = useState('All');
   const [error, setError]       = useState(null);
 
   const selectedDays = horizon?.days || (customDays ? parseInt(customDays) : null);
@@ -231,6 +238,8 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
           floating_capital: parseFloat(capital),
           horizon_days: selectedDays,
           mode: mode,
+          max_stock_price: maxPrice === 'Any' ? null : parseFloat(maxPrice),
+          sector: selectedSector === 'All' ? null : selectedSector,
         }),
       });
       const json = await res.json();
@@ -241,7 +250,7 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
     } finally {
       setLoading(false);
     }
-  }, [capital, selectedDays, holdings, mode, onResult, setLoading]);
+  }, [capital, selectedDays, holdings, mode, maxPrice, selectedSector, onResult, setLoading]);
 
   return (
     <div className="space-y-5">
@@ -312,6 +321,56 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
               {fmtINR(amt)}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Filters Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Sector Filter */}
+        <div>
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+            📁 Category / Sector
+          </label>
+          <div className="relative">
+            <select
+              value={selectedSector}
+              onChange={e => setSelectedSector(e.target.value)}
+              className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.10] rounded-xl text-xs text-white outline-none focus:border-violet-500/50 appearance-none cursor-pointer"
+            >
+              {['All', 'Banking', 'IT', 'FMCG', 'Metals', 'Infrastructure', 'Auto', 'Pharma', 'Energy', 'Power', 'NBFC', 'Telecom'].map(sec => (
+                <option key={sec} value={sec} className="bg-[#0a0a0f] text-white">
+                  {sec === 'All' ? 'All Sectors' : sec}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+              <ChevronDown className="h-3.5 w-3.5" />
+            </div>
+          </div>
+        </div>
+
+        {/* Price Limit Filter */}
+        <div>
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+            💰 Max Stock Price
+          </label>
+          <div className="relative">
+            <select
+              value={maxPrice}
+              onChange={e => setMaxPrice(e.target.value)}
+              className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.10] rounded-xl text-xs text-white outline-none focus:border-violet-500/50 appearance-none cursor-pointer"
+            >
+              <option value="Any" className="bg-[#0a0a0f] text-white">Any Price</option>
+              <option value="100" className="bg-[#0a0a0f] text-white">Under ₹100</option>
+              <option value="200" className="bg-[#0a0a0f] text-white">Under ₹200</option>
+              <option value="500" className="bg-[#0a0a0f] text-white">Under ₹500</option>
+              <option value="1000" className="bg-[#0a0a0f] text-white">Under ₹1,000</option>
+              <option value="2000" className="bg-[#0a0a0f] text-white">Under ₹2,000</option>
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+              <ChevronDown className="h-3.5 w-3.5" />
+            </div>
+          </div>
         </div>
       </div>
 

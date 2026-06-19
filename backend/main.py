@@ -1033,6 +1033,8 @@ class CapitalAllocatorRequest(BaseModel):
     floating_capital: float          # INR available to invest
     horizon_days: int                # Investment horizon in days
     mode: Optional[str] = "recovery"  # "recovery" or "market_buys"
+    max_stock_price: Optional[float] = None
+    sector: Optional[str] = None
 
 @app.post("/api/portfolio-analyze")
 def analyze_portfolio(req: PortfolioRequest):
@@ -1395,6 +1397,8 @@ def capital_allocate(req: CapitalAllocatorRequest):
             floating_capital=req.floating_capital,
             horizon_days=req.horizon_days,
             mode=req.mode or "recovery",
+            max_stock_price=req.max_stock_price,
+            sector=req.sector,
         )
         return result
     except Exception as e:
