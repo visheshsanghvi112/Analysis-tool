@@ -432,6 +432,13 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
 function ResultsPanel({ data, onReset }) {
   const s = data.summary;
 
+  const groupedSuggestions = (data.suggestions || []).reduce((acc, sug) => {
+    const sector = sug.sector || 'Others';
+    if (!acc[sector]) acc[sector] = [];
+    acc[sector].push(sug);
+    return acc;
+  }, {});
+
   if (data.no_loss_positions) {
     return (
       <div className="text-center py-8 space-y-3">
@@ -485,13 +492,22 @@ function ResultsPanel({ data, onReset }) {
         </div>
       )}
 
-      {/* Suggestion cards */}
-      <div className="space-y-3">
+      {/* Grouped Suggestion cards */}
+      <div className="space-y-4">
         <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold flex items-center gap-1.5">
-          <Target className="h-3 w-3" /> Ranked Allocation Plan
+          <Target className="h-3 w-3" /> Category-Wise Allocation Plan
         </p>
-        {data.suggestions.map((s, i) => (
-          <SuggestionCard key={s.ticker} s={s} rank={i + 1} />
+        {Object.entries(groupedSuggestions).map(([sector, list]) => (
+          <div key={sector} className="space-y-2">
+            <p className="text-[10px] font-bold text-violet-400/80 uppercase tracking-wider pl-1 flex items-center gap-1">
+              <span>📁</span> {sector} Sector
+            </p>
+            <div className="space-y-2.5">
+              {list.map((sug, i) => (
+                <SuggestionCard key={sug.ticker} s={sug} rank={i + 1} />
+              ))}
+            </div>
+          </div>
         ))}
       </div>
 
