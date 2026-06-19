@@ -382,116 +382,143 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
 
     for p in eligible_profiles:
         p["recovery_score"] = _recovery_score(p, horizon_days)
+        p["signal"] = _signal_label(p)
 
     # Sort candidates by score descending
     eligible_profiles.sort(key=lambda x: x["recovery_score"], reverse=True)
 
     # Determine thresholds
     threshold = 38.0 if mode == "recovery" else 42.0
-    eligible = [p for p in eligible_profiles if p["recovery_score"] >= threshold]
-    if not eligible:
-        eligible = [eligible_profiles[0]]  # Fallback to the top candidate
 
-    elig_scores = np.array([p["recovery_score"] for p in eligible], dtype=float)
-    exp_s   = np.exp((elig_scores - elig_scores.max()) / 5.0)
-    weights = exp_s / exp_s.sum()
+    if mode == "market_buys":
+        # Only select leaders that are active buy opportunities (i.e. signal is not WAIT)
+        eligible = [p for p in eligible_profiles if p["recovery_score"] >= threshold and p["signal"] != "WAIT"]
+    else:
+        eligible = [p for p in eligible_profiles if p["recovery_score"] >= threshold]
 
-    buffer_pct = 0.20 if horizon_days < 90 else 0.12 if horizon_days < 180 else 0.08
-    deployable = floating_capital * (1 - buffer_pct)
-    reserve    = floating_capital * buffer_pct
+    if not eligible and mode == "recovery":
+        eligible = [eligible_profiles[0]]  # Fallback to the top candidate for recovery
 
     suggestions = []
     total_allocated = 0.0
 
-    for i, (p, w) in enumerate(zip(eligible, weights)):
-        alloc_amt = round(deployable * float(w), 2)
-        live_px   = p["live_price"]
-
-        shares = max(1 if i == 0 else 0, int(alloc_amt / live_px)) if live_px > 0 else 0
-        actual = round(shares * live_px, 2)
-
-        signal              = _signal_label(p)
-        conf_pct, conf_lbl  = _confidence_band(p["recovery_score"], horizon_days)
-        rec_time            = _recovery_timeline(abs(p["pnl_pct"]), p)
-        tranches            = _tranche_plan(live_px, actual, p["qty"], p["buy_price"], horizon_days)
-
-        priority_map = {0: ("🔥 Top Pick", "emerald"), 1: ("⚡ Strong Opportunity", "indigo"),
-                        2: ("📊 Moderate Opportunity", "amber")}
-        pl, pc = priority_map.get(i, ("🔵 Consider", "slate"))
-
-        # Signals explanation
-        active = []
-        if p.get("macd_crossover"): active.append("MACD crossover ✓")
-        if p.get("rsi_divergence"):  active.append("RSI divergence ✓")
-        if p.get("above_ema200"):    active.append("above 200 EMA ✓")
-        if p.get("vol_spike"):       active.append("volume spike ✓")
-        if p.get("rsi") and p["rsi"] < 40: active.append(f"RSI oversold ({p['rsi']}) ✓")
-        sigs = ", ".join(active) if active else "mixed signals"
-
-        if mode == "recovery":
-            total_qty = p["qty"] + shares
-            new_avg   = (p["qty"] * p["buy_price"] + shares * live_px) / total_qty if total_qty > 0 else live_px
-            new_be    = round(((new_avg / live_px) - 1) * 100, 2) if live_px > 0 else 0.0
-            avg_red   = round(((p["buy_price"] - new_avg) / p["buy_price"]) * 100, 2) if p["buy_price"] > 0 else 0.0
-
-            if signal == "STRONG_BUY":
-                action_text = (f"Strong setup — {sigs}. Buying {shares} shares at ₹{live_px:,.0f} "
-                               f"cuts your avg from ₹{p['buy_price']:,.0f} → ₹{new_avg:,.1f} (-{avg_red}%). "
-                               f"New break-even: +{new_be}% (was +{p['gain_to_breakeven']}%).")
-            elif signal == "ACCUMULATE":
-                action_text = (f"Moderate setup — {sigs}. Partial entry of {shares} shares lowers "
-                               f"avg cost by {avg_red}%. Est. recovery: {rec_time}.")
-            else:
-                action_text = (f"Weak signals ({sigs}). Small position of {shares} shares only. "
-                               f"Wait for MACD crossover or 200 EMA reclaim before committing more.")
-        else:
-            # Fresh buys
-            new_avg = live_px
-            new_be = 0.0
-            avg_red = 0.0
-            if signal == "STRONG_BUY":
-                action_text = (f"Premium fresh entry setup — {sigs}. Strong momentum and low risk path. "
-                               f"Deploy first tranche of {shares} shares at ₹{live_px:,.0f}.")
-            elif signal == "ACCUMULATE":
-                action_text = (f"Solid accumulation setup — {sigs}. High sector resilience. "
-                               f"Start building position with {shares} shares at ₹{live_px:,.0f}.")
-            else:
-                action_text = (f"Neutral setup — {sigs}. Enter with caution. Buy {shares} shares and "
-                               f"deploy rest only after MACD crossover confirms.")
-
-        suggestions.append({
-            "ticker": p["ticker"], "priority_rank": i + 1,
-            "priority_label": pl, "priority_color": pc,
-            "allocated_amount": actual, "shares_to_buy": shares,
-            "allocation_weight_pct": round(float(w) * 100, 1),
-            "live_price": live_px, "buy_price": p["buy_price"],
-            "current_pnl_pct": p["pnl_pct"],
-            "current_gain_to_be": p["gain_to_breakeven"],
-            "new_avg_price": round(new_avg, 2),
-            "new_gain_to_be": new_be, "avg_cost_reduction_pct": avg_red,
-            "rsi": p["rsi"], "sentiment": p["sentiment"],
-            "momentum_1m": p.get("momentum_1m"),
-            "macd_crossover": p.get("macd_crossover"),
-            "rsi_divergence": p.get("rsi_divergence"),
-            "above_ema200": p.get("above_ema200"),
-            "pct_from_ema200": p.get("pct_from_ema200"),
-            "vol_spike": p.get("vol_spike"),
-            "pe_ratio": p.get("pe_ratio"),
-            "sector": p.get("sector"),
-            "signal": signal, "recovery_score": p["recovery_score"],
-            "confidence_pct": conf_pct, "confidence_label": conf_lbl,
-            "estimated_recovery": rec_time,
-            "action_text": action_text,
-            "tranches": tranches,
-        })
-        total_allocated += actual
-
-    skipped = [p for p in eligible_profiles if not any(s["ticker"] == p["ticker"] for s in suggestions)]
+    # Base skipped notes on profiles not in eligible list
+    skipped = [p for p in eligible_profiles if p not in eligible]
     skip_notes = [{"ticker": sp["ticker"], "pnl_pct": sp["pnl_pct"],
                    "recovery_score": sp.get("recovery_score", 0),
                    "reason": _skip_reason(sp, horizon_days)} for sp in skipped]
 
+    if eligible:
+        elig_scores = np.array([p["recovery_score"] for p in eligible], dtype=float)
+        # Softmax temperature = 15.0 (v3 fix: wider distribution for better portfolio diversification)
+        exp_s   = np.exp((elig_scores - elig_scores.max()) / 15.0)
+        weights = exp_s / exp_s.sum()
+
+        buffer_pct = 0.20 if horizon_days < 90 else 0.12 if horizon_days < 180 else 0.08
+        deployable = floating_capital * (1 - buffer_pct)
+        reserve    = floating_capital * buffer_pct
+
+        for i, (p, w) in enumerate(zip(eligible, weights)):
+            alloc_amt = round(deployable * float(w), 2)
+            live_px   = p["live_price"]
+
+            shares = max(1 if (i == 0 and deployable >= live_px) else 0, int(alloc_amt / live_px)) if live_px > 0 else 0
+            actual = round(shares * live_px, 2)
+
+            if shares == 0:
+                # If cannot buy single share, move this pick to skipped
+                skip_notes.append({
+                    "ticker": p["ticker"],
+                    "pnl_pct": p["pnl_pct"],
+                    "recovery_score": p["recovery_score"],
+                    "reason": f"Insufficient allocated capital (₹{alloc_amt:,.0f}) to buy 1 share at ₹{live_px:,.0f}. Try increasing your floating capital."
+                })
+                continue
+
+            signal              = p["signal"]
+            conf_pct, conf_lbl  = _confidence_band(p["recovery_score"], horizon_days)
+            rec_time            = _recovery_timeline(abs(p["pnl_pct"]), p)
+            tranches            = _tranche_plan(live_px, actual, p["qty"], p["buy_price"], horizon_days)
+
+            priority_map = {0: ("🔥 Top Pick", "emerald"), 1: ("⚡ Strong Opportunity", "indigo"),
+                            2: ("📊 Moderate Opportunity", "amber")}
+            pl, pc = priority_map.get(i, ("🔵 Consider", "slate"))
+
+            # Signals explanation
+            active = []
+            if p.get("macd_crossover"): active.append("MACD crossover ✓")
+            if p.get("rsi_divergence"):  active.append("RSI divergence ✓")
+            if p.get("above_ema200"):    active.append("above 200 EMA ✓")
+            if p.get("vol_spike"):       active.append("volume spike ✓")
+            if p.get("rsi") and p["rsi"] < 40: active.append(f"RSI oversold ({p['rsi']}) ✓")
+            sigs = ", ".join(active) if active else "mixed signals"
+
+            if mode == "recovery":
+                total_qty = p["qty"] + shares
+                new_avg   = (p["qty"] * p["buy_price"] + shares * live_px) / total_qty if total_qty > 0 else live_px
+                new_be    = round(((new_avg / live_px) - 1) * 100, 2) if live_px > 0 else 0.0
+                avg_red   = round(((p["buy_price"] - new_avg) / p["buy_price"]) * 100, 2) if p["buy_price"] > 0 else 0.0
+
+                if signal == "STRONG_BUY":
+                    action_text = (f"Strong setup — {sigs}. Buying {shares} shares at ₹{live_px:,.0f} "
+                                   f"cuts your avg from ₹{p['buy_price']:,.0f} → ₹{new_avg:,.1f} (-{avg_red}%). "
+                                   f"New break-even: +{new_be}% (was +{p['gain_to_breakeven']}%).")
+                elif signal == "ACCUMULATE":
+                    action_text = (f"Moderate setup — {sigs}. Partial entry of {shares} shares lowers "
+                                   f"avg cost by {avg_red}%. Est. recovery: {rec_time}.")
+                else:
+                    action_text = (f"Weak signals ({sigs}). Small position of {shares} shares only. "
+                                   f"Wait for MACD crossover or 200 EMA reclaim before committing more.")
+            else:
+                # Fresh buys
+                new_avg = live_px
+                new_be = 0.0
+                avg_red = 0.0
+                if signal == "STRONG_BUY":
+                    action_text = (f"Premium fresh entry setup — {sigs}. Strong momentum and low risk path. "
+                                   f"Deploy first tranche of {shares} shares at ₹{live_px:,.0f}.")
+                elif signal == "ACCUMULATE":
+                    action_text = (f"Solid accumulation setup — {sigs}. High sector resilience. "
+                                   f"Start building position with {shares} shares at ₹{live_px:,.0f}.")
+                else:
+                    action_text = (f"Neutral setup — {sigs}. Enter with caution. Buy {shares} shares and "
+                                   f"deploy rest only after MACD crossover confirms.")
+
+            suggestions.append({
+                "ticker": p["ticker"], "priority_rank": i + 1,
+                "priority_label": pl, "priority_color": pc,
+                "allocated_amount": actual, "shares_to_buy": shares,
+                "allocation_weight_pct": round(float(w) * 100, 1),
+                "live_price": live_px, "buy_price": p["buy_price"],
+                "current_pnl_pct": p["pnl_pct"],
+                "current_gain_to_be": p["gain_to_breakeven"],
+                "new_avg_price": round(new_avg, 2),
+                "new_gain_to_be": new_be, "avg_cost_reduction_pct": avg_red,
+                "rsi": p["rsi"], "sentiment": p["sentiment"],
+                "momentum_1m": p.get("momentum_1m"),
+                "macd_crossover": p.get("macd_crossover"),
+                "rsi_divergence": p.get("rsi_divergence"),
+                "above_ema200": p.get("above_ema200"),
+                "pct_from_ema200": p.get("pct_from_ema200"),
+                "vol_spike": p.get("vol_spike"),
+                "pe_ratio": p.get("pe_ratio"),
+                "sector": p.get("sector"),
+                "signal": signal, "recovery_score": p["recovery_score"],
+                "confidence_pct": conf_pct, "confidence_label": conf_lbl,
+                "estimated_recovery": rec_time,
+                "action_text": action_text,
+                "tranches": tranches,
+            })
+            total_allocated += actual
+    else:
+        buffer_pct = 0.20 if horizon_days < 90 else 0.12 if horizon_days < 180 else 0.08
+        reserve = floating_capital
+        deployable = 0.0
+
     avg_conf = round(float(np.mean([s["confidence_pct"] for s in suggestions])), 0) if suggestions else 0
+
+    no_loss = len(suggestions) == 0
+    message = "All your holdings are currently in profit! No averaging down needed." if mode == "recovery" else "No active bullish buy setups found among market leaders right now. Markets may be overbought or in a broad downtrend. We recommend holding cash in reserve."
 
     return {
         "floating_capital": round(floating_capital, 2),
@@ -499,12 +526,15 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
         "deployable_capital": round(deployable, 2),
         "reserve_buffer": round(reserve, 2), "buffer_reason": _buffer_reason(horizon_days),
         "suggestions": suggestions, "skipped_positions": skip_notes,
+        "no_loss_positions": no_loss,
+        "message": message,
+        "mode": mode,
         "summary": {
             "total_allocated": round(total_allocated, 2),
             "unallocated_cash": round(floating_capital - total_allocated, 2),
             "positions_addressed": len(suggestions), "positions_skipped": len(skip_notes),
             "avg_confidence": avg_conf,
-            "overall_confidence": "HIGH" if avg_conf >= 70 else "MODERATE" if avg_conf >= 50 else "LOW",
+            "overall_confidence": "HIGH" if avg_conf >= 70 else "MODERATE" if avg_conf >= 50 else "LOW" if suggestions else "N/A",
             "horizon_label": _horizon_label(horizon_days),
             "risk_profile": _risk_profile_label(horizon_days),
         },
