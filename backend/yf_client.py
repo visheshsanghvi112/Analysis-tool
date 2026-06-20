@@ -145,6 +145,9 @@ def get_quote(ticker: str) -> dict:
             "change":     change,
             "changePct":  change_pct,
             "timestamp":  datetime.now().strftime("%H:%M:%S"),
+            "longName":   meta.get("longName"),
+            "fiftyTwoWeekHigh": meta.get("fiftyTwoWeekHigh"),
+            "fiftyTwoWeekLow":  meta.get("fiftyTwoWeekLow"),
         }
     except Exception:
         return {}

@@ -220,6 +220,79 @@ def get_sectors():
         "total_stocks": len(TICKER_LIST)
     }
 
+NIFTY_50_TICKERS = [
+    'ADANIENT.NS', 'ADANIPORTS.NS', 'APOLLOHOSP.NS', 'ASIANPAINT.NS', 'AXISBANK.NS',
+    'BAJAJ-AUTO.NS', 'BAJFINANCE.NS', 'BAJAJFINSV.NS', 'BPCL.NS', 'BHARTIARTL.NS',
+    'BRITANNIA.NS', 'CIPLA.NS', 'COALINDIA.NS', 'DIVISLAB.NS', 'DRREDDY.NS',
+    'EICHERMOT.NS', 'GRASIM.NS', 'HCLTECH.NS', 'HDFCBANK.NS', 'HDFCLIFE.NS',
+    'HEROMOTOCO.NS', 'HINDALCO.NS', 'HINDUNILVR.NS', 'ICICIBANK.NS', 'ITC.NS',
+    'INDUSINDBK.NS', 'INFY.NS', 'JSWSTEEL.NS', 'KOTAKBANK.NS', 'LT.NS',
+    'LTIM.NS', 'M&M.NS', 'MARUTI.NS', 'NTPC.NS', 'NESTLEIND.NS',
+    'ONGC.NS', 'POWERGRID.NS', 'RELIANCE.NS', 'SBILIFE.NS', 'SBIN.NS',
+    'SUNPHARMA.NS', 'TCS.NS', 'TATACONSUM.NS', 'TATAMOTORS.NS', 'TATASTEEL.NS',
+    'TECHM.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'UPL.NS', 'WIPRO.NS'
+]
+
+@app.get("/api/market-screener")
+@limiter.limit("20/minute")
+def get_market_screener(request: Request):
+    """
+    Returns real-time lists of Top Gainers, Top Losers, Volume Shockers,
+    52-Week Highs, and 52-Week Lows for Nifty 50 stocks.
+    """
+    import concurrent.futures
+    
+    def fetch_quote_safe(ticker):
+        try:
+            q = get_quote(ticker)
+            if q and q.get("price") is not None:
+                q["ticker"] = ticker
+                return q
+        except Exception:
+            pass
+        return None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+        raw_results = list(executor.map(fetch_quote_safe, NIFTY_50_TICKERS))
+    
+    quotes = [q for q in raw_results if q is not None]
+    if not quotes:
+        raise HTTPException(status_code=503, detail="Failed to fetch market data from Yahoo Finance.")
+
+    gainers = sorted(quotes, key=lambda x: x.get("changePct") or 0.0, reverse=True)
+    losers = sorted(quotes, key=lambda x: x.get("changePct") or 0.0)
+    top_volume = sorted(quotes, key=lambda x: x.get("volume") or 0, reverse=True)
+    
+    high_52w = []
+    for q in quotes:
+        price = q.get("price")
+        high = q.get("fiftyTwoWeekHigh")
+        if price and high:
+            pct = ((price - high) / high) * 100
+            q_copy = dict(q)
+            q_copy["pct_from_52w_high"] = round(pct, 2)
+            high_52w.append(q_copy)
+    high_52w = sorted(high_52w, key=lambda x: x["pct_from_52w_high"], reverse=True)
+    
+    low_52w = []
+    for q in quotes:
+        price = q.get("price")
+        low = q.get("fiftyTwoWeekLow")
+        if price and low:
+            pct = ((price - low) / low) * 100
+            q_copy = dict(q)
+            q_copy["pct_from_52w_low"] = round(pct, 2)
+            low_52w.append(q_copy)
+    low_52w = sorted(low_52w, key=lambda x: x["pct_from_52w_low"])
+
+    return {
+        "gainers": gainers[:8],
+        "losers": losers[:8],
+        "volume": top_volume[:8],
+        "high52w": high_52w[:8],
+        "low52w": low_52w[:8]
+    }
+
 @app.get("/api/live")
 @limiter.limit("30/minute")  # Rate limit: 30 requests per minute
 def get_live_price(
@@ -1058,9 +1131,15 @@ def analyze_portfolio(req: PortfolioRequest):
 
     for h in req.holdings:
         tk = h.ticker.strip().upper()
+        company_name = tk
+        high_52w = None
+        low_52w = None
         try:
             q = get_quote(tk)
             live_px = float(q.get("price") or h.buy_price)
+            company_name = q.get("longName") or tk
+            high_52w = q.get("fiftyTwoWeekHigh")
+            low_52w = q.get("fiftyTwoWeekLow")
         except Exception:
             live_px = h.buy_price
 
@@ -1069,15 +1148,22 @@ def analyze_portfolio(req: PortfolioRequest):
         pnl         = curr_val - cost
         pnl_pct     = (pnl / cost * 100) if cost > 0 else 0.0
 
+        raw_symbol  = tk.replace(".NS", "").replace(".BO", "")
+        sector      = SECTOR_MAP.get(raw_symbol, "Other")
+
         holdings_out.append({
-            "ticker":      tk,
-            "qty":         h.qty,
-            "buy_price":   round(h.buy_price, 2),
-            "live_price":  round(live_px, 2),
-            "cost":        round(cost, 2),
-            "curr_value":  round(curr_val, 2),
-            "pnl":         round(pnl, 2),
-            "pnl_pct":     round(pnl_pct, 2),
+            "ticker":        tk,
+            "company_name":  company_name,
+            "qty":           h.qty,
+            "buy_price":     round(h.buy_price, 2),
+            "live_price":    round(live_px, 2),
+            "cost":          round(cost, 2),
+            "curr_value":    round(curr_val, 2),
+            "pnl":           round(pnl, 2),
+            "pnl_pct":       round(pnl_pct, 2),
+            "sector":        sector,
+            "high_52w":      high_52w,
+            "low_52w":       low_52w
         })
         total_cost  += cost
         total_value += curr_val
@@ -1094,9 +1180,18 @@ def analyze_portfolio(req: PortfolioRequest):
     history_map  = {}
 
     for h in holdings_out:
+        # Fallback handling for 52w high/low
+        if h["high_52w"] is None:
+            h["high_52w"] = h["live_price"]
+        if h["low_52w"] is None:
+            h["low_52w"] = h["live_price"]
         try:
             df = get_history(h["ticker"], period="1y")
             if df is not None and not df.empty and len(df) > 30:
+                if h["high_52w"] == h["live_price"]:
+                    h["high_52w"] = round(float(df["High"].max()), 2)
+                if h["low_52w"] == h["live_price"]:
+                    h["low_52w"]  = round(float(df["Low"].min()), 2)
                 r = df["Close"].pct_change().dropna()
                 returns_map[h["ticker"]]  = r
                 # Weekly-sampled close for equity curve (cap payload)
@@ -1107,6 +1202,18 @@ def analyze_portfolio(req: PortfolioRequest):
                 ]
         except Exception:
             pass
+
+    # Fetch Nifty 50 benchmark history
+    try:
+        nifty_df = get_history("^NSEI", period="1y")
+        if nifty_df is not None and not nifty_df.empty and len(nifty_df) > 30:
+            wk = nifty_df["Close"].resample("W").last().dropna()
+            history_map["NIFTY50"] = [
+                {"date": str(d.date()), "price": round(float(v), 2)}
+                for d, v in wk.items()
+            ]
+    except Exception as e:
+        print(f"[PORTFOLIO] Failed to fetch Nifty benchmark: {e}")
 
     # ── Step 4: portfolio-level risk ──────────────────────────────────────
     portfolio_risk = {}
@@ -1134,6 +1241,19 @@ def analyze_portfolio(req: PortfolioRequest):
             rf_daily    = 0.065 / 252
             sharpe      = float((port_ret.mean() - rf_daily) / (port_ret.std() + 1e-9) * np.sqrt(252))
 
+            # Beta calculation relative to Nifty 50
+            beta = 1.0
+            try:
+                if nifty_df is not None and not nifty_df.empty:
+                    nifty_ret = nifty_df["Close"].pct_change().dropna()
+                    combined = pd.DataFrame({"port": port_ret, "nifty": nifty_ret}).dropna()
+                    if len(combined) > 10:
+                        cov = float(combined.cov().values[0, 1])
+                        nifty_var = float(combined["nifty"].var())
+                        beta = round(cov / (nifty_var + 1e-9), 3)
+            except Exception as e:
+                print(f"[PORTFOLIO] Failed to compute Beta: {e}")
+
             # Max drawdown on weighted portfolio
             cum         = (1 + port_ret).cumprod()
             roll_max    = cum.cummax()
@@ -1154,6 +1274,7 @@ def analyze_portfolio(req: PortfolioRequest):
                 "sharpe_ratio":        round(sharpe, 3),
                 "max_drawdown_pct":    max_dd,
                 "correlation_pairs":   corr_list,
+                "beta":                beta,
             }
         except Exception as e:
             portfolio_risk = {"error": str(e)}

@@ -121,9 +121,9 @@ function SuggestionCard({ s, rank }) {
                 { label: 'Sentiment',       value: s.sentiment > 0 ? 'Bullish' : s.sentiment < 0 ? 'Bearish' : 'Neutral', sub: `score: ${fmt(s.sentiment, 2)}` },
               ].map(m => (
                 <div key={m.label} className="rounded-xl bg-white/[0.04] border border-white/[0.06] p-2.5 text-center">
-                  <p className="text-[8px] text-slate-600 uppercase tracking-wider mb-1">{m.label}</p>
+                  <p className="text-[8px] text-slate-400 uppercase tracking-wider mb-1">{m.label}</p>
                   <p className="text-[12px] font-black text-white">{m.value}</p>
-                  <p className="text-[9px] text-slate-600 mt-0.5">{m.sub}</p>
+                  <p className="text-[9px] text-slate-400 mt-0.5">{m.sub}</p>
                 </div>
               ))
             ) : (
@@ -134,9 +134,9 @@ function SuggestionCard({ s, rank }) {
                 { label: 'Cost Reduced By', value: `${fmt(s.avg_cost_reduction_pct)}%`, sub: 'avg cost reduction' },
               ].map(m => (
                 <div key={m.label} className="rounded-xl bg-white/[0.04] border border-white/[0.06] p-2.5 text-center">
-                  <p className="text-[8px] text-slate-600 uppercase tracking-wider mb-1">{m.label}</p>
+                  <p className="text-[8px] text-slate-400 uppercase tracking-wider mb-1">{m.label}</p>
                   <p className="text-[12px] font-black text-white">{m.value}</p>
-                  <p className="text-[9px] text-slate-600 mt-0.5">{m.sub}</p>
+                  <p className="text-[9px] text-slate-400 mt-0.5">{m.sub}</p>
                 </div>
               ))
             )}
@@ -174,15 +174,15 @@ function SuggestionCard({ s, rank }) {
             {s.pe_ratio && (
               <span className="text-[9px] font-bold px-2 py-0.5 rounded-full border bg-white/[0.05] border-white/[0.10] text-slate-400">P/E {fmt(s.pe_ratio, 1)}</span>
             )}
-            <span className="text-[9px] px-2 py-0.5 rounded-full border bg-white/[0.04] border-white/[0.08] text-slate-500">
-              {s.current_pnl_pct === 0 ? 'Fresh Entry Pick' : `Recovery: ${s.estimated_recovery}`}
+            <span className="text-[9px] px-2 py-0.5 rounded-full border bg-white/[0.04] border-white/[0.08] text-slate-400">
+               {s.current_pnl_pct === 0 ? 'Fresh Entry Pick' : `Recovery: ${s.estimated_recovery}`}
             </span>
           </div>
 
           {/* Tranche entry plan */}
           {s.tranches?.length > 0 && (
             <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-3">
-              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2">📋 Staggered Entry Plan (Industry Best Practice)</p>
+              <p className="text-[9px] font-bold text-slate-300 uppercase tracking-wider mb-2">📋 Staggered Entry Plan (Industry Best Practice)</p>
               <div className="space-y-1.5">
                 {s.tranches.map(t => (
                   <div key={t.tranche} className="flex items-center gap-2 text-[10px]">
@@ -197,7 +197,7 @@ function SuggestionCard({ s, rank }) {
 
           {/* Confidence bar */}
           <div>
-            <div className="flex justify-between text-[9px] text-slate-600 mb-1">
+            <div className="flex justify-between text-[9px] text-slate-400 mb-1">
               <span>Signal Confidence</span>
               <span className="uppercase font-bold">{s.confidence_label}</span>
             </div>
@@ -261,7 +261,7 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
           className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
             mode === 'recovery'
               ? 'bg-violet-500/20 border border-violet-500/30 text-violet-300'
-              : 'text-slate-500 hover:text-slate-300 border border-transparent'
+              : 'text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
           <TrendingDown className="h-3.5 w-3.5" />
@@ -272,7 +272,7 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
           className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
             mode === 'market_buys'
               ? 'bg-violet-500/20 border border-violet-500/30 text-violet-300'
-              : 'text-slate-500 hover:text-slate-300 border border-transparent'
+              : 'text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
           <Sparkles className="h-3.5 w-3.5" />
@@ -292,18 +292,18 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
 
       {/* Capital input */}
       <div>
-        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+        <label className="block text-[10px] font-bold text-slate-200 uppercase tracking-wider mb-2">
           <Wallet className="inline h-3 w-3 mr-1" /> Available Floating Capital (₹)
         </label>
         <div className="flex items-center gap-2 px-3 py-2.5 bg-white/[0.04] border border-white/[0.10] rounded-xl focus-within:border-violet-500/50 transition">
-          <span className="text-slate-500 text-sm font-bold">₹</span>
+          <span className="text-slate-400 text-sm font-bold">₹</span>
           <input
             type="number"
             min="1"
             value={capital}
             onChange={e => setCapital(e.target.value)}
             placeholder="e.g. 50000"
-            className="bg-transparent text-white text-sm flex-1 outline-none placeholder-slate-700"
+            className="bg-transparent text-white text-sm flex-1 outline-none placeholder-slate-500"
           />
         </div>
         {/* Quick amount chips */}
@@ -315,7 +315,7 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
               className={`text-[10px] px-2.5 py-1 rounded-lg border transition cursor-pointer ${
                 capital === String(amt)
                   ? 'bg-violet-500/20 border-violet-500/40 text-violet-300'
-                  : 'bg-white/[0.03] border-white/[0.08] text-slate-500 hover:text-slate-300'
+                  : 'bg-white/[0.03] border-white/[0.08] text-slate-400 hover:text-slate-200'
               }`}
             >
               {fmtINR(amt)}
@@ -328,7 +328,7 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Sector Filter */}
         <div>
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+          <label className="block text-[10px] font-bold text-slate-200 uppercase tracking-wider mb-2">
             📁 Category / Sector
           </label>
           <div className="relative">
@@ -343,7 +343,7 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
                 </option>
               ))}
             </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
               <ChevronDown className="h-3.5 w-3.5" />
             </div>
           </div>
@@ -351,7 +351,7 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
 
         {/* Price Limit Filter */}
         <div>
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+          <label className="block text-[10px] font-bold text-slate-200 uppercase tracking-wider mb-2">
             💰 Max Stock Price
           </label>
           <div className="relative">
@@ -367,7 +367,7 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
               <option value="1000" className="bg-[#0a0a0f] text-white">Under ₹1,000</option>
               <option value="2000" className="bg-[#0a0a0f] text-white">Under ₹2,000</option>
             </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
               <ChevronDown className="h-3.5 w-3.5" />
             </div>
           </div>
@@ -376,7 +376,7 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
 
       {/* Horizon selector */}
       <div>
-        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+        <label className="block text-[10px] font-bold text-slate-200 uppercase tracking-wider mb-2">
           <Clock className="inline h-3 w-3 mr-1" /> Investment Horizon
         </label>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
@@ -387,12 +387,12 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
               className={`flex flex-col items-center gap-0.5 py-2.5 px-2 rounded-xl border text-center transition cursor-pointer ${
                 horizon?.days === h.days
                   ? 'bg-violet-600/20 border-violet-500/40 text-violet-300'
-                  : 'bg-white/[0.03] border-white/[0.07] text-slate-400 hover:border-white/[0.15] hover:text-slate-200'
+                  : 'bg-white/[0.03] border-white/[0.07] text-slate-350 hover:border-white/[0.15] hover:text-slate-200'
               }`}
             >
               <span className="text-lg leading-none">{h.icon}</span>
               <span className="text-[11px] font-bold mt-1">{h.label}</span>
-              <span className="text-[9px] text-slate-600">{h.desc}</span>
+              <span className="text-[9px] text-slate-400">{h.desc}</span>
             </button>
           ))}
         </div>
@@ -404,9 +404,9 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
             value={customDays}
             onChange={e => { setCustom(e.target.value); setHorizon(null); }}
             placeholder="Or enter custom days…"
-            className="flex-1 px-3 py-1.5 bg-white/[0.03] border border-white/[0.07] rounded-lg text-xs text-white placeholder-slate-700 outline-none focus:border-violet-500/40"
+            className="flex-1 px-3 py-1.5 bg-white/[0.03] border border-white/[0.07] rounded-lg text-xs text-white placeholder-slate-500 outline-none focus:border-violet-500/40"
           />
-          {customDays && <span className="text-[10px] text-slate-500">= {Math.round(parseInt(customDays)/30)} months</span>}
+          {customDays && <span className="text-[10px] text-slate-400">= {Math.round(parseInt(customDays)/30)} months</span>}
         </div>
       </div>
 
@@ -460,11 +460,11 @@ function ResultsPanel({ data, onReset }) {
       <div className="rounded-2xl bg-gradient-to-br from-violet-500/10 to-indigo-500/10 border border-violet-500/20 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div>
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Capital Allocation Plan</p>
-            <p className="text-2xl font-black text-white mt-0.5">{fmtINR(s.total_allocated)} <span className="text-sm text-slate-400 font-normal">deployed</span></p>
+            <p className="text-[10px] text-slate-300 uppercase tracking-wider font-bold">Capital Allocation Plan</p>
+            <p className="text-2xl font-black text-white mt-0.5">{fmtINR(s.total_allocated)} <span className="text-sm text-slate-300 font-normal">deployed</span></p>
           </div>
           <div className="text-right">
-            <p className="text-[9px] text-slate-600 uppercase">Confidence</p>
+            <p className="text-[9px] text-slate-400 uppercase">Confidence</p>
             <p className={`text-lg font-black ${confColor}`}>{s.overall_confidence}</p>
           </div>
         </div>
@@ -476,9 +476,9 @@ function ResultsPanel({ data, onReset }) {
             { label: 'Horizon',          value: s.horizon_label },
           ].map(m => (
             <div key={m.label} className="rounded-xl bg-white/[0.04] border border-white/[0.06] p-2.5 text-center">
-              <p className="text-[8px] text-slate-600 uppercase tracking-wider mb-1">{m.label}</p>
+              <p className="text-[8px] text-slate-400 uppercase tracking-wider mb-1">{m.label}</p>
               <p className="text-[11px] font-bold text-white">{m.value}</p>
-              {m.sub && <p className="text-[8px] text-slate-700 mt-0.5">{m.sub}</p>}
+              {m.sub && <p className="text-[8px] text-slate-500 mt-0.5">{m.sub}</p>}
             </div>
           ))}
         </div>
@@ -494,7 +494,7 @@ function ResultsPanel({ data, onReset }) {
 
       {/* Grouped Suggestion cards */}
       <div className="space-y-4">
-        <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold flex items-center gap-1.5">
+        <p className="text-[10px] text-slate-300 uppercase tracking-wider font-bold flex items-center gap-1.5">
           <Target className="h-3 w-3" /> Category-Wise Allocation Plan
         </p>
         {Object.entries(groupedSuggestions).map(([sector, list]) => (
@@ -514,7 +514,7 @@ function ResultsPanel({ data, onReset }) {
       {/* Skipped positions */}
       {data.skipped_positions?.length > 0 && (
         <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-3">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <p className="text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
             <Eye className="h-3 w-3 text-indigo-400" /> Watchlist & Alternates under Monitor
           </p>
           {data.skipped_positions.map(sp => (
@@ -531,7 +531,7 @@ function ResultsPanel({ data, onReset }) {
                     </span>
                   )}
                 </div>
-                <p className="text-[10px] text-slate-500 leading-relaxed mt-0.5">{sp.reason}</p>
+                <p className="text-[10px] text-slate-300 leading-relaxed mt-0.5">{sp.reason}</p>
               </div>
             </div>
           ))}
@@ -540,7 +540,7 @@ function ResultsPanel({ data, onReset }) {
 
       {/* Disclaimer + reset */}
       <div className="flex items-center justify-between">
-        <p className="text-[9px] text-slate-700 flex items-center gap-1">
+        <p className="text-[9px] text-slate-500 flex items-center gap-1">
           <Info className="h-3 w-3" /> For educational purposes only. Not financial advice.
         </p>
         <button onClick={onReset} className="text-[10px] text-violet-400 hover:text-violet-300 cursor-pointer">
@@ -572,7 +572,7 @@ export default function SmartCapitalAdvisor({ holdings, onClose }) {
           </div>
           <div className="flex-1">
             <h2 className="text-base font-black text-white">Smart Capital Advisor</h2>
-            <p className="text-[11px] text-slate-500">Tell us your floating money & horizon → we build your recovery plan</p>
+            <p className="text-[11px] text-slate-300">Tell us your floating money & horizon → we build your recovery plan</p>
           </div>
           {onClose && (
             <button onClick={onClose} className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/[0.06] text-slate-600 hover:text-slate-300 transition cursor-pointer">

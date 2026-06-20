@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   Search,
   TrendingUp,
@@ -16,6 +17,10 @@ import {
 } from 'lucide-react';
 
 const Header = ({ onTickerSelect, currentTicker }) => {
+  const pathname = usePathname();
+  const isBrowseActive = pathname === '/browse';
+  const isPortfolioActive = pathname === '/portfolio';
+
   const [searchQuery, setSearchQuery]   = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching]   = useState(false);
@@ -26,6 +31,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
   const abortRef     = useRef(null);
   const wrapperRef   = useRef(null);
   const inputRef     = useRef(null);
+  const mobileInputRef = useRef(null);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://stock-analysis-backend-seven.vercel.app';
 
@@ -38,6 +44,46 @@ const Header = ({ onTickerSelect, currentTicker }) => {
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Auto-focus mobile search input when mobile menu opens
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      const timer = setTimeout(() => {
+        if (mobileInputRef.current) {
+          mobileInputRef.current.focus();
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [mobileMenuOpen]);
+
+  // Handle global search focus events & hotkeys
+  useEffect(() => {
+    const handleTriggerFocus = () => {
+      const isMobile = window.innerWidth < 768;
+      if (isMobile) {
+        setMobileMenuOpen(true);
+      } else {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }
+    };
+
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        handleTriggerFocus();
+      }
+    };
+
+    window.addEventListener('trigger-search-focus', handleTriggerFocus);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('trigger-search-focus', handleTriggerFocus);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   useEffect(() => {
@@ -89,7 +135,11 @@ const Header = ({ onTickerSelect, currentTicker }) => {
   };
 
   const selectTicker = (ticker) => {
-    onTickerSelect(ticker.symbol);
+    if (onTickerSelect) {
+      onTickerSelect(ticker.symbol);
+    } else {
+      window.location.href = `/?ticker=${encodeURIComponent(ticker.symbol)}`;
+    }
     setSearchQuery('');
     setSearchResults([]);
     setDropdownOpen(false);
@@ -123,7 +173,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
           <div style={{ display: 'flex', alignItems: 'center', height: '60px', gap: '24px' }}>
 
             {/* ── Logo — click navigates home ───────────────────────── */}
-            <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0, textDecoration: 'none' }}>
+            <Link href="/" onClick={() => { window.dispatchEvent(new CustomEvent('reset-selected-ticker')); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0, textDecoration: 'none' }}>
               <div style={{
                 width: '32px', height: '32px',
                 background: '#fff',
@@ -271,24 +321,24 @@ const Header = ({ onTickerSelect, currentTicker }) => {
               <Link
                 href="/browse"
                 style={{
-                  fontSize: '13px', fontWeight: 500, color: '#888',
+                  fontSize: '13px', fontWeight: 500, color: isBrowseActive ? '#fff' : '#888',
                   textDecoration: 'none', transition: 'color 0.15s',
                   whiteSpace: 'nowrap',
                 }}
                 onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-                onMouseLeave={e => e.currentTarget.style.color = '#888'}
+                onMouseLeave={e => e.currentTarget.style.color = isBrowseActive ? '#fff' : '#888'}
               >
                 Browse Stocks
               </Link>
               <Link
                 href="/portfolio"
                 style={{
-                  fontSize: '13px', fontWeight: 500, color: '#888',
+                  fontSize: '13px', fontWeight: 500, color: isPortfolioActive ? '#fff' : '#888',
                   textDecoration: 'none', transition: 'color 0.15s',
                   whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px',
                 }}
                 onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-                onMouseLeave={e => e.currentTarget.style.color = '#888'}
+                onMouseLeave={e => e.currentTarget.style.color = isPortfolioActive ? '#fff' : '#888'}
               >
                 <Briefcase style={{ width: '13px', height: '13px' }} />
                 Portfolio
@@ -355,6 +405,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
                 width: '15px', height: '15px', color: '#666', pointerEvents: 'none',
               }} />
               <input
+                ref={mobileInputRef}
                 type="text"
                 value={searchQuery}
                 onChange={handleSearch}
@@ -406,8 +457,11 @@ const Header = ({ onTickerSelect, currentTicker }) => {
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 width: '100%', padding: '12px',
-                background: '#111', border: '1px solid #222', borderRadius: '8px',
-                color: '#fff', fontSize: '13px', fontWeight: 500,
+                background: isBrowseActive ? 'rgba(99, 102, 241, 0.1)' : '#111',
+                border: isBrowseActive ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid #222',
+                borderRadius: '8px',
+                color: isBrowseActive ? '#a5b4fc' : '#fff',
+                fontSize: '13px', fontWeight: 500,
                 textDecoration: 'none', marginBottom: '16px',
               }}
               onClick={() => setMobileMenuOpen(false)}
@@ -419,8 +473,11 @@ const Header = ({ onTickerSelect, currentTicker }) => {
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                 width: '100%', padding: '12px',
-                background: '#0d0d18', border: '1px solid #2a2a40', borderRadius: '8px',
-                color: '#818cf8', fontSize: '13px', fontWeight: 500,
+                background: isPortfolioActive ? 'rgba(99, 102, 241, 0.1)' : '#0d0d18',
+                border: isPortfolioActive ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid #2a2a40',
+                borderRadius: '8px',
+                color: isPortfolioActive ? '#a5b4fc' : '#818cf8',
+                fontSize: '13px', fontWeight: 500,
                 textDecoration: 'none', marginBottom: '16px',
               }}
               onClick={() => setMobileMenuOpen(false)}

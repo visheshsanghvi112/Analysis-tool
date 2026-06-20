@@ -101,7 +101,7 @@ const WelcomeScreen = () => (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center', marginBottom: '80px', position: 'relative', zIndex: 1 }}>
       <button
         className="hero-cta"
-        onClick={() => { const inp = document.querySelector('header input[type="text"]'); inp?.focus(); }}
+        onClick={() => { window.dispatchEvent(new CustomEvent('trigger-search-focus')); }}
         style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 30px', fontSize: '14px', fontWeight: 600, borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#ffffff', color: '#000000', transition: 'transform 0.2s ease', letterSpacing: '-0.01em' }}
       >
         Search a stock <ArrowRight style={{ width: '15px', height: '15px' }} />
@@ -241,6 +241,15 @@ export default function Dashboard() {
       window.history.replaceState({}, '', '/');
       handleTickerSelect(t);
     }
+  }, []);
+
+  // Listen to logo click event to go back to homepage welcome screen
+  useEffect(() => {
+    const handleReset = () => {
+      setSelectedTicker('');
+    };
+    window.addEventListener('reset-selected-ticker', handleReset);
+    return () => window.removeEventListener('reset-selected-ticker', handleReset);
   }, []);
 
   const handleTickerSelect = (ticker) => {
