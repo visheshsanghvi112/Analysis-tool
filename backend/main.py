@@ -286,11 +286,11 @@ def get_market_screener(request: Request):
     low_52w = sorted(low_52w, key=lambda x: x["pct_from_52w_low"])
 
     return {
-        "gainers": gainers[:8],
-        "losers": losers[:8],
-        "volume": top_volume[:8],
-        "high52w": high_52w[:8],
-        "low52w": low_52w[:8]
+        "gainers": gainers[:20],
+        "losers": losers[:20],
+        "volume": top_volume[:20],
+        "high52w": high_52w[:20],
+        "low52w": low_52w[:20]
     }
 
 @app.get("/api/live")
@@ -565,6 +565,248 @@ def get_portfolio_metrics(ticker: str = Query(..., description="Stock ticker sym
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Portfolio metrics calculation failed: {str(e)}")
+
+@app.get("/api/valuation")
+def get_valuation(ticker: str = Query(..., description="Stock ticker symbol, e.g. HDFCBANK.NS")):
+    """
+    Returns advanced valuation models (DCF, Graham Number), DuPont Analysis,
+    and a custom Long-Term Financial Health Score for a stock.
+    """
+    import math
+    ticker_clean = ticker.strip().upper()
+    try:
+        info = get_info(ticker_clean)
+        if not info or "currentPrice" not in info:
+            # Fallback to get_quote to see if the ticker exists at all
+            q = get_quote(ticker_clean)
+            if not q or q.get("price") is None:
+                raise HTTPException(status_code=404, detail=f"No data found for ticker {ticker_clean}")
+            # If get_info is empty but quote works, return partial structure
+            info = {
+                "currentPrice": q.get("price"),
+                "longName": q.get("longName") or ticker_clean,
+                "fiftyTwoWeekHigh": q.get("fiftyTwoWeekHigh"),
+                "fiftyTwoWeekLow": q.get("fiftyTwoWeekLow"),
+                "marketCap": q.get("marketCap")
+            }
+            
+        current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+        long_name = info.get("longName") or ticker_clean
+        shares = info.get("sharesOutstanding") or 0
+        market_cap = info.get("marketCap") or (current_price * shares if shares > 0 else 0)
+        book_value = info.get("bookValue")
+        eps = info.get("trailingEps")
+        pe = info.get("trailingPE")
+        pb = info.get("priceToBook")
+        peg = info.get("pegRatio")
+        div_yield = info.get("dividendYield")
+        payout = info.get("payoutRatio")
+        insiders = info.get("heldPercentInsiders")
+        institutions = info.get("heldPercentInstitutions")
+        rev_growth = info.get("revenueGrowth")
+        earn_growth = info.get("earningsGrowth") or info.get("earningsQuarterlyGrowth")
+        npm = info.get("profitMargins")
+        opm = info.get("operatingMargins")
+        gpm = info.get("grossMargins")
+        roe = info.get("returnOnEquity")
+        roa = info.get("returnOnAssets")
+        de = info.get("debtToEquity")
+        curr_ratio = info.get("currentRatio")
+        quick_ratio = info.get("quickRatio")
+        cash = info.get("totalCash") or 0
+        debt = info.get("totalDebt") or 0
+        fcf = info.get("freeCashflow") or 0
+        ocf = info.get("operatingCashflow") or 0
+        rev = info.get("totalRevenue") or 0
+
+        # Solvency / Debt to Equity handling (ensure it's in ratio format, e.g. 0.36 instead of 36.6)
+        de_ratio = None
+        if de is not None:
+            if de > 2.0:
+                de_ratio = de / 100.0
+            else:
+                de_ratio = de
+
+        # Graham Number calculation
+        graham_number = None
+        if eps is not None and book_value is not None and eps > 0 and book_value > 0:
+            graham_number = round(math.sqrt(22.5 * eps * book_value), 2)
+
+        # DuPont Analysis Decomposition
+        dupont = None
+        if roe is not None and npm is not None:
+            equity = book_value * shares if (book_value and shares) else None
+            if not equity and market_cap and pb:
+                equity = market_cap / pb
+            
+            if equity:
+                assets = equity + debt
+                asset_turnover = rev / assets if (rev and assets > 0) else (roe / (npm * (assets / equity)) if (npm and assets > 0) else None)
+                equity_multiplier = assets / equity if equity > 0 else None
+                
+                dupont = {
+                    "net_profit_margin": round(npm * 100, 2) if npm is not None else None,
+                    "asset_turnover": round(asset_turnover, 3) if asset_turnover is not None else None,
+                    "equity_multiplier": round(equity_multiplier, 2) if equity_multiplier is not None else None,
+                    "calculated_roe": round(roe * 100, 2) if roe is not None else None
+                }
+
+        # Health Checklist items
+        health_checklist = []
+        score = 0
+        
+        # 1. ROE Check
+        if roe is not None:
+            passed = roe >= 0.12
+            score += 1 if passed else 0
+            health_checklist.append({"metric": "Return on Equity (ROE)", "value": f"{round(roe*100, 2)}%", "condition": ">= 12%", "passed": passed})
+        else:
+            health_checklist.append({"metric": "Return on Equity (ROE)", "value": "N/A", "condition": ">= 12%", "passed": False})
+            
+        # 2. ROA Check
+        if roa is not None:
+            passed = roa >= 0.05
+            score += 1 if passed else 0
+            health_checklist.append({"metric": "Return on Assets (ROA)", "value": f"{round(roa*100, 2)}%", "condition": ">= 5%", "passed": passed})
+        else:
+            health_checklist.append({"metric": "Return on Assets (ROA)", "value": "N/A", "condition": ">= 5%", "passed": False})
+            
+        # 3. NPM Check
+        if npm is not None:
+            passed = npm >= 0.08
+            score += 1 if passed else 0
+            health_checklist.append({"metric": "Net Profit Margin", "value": f"{round(npm*100, 2)}%", "condition": ">= 8%", "passed": passed})
+        else:
+            health_checklist.append({"metric": "Net Profit Margin", "value": "N/A", "condition": ">= 8%", "passed": False})
+            
+        # 4. Solvency Check (D/E ratio)
+        if de_ratio is not None:
+            passed = de_ratio <= 1.0
+            score += 1 if passed else 0
+            health_checklist.append({"metric": "Debt to Equity Ratio", "value": f"{round(de_ratio, 2)}x", "condition": "<= 1.0x", "passed": passed})
+        else:
+            health_checklist.append({"metric": "Debt to Equity Ratio", "value": "0.0x (No Debt)", "condition": "<= 1.0x", "passed": True})
+            score += 1
+            
+        # 5. Liquidity Check
+        if curr_ratio is not None:
+            passed = curr_ratio >= 1.2
+            score += 1 if passed else 0
+            health_checklist.append({"metric": "Current Ratio", "value": f"{round(curr_ratio, 2)}x", "condition": ">= 1.2x", "passed": passed})
+        else:
+            health_checklist.append({"metric": "Current Ratio", "value": "N/A", "condition": ">= 1.2x", "passed": False})
+            
+        # 6. Cash Flow Check (FCF)
+        passed_fcf = fcf > 0 or ocf > 0
+        score += 1 if passed_fcf else 0
+        fcf_val_str = f"₹{round(fcf/1e9, 2)}B" if fcf else (f"₹{round(ocf/1e9, 2)}B (OCF)" if ocf else "Negative/Zero")
+        health_checklist.append({"metric": "Free Cash Flow", "value": fcf_val_str, "condition": "> 0", "passed": passed_fcf})
+        
+        # 7. Valuation (PE ratio check)
+        if pe is not None:
+            passed = pe < 30
+            score += 1 if passed else 0
+            health_checklist.append({"metric": "Price to Earnings (P/E)", "value": f"{round(pe, 1)}x", "condition": "< 30x", "passed": passed})
+        else:
+            health_checklist.append({"metric": "Price to Earnings (P/E)", "value": "N/A", "condition": "< 30x", "passed": False})
+            
+        # 8. Insider Ownership (Promoters)
+        if insiders is not None:
+            passed = insiders >= 0.40
+            score += 1 if passed else 0
+            health_checklist.append({"metric": "Promoter Holding", "value": f"{round(insiders*100, 1)}%", "condition": ">= 40%", "passed": passed})
+        else:
+            health_checklist.append({"metric": "Promoter Holding", "value": "N/A", "condition": ">= 40%", "passed": False})
+            
+        # 9. Revenue Growth (YoY)
+        if rev_growth is not None:
+            passed = rev_growth >= 0.08
+            score += 1 if passed else 0
+            health_checklist.append({"metric": "Revenue Growth (YoY)", "value": f"{round(rev_growth*100, 1)}%", "condition": ">= 8%", "passed": passed})
+        else:
+            health_checklist.append({"metric": "Revenue Growth (YoY)", "value": "N/A", "condition": ">= 8%", "passed": False})
+            
+        # 10. Earnings Growth (YoY)
+        if earn_growth is not None:
+            passed = earn_growth >= 0.05
+            score += 1 if passed else 0
+            health_checklist.append({"metric": "Earnings Growth (YoY)", "value": f"{round(earn_growth*100, 1)}%", "condition": ">= 5%", "passed": passed})
+        else:
+            health_checklist.append({"metric": "Earnings Growth (YoY)", "value": "N/A", "condition": ">= 5%", "passed": False})
+
+        # WACC default calculation using CAPM: Rf + Beta * ERP
+        beta_val = info.get("beta") or 1.0
+        calculated_wacc = 0.065 + beta_val * 0.06
+        calculated_wacc = max(0.08, min(0.15, calculated_wacc))
+
+        calculated_growth = 0.08
+        if rev_growth is not None:
+            calculated_growth = max(0.05, min(0.20, rev_growth))
+
+        # Default Cash Flow for DCF
+        default_dcf_flow = fcf
+        flow_type = "Free Cash Flow"
+        if default_dcf_flow <= 0:
+            if info.get("netIncomeToCommon") and info.get("netIncomeToCommon") > 0:
+                default_dcf_flow = info.get("netIncomeToCommon")
+                flow_type = "Net Income"
+            elif ocf > 0:
+                default_dcf_flow = ocf * 0.7
+                flow_type = "70% of Operating Cash Flow"
+            elif rev > 0:
+                default_dcf_flow = rev * 0.06
+                flow_type = "6% of Revenue (Normalized Proxy)"
+            else:
+                default_dcf_flow = (current_price * shares * 0.04) if shares > 0 else 1000000000
+                flow_type = "Estimated 4% Equity Yield"
+
+        return {
+            "ticker": ticker_clean,
+            "company_name": long_name,
+            "current_price": current_price,
+            "currency": info.get("currency") or "INR",
+            "market_cap": market_cap,
+            "shares_outstanding": shares,
+            "book_value": book_value,
+            "eps": eps,
+            "pe_ratio": pe,
+            "pb_ratio": pb,
+            "peg_ratio": peg,
+            "dividend_yield": div_yield,
+            "payout_ratio": payout,
+            "held_insiders_pct": insiders,
+            "held_institutions_pct": institutions,
+            "revenue_growth": rev_growth,
+            "earnings_growth": earn_growth,
+            "profit_margins": npm,
+            "operating_margins": opm,
+            "gross_margins": gpm,
+            "return_on_equity": roe,
+            "return_on_assets": roa,
+            "debt_to_equity": de_ratio,
+            "current_ratio": curr_ratio,
+            "quick_ratio": quick_ratio,
+            "total_cash": cash,
+            "total_debt": debt,
+            "free_cashflow": fcf,
+            "operating_cashflow": ocf,
+            "total_revenue": rev,
+            "graham_number": graham_number,
+            "dupont": dupont,
+            "health_score": score,
+            "health_checklist": health_checklist,
+            "dcf_defaults": {
+                "starting_flow": round(default_dcf_flow, 2),
+                "flow_type": flow_type,
+                "growth_rate": round(calculated_growth, 3),
+                "discount_rate": round(calculated_wacc, 3),
+                "terminal_growth": 0.045
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Valuation calculation failed: {str(e)}")
 
 @app.get("/api/analyze")
 def get_analysis(
@@ -1134,12 +1376,14 @@ def analyze_portfolio(req: PortfolioRequest):
         company_name = tk
         high_52w = None
         low_52w = None
+        price_date = ""
         try:
             q = get_quote(tk)
             live_px = float(q.get("price") or h.buy_price)
             company_name = q.get("longName") or tk
             high_52w = q.get("fiftyTwoWeekHigh")
             low_52w = q.get("fiftyTwoWeekLow")
+            price_date = q.get("price_date") or ""
         except Exception:
             live_px = h.buy_price
 
@@ -1163,7 +1407,8 @@ def analyze_portfolio(req: PortfolioRequest):
             "pnl_pct":       round(pnl_pct, 2),
             "sector":        sector,
             "high_52w":      high_52w,
-            "low_52w":       low_52w
+            "low_52w":       low_52w,
+            "price_date":    price_date
         })
         total_cost  += cost
         total_value += curr_val

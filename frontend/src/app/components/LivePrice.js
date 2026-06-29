@@ -27,7 +27,7 @@ function formatVolume(volume) {
   return fmt(volume, 0);
 }
 
-const StatusIndicator = ({ error, loading }) => {
+const StatusIndicator = ({ error, loading, priceDate }) => {
   if (error) {
     return (
       <div className="flex items-center gap-1.5">
@@ -47,12 +47,17 @@ const StatusIndicator = ({ error, loading }) => {
   }
   
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
       <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
       <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Live</span>
       <span className="text-xs text-slate-500 bg-slate-800/60 px-2 py-0.5 rounded-md font-mono">
         ~15min delay
       </span>
+      {priceDate && (
+        <span className="text-xs text-indigo-400 bg-indigo-950/40 border border-indigo-900/30 px-2 py-0.5 rounded-md font-mono">
+          As of: {priceDate}
+        </span>
+      )}
     </div>
   );
 };
@@ -180,7 +185,7 @@ export default function LivePrice({ ticker }) {
     <div className="glass-card border border-slate-800/60 shadow-2xl hover:shadow-indigo-900/20 transition-all duration-300">
       {/* Header */}
       <div className="flex items-center justify-between p-4 pb-2">
-        <StatusIndicator error={error} loading={loading} />
+        <StatusIndicator error={error} loading={loading} priceDate={quote?.price_date} />
         
         <div className="flex items-center gap-2">
           {lastUpdated && (

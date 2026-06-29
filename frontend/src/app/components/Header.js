@@ -20,6 +20,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
   const pathname = usePathname();
   const isBrowseActive = pathname === '/browse';
   const isPortfolioActive = pathname === '/portfolio';
+  const isFeaturesActive = pathname === '/features';
 
   const [searchQuery, setSearchQuery]   = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -331,6 +332,18 @@ const Header = ({ onTickerSelect, currentTicker }) => {
                 Browse Stocks
               </Link>
               <Link
+                href="/features"
+                style={{
+                  fontSize: '13px', fontWeight: 500, color: isFeaturesActive ? '#fff' : '#888',
+                  textDecoration: 'none', transition: 'color 0.15s',
+                  whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+                onMouseLeave={e => e.currentTarget.style.color = isFeaturesActive ? '#fff' : '#888'}
+              >
+                Deep-dive Features
+              </Link>
+              <Link
                 href="/portfolio"
                 style={{
                   fontSize: '13px', fontWeight: 500, color: isPortfolioActive ? '#fff' : '#888',
@@ -467,6 +480,22 @@ const Header = ({ onTickerSelect, currentTicker }) => {
               onClick={() => setMobileMenuOpen(false)}
             >
               Browse all sectors →
+            </Link>
+            <Link
+              href="/features"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: '100%', padding: '12px',
+                background: isFeaturesActive ? 'rgba(99, 102, 241, 0.1)' : '#111',
+                border: isFeaturesActive ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid #222',
+                borderRadius: '8px',
+                color: isFeaturesActive ? '#a5b4fc' : '#fff',
+                fontSize: '13px', fontWeight: 500,
+                textDecoration: 'none', marginBottom: '16px',
+              }}
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Deep-dive Features
             </Link>
             <Link
               href="/portfolio"

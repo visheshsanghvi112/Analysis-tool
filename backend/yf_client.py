@@ -7,7 +7,7 @@
 import requests
 import pandas as pd
 import numpy as np
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import time
 
 _SESSION = requests.Session()
@@ -135,6 +135,18 @@ def get_quote(ticker: str) -> dict:
             change     = round(price - prev_close, 2)
             change_pct = round((price - prev_close) / prev_close * 100, 2)
 
+        gmtoffset = meta.get("gmtoffset")
+        market_time = meta.get("regularMarketTime")
+        price_date_str = ""
+        if market_time is not None:
+            if gmtoffset is not None:
+                tz = timezone(timedelta(seconds=gmtoffset))
+                dt = datetime.fromtimestamp(market_time, tz)
+            else:
+                dt = datetime.fromtimestamp(market_time, timezone.utc)
+            tz_name = meta.get("timezone", "")
+            price_date_str = dt.strftime("%Y-%m-%d %H:%M:%S") + (f" {tz_name}" if tz_name else "")
+
         return {
             "price":      round(price, 2) if price else None,
             "prevClose":  round(prev_close, 2) if prev_close else None,
@@ -145,6 +157,8 @@ def get_quote(ticker: str) -> dict:
             "change":     change,
             "changePct":  change_pct,
             "timestamp":  datetime.now().strftime("%H:%M:%S"),
+            "price_date": price_date_str,
+            "regularMarketTime": market_time,
             "longName":   meta.get("longName"),
             "fiftyTwoWeekHigh": meta.get("fiftyTwoWeekHigh"),
             "fiftyTwoWeekLow":  meta.get("fiftyTwoWeekLow"),
@@ -153,15 +167,55 @@ def get_quote(ticker: str) -> dict:
         return {}
 
 
+_CRUMB = None
+
+def _ensure_crumb():
+    global _CRUMB
+    if _CRUMB is not None:
+        return _CRUMB
+    try:
+        # Fetch fc.yahoo.com to set cookies
+        _SESSION.get("https://fc.yahoo.com", headers={"Accept": "*/*"}, timeout=10)
+        # Fetch crumb with overridden Accept header (since it returns text/plain, which causes 406 with Accept: application/json)
+        r = _SESSION.get("https://query2.finance.yahoo.com/v1/test/getcrumb", headers={"Accept": "*/*"}, timeout=10)
+        if r.status_code == 200:
+            _CRUMB = r.text.strip()
+            print(f"Initialized Yahoo Finance crumb: {_CRUMB}")
+            return _CRUMB
+        else:
+            print(f"Crumb request failed with status {r.status_code}: {r.text[:200]}")
+    except Exception as e:
+        print(f"Failed to fetch Yahoo Finance crumb: {e}")
+    return None
+
+
 def get_info(ticker: str) -> dict:
     """
     Returns fundamental info via quoteSummary (price + defaultKeyStatistics
     + financialData modules).
     """
+    global _CRUMB
+    crumb = _ensure_crumb()
+    params = {"modules": "price,defaultKeyStatistics,financialData,summaryDetail"}
+    if crumb:
+        params["crumb"] = crumb
+
     data = _get(
         _QUOTE_URL.format(ticker=ticker),
-        params={"modules": "price,defaultKeyStatistics,financialData,summaryDetail"},
+        params=params,
     )
+
+    # If unauthorized, try resetting crumb and retrying once
+    if not data and _CRUMB is not None:
+        _CRUMB = None
+        crumb = _ensure_crumb()
+        if crumb:
+            params["crumb"] = crumb
+            data = _get(
+                _QUOTE_URL.format(ticker=ticker),
+                params=params,
+            )
+
     if not data:
         return {}
 

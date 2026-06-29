@@ -47,8 +47,11 @@ def _compute_stock_profile(ticker: str, buy_price: float, qty: float) -> dict:
     """
     Builds a rich signal profile for one holding using yfinance data.
     """
+    price_date = ""
     try:
-        live_px = float((get_quote(ticker) or {}).get("price") or buy_price)
+        q = get_quote(ticker) or {}
+        live_px = float(q.get("price") or buy_price)
+        price_date = q.get("price_date") or ""
     except Exception:
         live_px = buy_price
 
@@ -152,6 +155,7 @@ def _compute_stock_profile(ticker: str, buy_price: float, qty: float) -> dict:
         "pe_ratio":         pe_ratio,
         "sector":           sector,
         "gain_to_breakeven": gain_to_be,
+        "price_date":       price_date,
     }
 
 def _ml_predictive_score(p: dict) -> float:
@@ -547,6 +551,7 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
                 "estimated_recovery": rec_time,
                 "action_text": action_text,
                 "tranches": tranches,
+                "price_date": p.get("price_date", ""),
             })
             total_allocated += actual
     else:

@@ -33,7 +33,9 @@ But **what is that price actually telling you?**
 - Is the stock overbought or building momentum?
 - Is the recent rally backed by volume or just noise?
 - What does the market *feel* about this stock right now — fear or greed?
-- Is a correction coming, or is there more upside?
+- Is the stock fairly valued, or are you overpaying for it?
+- What is this company's intrinsic worth based on its cash flows?
+- Is management efficiently converting revenue into shareholder returns?
 - How much could you lose on a bad day — statistically?
 
 **Most retail investors don't have answers to these questions.** Not because they're not smart — but because the tools that answer them cost ₹2,00,000+/year (Bloomberg Terminal), require a CFA to interpret, or simply don't exist for Indian markets.
@@ -54,7 +56,10 @@ Imagine you're considering buying HDFC Bank. Here's what StockIQ Pro gives you i
 ✅ Risk profile — how much can I lose? What's my risk-adjusted return?
 ✅ Strategy backtest — if I had followed this signal in the past, would I have made money?
 ✅ Peer comparison — is HDFC Bank actually better than ICICI Bank right now?
-✅ Market regime — is the broader environment bullish or are we in a volatile phase?
+✅ DCF intrinsic value — what is this stock actually worth? Am I getting a discount?
+✅ DuPont ROE breakdown — is the company profitable because it's efficient, or just leveraged?
+✅ Financial health score — does this pass the 10-criteria long-term investor checklist?
+✅ Portfolio recovery advisor — which of my losing stocks should I average down on?
 ```
 
 This is not a simple screener. This is a **decision-support system** — built for investors who want to go beyond price and make informed, evidence-based decisions.
@@ -73,6 +78,11 @@ This is not a simple screener. This is a **decision-support system** — built f
 | News Sentiment AI | ✅ Per-article impact scoring | ❌ | Manual tags | ✅ |
 | Options Greeks | ✅ Full Black-Scholes + Greeks | Limited | Limited | ✅ |
 | VaR / Expected Shortfall | ✅ 95% & 99% | ❌ | ❌ | ✅ |
+| **DCF Valuation Model** | ✅ **Interactive sliders, real-time** | ❌ | Basic | ✅ |
+| **DuPont ROE Decomposition** | ✅ **3-factor breakdown** | ❌ | ❌ | ✅ |
+| **Financial Health Score** | ✅ **10-criteria checklist** | ❌ | ❌ | ✅ |
+| **Graham Number** | ✅ **Benjamin Graham formula** | ❌ | ❌ | Limited |
+| **Portfolio Recovery Advisor** | ✅ **RSI + sentiment + avg-down calc** | ❌ | ❌ | ❌ |
 | Sector Peer Ranking | ✅ Composite score vs peers | Basic | Basic | ✅ |
 | NSE Coverage | ✅ 1,900+ stocks | ✅ | ✅ | ✅ |
 | **Cost** | **Free & Open Source** | Free (basic) | Free (ads) | ₹2,00,000/yr |
@@ -80,6 +90,79 @@ This is not a simple screener. This is a **decision-support system** — built f
 ---
 
 ## Feature Deep-Dive
+
+### 💰 Long-Term Investment & Valuation Hub _(New)_
+
+> _"Price is what you pay. Value is what you get." — Warren Buffett_
+
+The most important question in investing isn't "where is the price going?" — it's **"what is this business worth?"** StockIQ Pro now answers this with four interconnected models:
+
+#### 1. Interactive DCF Intrinsic Value Calculator
+
+A fully dynamic **Discounted Cash Flow model** that lets you explore valuation scenarios in real time:
+
+- **Starting Cash Flow**: Switch between Free Cash Flow, Net Income, or Operating Cash Flow as your baseline
+- **Growth Rate** slider (0–30%): Adjust the projected 5-year growth assumption
+- **WACC** slider (5–20%): Set your weighted average cost of capital (pre-filled via CAPM: Risk-free rate + Beta × Equity Risk Premium)
+- **Terminal Growth Rate** slider (1–8%): Set the perpetuity growth rate after year 5
+
+The model computes:
+```
+Enterprise Value = Σ (FCF × (1+g)^t / (1+d)^t) for t=1..5 + Terminal Value / (1+d)^5
+Equity Value    = Enterprise Value + Cash − Debt
+Intrinsic Value = Equity Value / Shares Outstanding
+Margin of Safety = (Intrinsic Value − Market Price) / Intrinsic Value
+```
+
+The **Margin of Safety** badge turns green (undervalued), yellow (fair), or red (overvalued) in real time as you move sliders — giving you immediate visual feedback on your assumptions.
+
+#### 2. DuPont ROE Decomposition
+
+Breaks **Return on Equity (ROE)** into its three fundamental drivers using the DuPont Identity:
+
+```
+ROE = Net Profit Margin × Asset Turnover × Equity Multiplier
+    = (Net Income / Revenue) × (Revenue / Assets) × (Assets / Equity)
+```
+
+| Component | What it reveals |
+|---|---|
+| **Net Profit Margin** | How much of each rupee of revenue becomes profit (pricing power & cost control) |
+| **Asset Turnover** | How efficiently the company uses its assets to generate revenue |
+| **Equity Multiplier** | How much of the balance sheet is funded by debt (financial leverage) |
+
+This decomposition tells you *why* a company has a high or low ROE — whether it's because they're operationally excellent, asset-light, or simply highly leveraged.
+
+#### 3. Graham Defensive Valuation Number
+
+Based on Benjamin Graham's formula from *The Intelligent Investor*:
+
+```
+Graham Number = √(22.5 × EPS × Book Value Per Share)
+```
+
+This represents the **maximum price a defensive investor should pay** for a stock. If the current market price exceeds the Graham Number, the stock is trading at a premium over its fundamental defensive value.
+
+#### 4. 10-Criteria Long-Term Financial Health Score
+
+A transparent, checklist-based scoring system (0–10) that evaluates:
+
+| # | Criterion | Threshold |
+|---|---|---|
+| 1 | Return on Equity (ROE) | ≥ 12% |
+| 2 | Return on Assets (ROA) | ≥ 5% |
+| 3 | Net Profit Margin | ≥ 8% |
+| 4 | Debt to Equity Ratio | ≤ 1.0x |
+| 5 | Current Ratio | ≥ 1.2x |
+| 6 | Free Cash Flow | > 0 |
+| 7 | Price to Earnings (P/E) | < 30x |
+| 8 | Promoter / Insider Holding | ≥ 40% |
+| 9 | Revenue Growth (YoY) | ≥ 8% |
+| 10 | Earnings Growth (YoY) | ≥ 5% |
+
+A score of **8–10** = Strong long-term candidate. **5–7** = Watchlist. **0–4** = Caution.
+
+---
 
 ### 🧠 AI Price Prediction — 6-Model Stacked Ensemble
 
@@ -125,9 +208,6 @@ Every prediction comes with a **SHAP (SHapley Additive exPlanations) waterfall c
 
 **Net Bullish → BUY signal.** Now you understand *why*, not just *what*.
 
-For an investor, this means: *"The model is bullish primarily because RSI is recovering from oversold levels and volume is picking up — but MACD and rising volatility are concerns."*  
-That's a sentence you can actually act on.
-
 ---
 
 ### 🏛️ Market Regime Detection (Hidden Markov Model)
@@ -169,8 +249,6 @@ The backtesting engine runs a **RSI(14) + MACD Crossover + ATR Stop-Loss** strat
 - 📉 **Max Drawdown** — worst-case loss from peak
 - 🎯 **Calmar Ratio** — return per unit of drawdown risk
 - 📋 **Full trade log** — every buy/sell date, entry price, exit price, P&L
-
-**For the investor:** This tells you whether a momentum-based entry strategy would have worked historically on this specific stock — before you risk real money.
 
 ---
 
@@ -228,7 +306,18 @@ For any NSE stock, StockIQ Pro computes at-the-money (ATM) European options for 
 - RSI health (40–65 ideal): 15%
 - 1Y Return rank: 10%
 
-This tells you: within IT stocks, TCS vs Infosys vs HCL — which is actually the strongest right now on a risk-adjusted basis?
+---
+
+### 🩺 Portfolio Recovery Advisor _(New)_
+
+For investors with losing positions, StockIQ Pro provides an intelligent recovery analysis for each holding:
+
+- **RSI Signal** — Is the stock oversold (potential reversal) or overbought?
+- **News Sentiment** — Is the macro/news environment supportive of recovery?
+- **Averaging-Down Calculator** — Exact cost of doubling your position, new average price, and how much the stock needs to recover to break even
+- **Recommendation engine**: `AVERAGE_DOWN` / `HOLD & MONITOR` / `CUT LOSS` / `BOOK PROFIT`
+
+**Smart Capital Allocator** distributes spare capital across your losing positions by composite score (RSI + sentiment + momentum + volatility fit).
 
 ---
 
@@ -243,7 +332,9 @@ This tells you: within IT stocks, TCS vs Infosys vs HCL — which is actually th
 │   │                                                         │   │
 │   │  LivePrice → StockChart → MLPrediction (SHAP chart)    │   │
 │   │  Backtesting → PortfolioMetrics → AdvancedNews         │   │
+│   │  LongTermAnalysis (DCF · DuPont · Health Score)        │   │
 │   │  PeerComparison → SectorIntelligence                   │   │
+│   │  PortfolioTracker → RecoveryAdvisor → CapitalAdvisor   │   │
 │   └──────────────────────────┬─────────────────────────────┘   │
 └─────────────────────────────-│──────────────────────────────────┘
                                │ REST API (JSON)
@@ -251,18 +342,22 @@ This tells you: within IT stocks, TCS vs Infosys vs HCL — which is actually th
 ┌─────────────────────────────────────────────────────────────────┐
 │                     FastAPI Backend (Python)                     │
 │                                                                 │
-│   /api/live          → yf_client.get_quote()                   │
-│   /api/analyze       → engine.analyze_ticker()                 │
-│   /api/ml-predict    → 6-model stacked ensemble + SHAP         │
-│   /api/backtest      → RSI+MACD strategy simulation            │
+│   /api/live              → yf_client.get_quote()               │
+│   /api/analyze           → engine.analyze_ticker()             │
+│   /api/ml-predict        → 6-model stacked ensemble + SHAP     │
+│   /api/backtest          → RSI+MACD strategy simulation        │
 │   /api/portfolio-metrics → VaR, Sharpe, Beta, Black-Scholes    │
-│   /api/advanced-news → sentiment scoring + impact analysis     │
-│   /api/peer-compare  → head-to-head metrics                    │
-│   /api/sector-rank   → composite peer ranking                  │
-│   /api/tickers       → 1,900+ NSE stocks (in-memory cache)     │
+│   /api/advanced-news     → sentiment scoring + impact analysis  │
+│   /api/peer-compare      → head-to-head metrics                │
+│   /api/sector-rank       → composite peer ranking              │
+│   /api/valuation         → DCF, DuPont, Graham, Health Score   │
+│   /api/portfolio-insight → Recovery Advisor per holding        │
+│   /api/capital-allocate  → Smart capital distribution engine   │
+│   /api/tickers           → 1,900+ NSE stocks (in-memory cache) │
 │                                                                 │
-│   External:                                                     │
-│   ├── Yahoo Finance v8/v10 API (OHLCV, quote, fundamentals)    │
+│   Data Layer (yf_client.py):                                    │
+│   ├── Yahoo Finance v8 /chart API (OHLCV, live quotes)         │
+│   ├── Yahoo Finance v10 quoteSummary (crumb + cookie auth)     │
 │   ├── NSE India CSV (EQUITY_L.csv — ticker universe)           │
 │   └── RSS feeds + News APIs (multi-source aggregation)         │
 └─────────────────────────────────────────────────────────────────┘
@@ -288,7 +383,7 @@ pip install -r requirements.txt
 cp .env.example .env
 python main.py
 # → API at http://localhost:8000
-# → Docs at http://localhost:8000/docs
+# → Interactive docs at http://localhost:8000/docs
 ```
 
 ### 3. Frontend
@@ -314,8 +409,11 @@ npm run dev
 | `GET` | `/api/backtest?ticker=HDFCBANK.NS&period=2y` | RSI+MACD backtest |
 | `GET` | `/api/portfolio-metrics?ticker=HDFCBANK.NS` | VaR, Sharpe, Greeks |
 | `GET` | `/api/advanced-news?ticker=HDFCBANK.NS` | News + AI sentiment |
-| `GET` | `/api/peer-compare?ticker=TCS.NS&peer=INFY.NS` | Head-to-head comparison |
+| `GET` | `/api/compare?tickers=TCS.NS,INFY.NS` | Peer comparison |
 | `GET` | `/api/sector-rank?ticker=HDFCBANK.NS` | Sector leaderboard |
+| `GET` | `/api/valuation?ticker=HDFCBANK.NS` | **DCF · DuPont · Graham · Health Score** |
+| `POST` | `/api/portfolio-insight` | Recovery Advisor for portfolio holdings |
+| `POST` | `/api/capital-allocate` | Smart capital allocation plan |
 
 ---
 
@@ -327,7 +425,7 @@ npm run dev
 | **Backend** | FastAPI, Python 3.9+, uvicorn (ASGI) |
 | **ML / Quantitative** | scikit-learn, XGBoost, LightGBM, SHAP, hmmlearn, arch (GARCH) |
 | **NLP / Sentiment** | TextBlob, feedparser, multi-source RSS aggregation |
-| **Data Sources** | Yahoo Finance REST API (v8/v10), NSE India EQUITY_L.csv |
+| **Data Sources** | Yahoo Finance REST API (v8 chart + v10 quoteSummary with crumb auth), NSE India EQUITY_L.csv |
 | **Deployment** | Vercel (serverless, edge CDN, global) |
 | **Security** | slowapi rate limiting, input regex validation, CORS whitelist |
 
@@ -342,18 +440,22 @@ npm run dev
 | CORS | Origin whitelist via environment variable |
 | AbortController | Client-side stale request cancellation |
 | Error Handling | No stack traces or sensitive data in API responses |
+| Yahoo Finance Auth | Dynamic crumb + cookie seeding for v10 quoteSummary endpoint |
 
 ---
 
 ## Roadmap
 
+- [x] ~~**DCF Valuation model** — intrinsic value vs market price~~ ✅ _Shipped_
+- [x] ~~**DuPont Analysis** — ROE decomposition into 3 drivers~~ ✅ _Shipped_
+- [x] ~~**Financial Health Score** — 10-criteria long-term checklist~~ ✅ _Shipped_
+- [x] ~~**Portfolio Recovery Advisor** — RSI + sentiment + avg-down calculator~~ ✅ _Shipped_
+- [x] ~~**Smart Capital Allocator** — distribute spare capital by recovery score~~ ✅ _Shipped_
 - [ ] **WebSocket real-time streaming** — true live prices without polling
-- [ ] **Multi-stock portfolio tracker** — P&L, efficient frontier, correlation heatmap
-- [ ] **DCF Valuation model** — intrinsic value vs market price
 - [ ] **Sector heatmap** — Finviz-style treemap for all NSE stocks
 - [ ] **Altman Z-Score** — financial health / bankruptcy risk gauge
-- [ ] **User accounts + watchlist** — auth via Clerk or Supabase
 - [ ] **Earnings surprise predictor** — beat/miss classifier
+- [ ] **User accounts + watchlist** — auth via Clerk or Supabase
 - [ ] **Mobile app** — React Native
 
 ---

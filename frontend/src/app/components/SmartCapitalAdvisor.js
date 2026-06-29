@@ -12,6 +12,23 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://stock-analysis-
 const fmt    = (n, d = 2) => n == null ? 'N/A' : Number(n).toFixed(d);
 const fmtINR = (n) => n == null ? 'N/A' : `₹${Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 
+const fmtPriceDate = (dtStr) => {
+  if (!dtStr) return '';
+  try {
+    const parts = dtStr.split(' ');
+    const dateParts = parts[0].split('-');
+    const timeParts = parts[1].split(':');
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const day = parseInt(dateParts[2]);
+    const month = months[parseInt(dateParts[1]) - 1];
+    const hourMin = `${timeParts[0]}:${timeParts[1]}`;
+    const tz = parts[2] || '';
+    return `${day} ${month} ${hourMin} ${tz}`.trim();
+  } catch {
+    return dtStr;
+  }
+};
+
 // ── Horizon presets ────────────────────────────────────────────────────────
 const HORIZON_PRESETS = [
   { label: '1 Month',   days: 30,  icon: '⚡', desc: 'Quick bounce play' },
@@ -115,7 +132,7 @@ function SuggestionCard({ s, rank }) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {s.current_pnl_pct === 0 ? (
               [
-                { label: 'Buy @ Price',     value: `₹${s.live_price.toLocaleString('en-IN')}`, sub: 'current LTP' },
+                { label: 'Buy @ Price',     value: `₹${s.live_price.toLocaleString('en-IN')}`, sub: s.price_date ? `LTP (${fmtPriceDate(s.price_date)})` : 'current LTP' },
                 { label: '1M Momentum',     value: `${s.momentum_1m > 0 ? '+' : ''}${fmt(s.momentum_1m)}%`, sub: 'price change 30d' },
                 { label: 'P/E Ratio',       value: s.pe_ratio ? `${fmt(s.pe_ratio, 1)}` : 'N/A', sub: s.sector || 'Sector benchmark' },
                 { label: 'Sentiment',       value: s.sentiment > 0 ? 'Bullish' : s.sentiment < 0 ? 'Bearish' : 'Neutral', sub: `score: ${fmt(s.sentiment, 2)}` },
@@ -128,7 +145,7 @@ function SuggestionCard({ s, rank }) {
               ))
             ) : (
               [
-                { label: 'Buy @ Price',     value: `₹${s.live_price.toLocaleString('en-IN')}`, sub: 'current LTP' },
+                { label: 'Buy @ Price',     value: `₹${s.live_price.toLocaleString('en-IN')}`, sub: s.price_date ? `LTP (${fmtPriceDate(s.price_date)})` : 'current LTP' },
                 { label: 'New Avg Cost',    value: `₹${s.new_avg_price.toLocaleString('en-IN')}`, sub: `was ₹${s.buy_price.toLocaleString('en-IN')}` },
                 { label: 'Break-Even Now',  value: `+${fmt(s.new_gain_to_be)}%`, sub: `was +${fmt(s.current_gain_to_be)}%` },
                 { label: 'Cost Reduced By', value: `${fmt(s.avg_cost_reduction_pct)}%`, sub: 'avg cost reduction' },

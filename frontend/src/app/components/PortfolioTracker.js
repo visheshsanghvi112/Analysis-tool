@@ -29,6 +29,23 @@ const pSign  = (v) => v >= 0 ? '+' : '';
 const pColor = (v) => v > 0 ? 'text-emerald-400' : v < 0 ? 'text-rose-400' : 'text-slate-400';
 const pBg    = (v) => v > 0 ? 'bg-emerald-500/10 border-emerald-500/20' : v < 0 ? 'bg-rose-500/10 border-rose-500/20' : 'bg-white/[0.03] border-white/[0.06]';
 
+const fmtPriceDate = (dtStr) => {
+  if (!dtStr) return '';
+  try {
+    const parts = dtStr.split(' ');
+    const dateParts = parts[0].split('-');
+    const timeParts = parts[1].split(':');
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const day = parseInt(dateParts[2]);
+    const month = months[parseInt(dateParts[1]) - 1];
+    const hourMin = `${timeParts[0]}:${timeParts[1]}`;
+    const tz = parts[2] || '';
+    return `${day} ${month} ${hourMin} ${tz}`.trim();
+  } catch {
+    return dtStr;
+  }
+};
+
 // ── Ticker autocomplete search ────────────────────────────────────────────────
 function TickerSearch({ value, onChange }) {
   const [query, setQuery]   = useState(value || '');
@@ -683,7 +700,14 @@ export default function PortfolioTracker() {
                         </td>
                         <td className="px-3 py-2.5 text-slate-100">{h.qty}</td>
                         <td className="px-3 py-2.5 text-slate-100">₹{h.buy_price.toLocaleString('en-IN')}</td>
-                        <td className="px-3 py-2.5 text-white font-medium">₹{h.live_price.toLocaleString('en-IN')}</td>
+                        <td className="px-3 py-2.5 text-slate-100 font-medium">
+                          <div>₹{h.live_price.toLocaleString('en-IN')}</div>
+                          {h.price_date && (
+                            <div className="text-[8px] text-slate-500 font-mono mt-0.5 leading-none" title="Last trade time on exchange">
+                              {fmtPriceDate(h.price_date)}
+                            </div>
+                          )}
+                        </td>
                         <td className="px-3 py-2.5 text-slate-300">{fmtINR(h.cost)}</td>
                         <td className="px-3 py-2.5 text-slate-100 font-medium">{fmtINR(h.curr_value)}</td>
                         <td className={`px-3 py-2.5 font-bold ${pColor(h.pnl)}`}>
