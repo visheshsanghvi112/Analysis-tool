@@ -83,6 +83,8 @@ This is not a simple screener. This is a **decision-support system** — built f
 | **Financial Health Score** | ✅ **10-criteria checklist** | ❌ | ❌ | ✅ |
 | **Graham Number** | ✅ **Benjamin Graham formula** | ❌ | ❌ | Limited |
 | **Portfolio Recovery Advisor** | ✅ **RSI + sentiment + avg-down calc** | ❌ | ❌ | ❌ |
+| **Markowitz Portfolio Optimizer** | ✅ **Max Sharpe & Min Volatility frontier** | ❌ | ❌ | ✅ |
+| **Monte Carlo Simulations** | ✅ **1,000-path GBM simulations & fan chart** | ❌ | ❌ | ✅ |
 | Sector Peer Ranking | ✅ Composite score vs peers | Basic | Basic | ✅ |
 | NSE Coverage | ✅ 1,900+ stocks | ✅ | ✅ | ✅ |
 | **Cost** | **Free & Open Source** | Free (basic) | Free (ads) | ₹2,00,000/yr |
@@ -412,6 +414,8 @@ npm run dev
 | `GET` | `/api/compare?tickers=TCS.NS,INFY.NS` | Peer comparison |
 | `GET` | `/api/sector-rank?ticker=HDFCBANK.NS` | Sector leaderboard |
 | `GET` | `/api/valuation?ticker=HDFCBANK.NS` | **DCF · DuPont · Graham · Health Score** |
+| `GET` | `/api/optimize-portfolio?tickers=TCS.NS,INFY.NS` | **Markowitz Efficient Frontier optimizer** |
+| `GET` | `/api/monte-carlo?ticker=HDFCBANK.NS` | **GBM Monte Carlo price path simulations** |
 | `POST` | `/api/portfolio-insight` | Recovery Advisor for portfolio holdings |
 | `POST` | `/api/capital-allocate` | Smart capital allocation plan |
 
@@ -451,6 +455,8 @@ npm run dev
 - [x] ~~**Financial Health Score** — 10-criteria long-term checklist~~ ✅ _Shipped_
 - [x] ~~**Portfolio Recovery Advisor** — RSI + sentiment + avg-down calculator~~ ✅ _Shipped_
 - [x] ~~**Smart Capital Allocator** — distribute spare capital by recovery score~~ ✅ _Shipped_
+- [x] ~~**Modern Portfolio Theory (MPT) Optimizer** — Markowitz portfolio allocation optimization~~ ✅ _Shipped_
+- [x] ~~**GBM Monte Carlo Simulations** — 1,000 simulated stochastic future price paths~~ ✅ _Shipped_
 - [ ] **WebSocket real-time streaming** — true live prices without polling
 - [ ] **Sector heatmap** — Finviz-style treemap for all NSE stocks
 - [ ] **Altman Z-Score** — financial health / bankruptcy risk gauge
