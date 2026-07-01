@@ -235,3 +235,228 @@ def get_info(ticker: str) -> dict:
         return out
     except Exception:
         return {}
+
+
+def get_fundamentals_data(ticker: str) -> dict:
+    """
+    Fetches rich fundamental data for long-term investor analysis:
+    - 5-year annual income statement (revenue, net income, EPS)
+    - Dividend history, yield, payout ratio, ex-dividend date
+    - Ownership breakdown: promoter/insider %, FII/institutions %, retail %
+    - Earnings per quarter (last 8 quarters) for trend visualization
+    Uses Yahoo Finance quoteSummary with multiple modules.
+    """
+    global _CRUMB
+    crumb = _ensure_crumb()
+
+    modules = ",".join([
+        "incomeStatementHistory",
+        "incomeStatementHistoryQuarterly",
+        "earningsHistory",
+        "summaryDetail",
+        "defaultKeyStatistics",
+        "financialData",
+        "majorHoldersBreakdown",
+        "insiderHolders",
+        "calendarEvents",
+        "price",
+    ])
+
+    params = {"modules": modules}
+    if crumb:
+        params["crumb"] = crumb
+
+    def _fetch():
+        return _get(_QUOTE_URL.format(ticker=ticker), params=params)
+
+    data = _fetch()
+    if not data and _CRUMB is not None:
+        _CRUMB = None
+        crumb2 = _ensure_crumb()
+        if crumb2:
+            params["crumb"] = crumb2
+        data = _fetch()
+
+    if not data:
+        return {}
+
+    try:
+        result = data.get("quoteSummary", {}).get("result", [])
+        if not result:
+            return {}
+        r = result[0]
+
+        def raw(d, key):
+            v = d.get(key, {})
+            if isinstance(v, dict):
+                return v.get("raw")
+            return v
+
+        # ── 1. Annual income statement (last 5 years) ────────────────────────
+        annual_stmts = r.get("incomeStatementHistory", {}).get("incomeStatementHistory", [])
+        income_annual = []
+        for stmt in annual_stmts:
+            end_date = raw(stmt, "endDate")
+            year = datetime.fromtimestamp(end_date).year if end_date else None
+            income_annual.append({
+                "year": year,
+                "revenue": raw(stmt, "totalRevenue"),
+                "net_income": raw(stmt, "netIncome"),
+                "gross_profit": raw(stmt, "grossProfit"),
+                "ebit": raw(stmt, "ebit"),
+                "eps": raw(stmt, "dilutedEps"),
+            })
+        income_annual = list(reversed(income_annual))  # oldest first
+
+        # ── 2. Quarterly earnings (last 8 quarters) ──────────────────────────
+        quarterly_stmts = r.get("incomeStatementHistoryQuarterly", {}).get("incomeStatementHistory", [])
+        income_quarterly = []
+        for stmt in quarterly_stmts[:8]:
+            end_date = raw(stmt, "endDate")
+            label = datetime.fromtimestamp(end_date).strftime("%b '%y") if end_date else None
+            income_quarterly.append({
+                "quarter": label,
+                "revenue": raw(stmt, "totalRevenue"),
+                "net_income": raw(stmt, "netIncome"),
+                "eps": raw(stmt, "dilutedEps"),
+            })
+        income_quarterly = list(reversed(income_quarterly))  # oldest first
+
+        # ── 3. Dividend data ─────────────────────────────────────────────────
+        sd = r.get("summaryDetail", {})
+        ks = r.get("defaultKeyStatistics", {})
+        calendar = r.get("calendarEvents", {})
+
+        div_yield = raw(sd, "dividendYield")
+        div_rate   = raw(sd, "dividendRate")
+        payout_ratio = raw(sd, "payoutRatio")
+        five_yr_avg_yield = raw(sd, "fiveYearAvgDividendYield")
+
+        # Ex-dividend date
+        ex_div_ts = raw(sd, "exDividendDate")
+        ex_div_date = None
+        if ex_div_ts:
+            try:
+                ex_div_date = datetime.fromtimestamp(ex_div_ts).strftime("%d %b %Y")
+            except Exception:
+                pass
+
+        # Last split info
+        last_split_factor = raw(ks, "lastSplitFactor")
+        last_split_date_ts = raw(ks, "lastSplitDate")
+        last_split_date = None
+        if last_split_date_ts:
+            try:
+                last_split_date = datetime.fromtimestamp(last_split_date_ts).strftime("%d %b %Y")
+            except Exception:
+                pass
+
+        # ── 4. Dividend history from v8 chart (with events) ─────────────────
+        div_history = []
+        try:
+            chart_data = _get(
+                _CHART_URL.format(ticker=ticker),
+                params={"interval": "1d", "range": "5y", "events": "dividends"}
+            )
+            if chart_data:
+                events = chart_data.get("chart", {}).get("result", [{}])[0].get("events", {})
+                dividends_raw = events.get("dividends", {})
+                for ts_str, div_info in dividends_raw.items():
+                    ts = int(ts_str)
+                    amount = div_info.get("amount", 0)
+                    div_history.append({
+                        "date": datetime.fromtimestamp(ts).strftime("%d %b %Y"),
+                        "year": datetime.fromtimestamp(ts).year,
+                        "amount": round(float(amount), 2),
+                    })
+                div_history = sorted(div_history, key=lambda x: x["date"])
+        except Exception:
+            pass
+
+        # Aggregate dividends per year for bar chart
+        div_by_year = {}
+        for d in div_history:
+            yr = d["year"]
+            div_by_year[yr] = round(div_by_year.get(yr, 0) + d["amount"], 2)
+        div_annual = [{"year": yr, "dividend": amt} for yr, amt in sorted(div_by_year.items())]
+
+        # ── 5. Ownership / shareholding breakdown ────────────────────────────
+        mhb = r.get("majorHoldersBreakdown", {})
+        insiders_pct    = raw(mhb, "insidersPercentHeld")   # promoter / insider group
+        institutions_pct = raw(mhb, "institutionsPercentHeld")  # FII + DII
+        retail_pct = None
+        if insiders_pct is not None and institutions_pct is not None:
+            retail_pct = max(0.0, 1.0 - insiders_pct - institutions_pct)
+
+        # Top institutional holders
+        inst_holders_raw = r.get("insiderHolders", {}).get("holders", [])
+        top_insiders = []
+        for h in inst_holders_raw[:5]:
+            top_insiders.append({
+                "name": h.get("name", ""),
+                "relation": h.get("relation", ""),
+                "shares": raw(h, "shares"),
+                "transaction": h.get("transactionDescription", ""),
+                "date": raw(h, "latestTransDate"),
+            })
+
+        # ── 6. Price CAGR from history ────────────────────────────────────────
+        price_cagr = {}
+        try:
+            price_module = r.get("price", {})
+            current_price = raw(price_module, "regularMarketPrice")
+            if current_price:
+                for years, period in [(1, "1y"), (3, "3y"), (5, "5y")]:
+                    hist = get_history(ticker, period=period)
+                    if hist is not None and not hist.empty and len(hist) > 10:
+                        start_price = float(hist["Close"].iloc[0])
+                        if start_price > 0:
+                            cagr = ((current_price / start_price) ** (1 / years) - 1) * 100
+                            price_cagr[f"{years}y"] = round(cagr, 2)
+        except Exception:
+            pass
+
+        # ── 7. Key ratios ─────────────────────────────────────────────────────
+        fd = r.get("financialData", {})
+        ratios = {
+            "pe_ratio": raw(ks, "trailingPE"),
+            "pb_ratio": raw(ks, "priceToBook"),
+            "roe": raw(fd, "returnOnEquity"),
+            "roa": raw(fd, "returnOnAssets"),
+            "debt_to_equity": raw(fd, "debtToEquity"),
+            "current_ratio": raw(fd, "currentRatio"),
+            "revenue_growth": raw(fd, "revenueGrowth"),
+            "earnings_growth": raw(fd, "earningsGrowth"),
+            "gross_margins": raw(fd, "grossMargins"),
+            "profit_margins": raw(fd, "profitMargins"),
+            "operating_margins": raw(fd, "operatingMargins"),
+        }
+
+        return {
+            "ticker": ticker,
+            "income_annual": income_annual,
+            "income_quarterly": income_quarterly,
+            "dividend": {
+                "yield_pct": round(div_yield * 100, 2) if div_yield else None,
+                "rate": div_rate,
+                "payout_ratio_pct": round(payout_ratio * 100, 1) if payout_ratio else None,
+                "five_yr_avg_yield_pct": round(five_yr_avg_yield, 2) if five_yr_avg_yield else None,
+                "ex_dividend_date": ex_div_date,
+                "last_split_factor": last_split_factor,
+                "last_split_date": last_split_date,
+                "history": div_history[-20:],  # last 20 payments
+                "annual_totals": div_annual[-6:],  # last 6 years
+            },
+            "ownership": {
+                "promoter_pct": round(insiders_pct * 100, 2) if insiders_pct is not None else None,
+                "institutions_pct": round(institutions_pct * 100, 2) if institutions_pct is not None else None,
+                "retail_pct": round(retail_pct * 100, 2) if retail_pct is not None else None,
+                "top_insiders": top_insiders,
+            },
+            "price_cagr": price_cagr,
+            "ratios": ratios,
+        }
+    except Exception as e:
+        print(f"[FUNDAMENTALS] Error parsing data for {ticker}: {e}")
+        return {}
+

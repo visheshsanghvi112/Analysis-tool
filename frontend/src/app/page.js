@@ -13,6 +13,7 @@ import SectorIntelligence from './components/SectorIntelligence';
 import Backtesting from './components/Backtesting';
 import LongTermAnalysis from './components/LongTermAnalysis';
 import MonteCarloSimulation from './components/MonteCarloSimulation';
+import FundamentalsAnalysis from './components/FundamentalsAnalysis';
 import {
   TrendingUp, Brain, Newspaper, PieChart,
   Activity, ArrowRight, CheckCircle, Clock, AlertTriangle,
@@ -302,6 +303,7 @@ export default function Dashboard() {
               <Backtesting ticker={selectedTicker} />
               <MonteCarloSimulation ticker={selectedTicker} />
               <LongTermAnalysis ticker={selectedTicker} />
+              <FundamentalsAnalysis ticker={selectedTicker} />
 
               {/* ── Peer & Sector Intelligence Tabs ───────────────────── */}
               <PeerSectorTabs ticker={selectedTicker} />

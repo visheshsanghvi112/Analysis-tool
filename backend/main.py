@@ -14,7 +14,7 @@ from slowapi.errors import RateLimitExceeded
 from engine import analyze_ticker
 from ml_models import get_ml_prediction, retrain_model
 from news_intelligence import get_advanced_news_analysis
-from yf_client import get_quote, get_history, get_info
+from yf_client import get_quote, get_history, get_info, get_fundamentals_data
 
 app = FastAPI(
     title="Stock Analysis Tool API",
@@ -2103,3 +2103,23 @@ def get_monte_carlo(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Monte Carlo simulation failed: {str(e)}")
 
+
+@app.get("/api/fundamentals")
+async def fundamentals(request: Request, ticker: str = Query(..., description="NSE/BSE ticker, e.g. HDFCBANK.NS")):
+    """
+    Returns deep fundamental data for long-term investors:
+    - Annual revenue & net income (last 4 years)
+    - Quarterly revenue & net income (last 8 quarters)
+    - Dividend yield, payout ratio, ex-dividend date, 5-year payment history
+    - Ownership breakdown: promoter %, institutions (FII+DII) %, retail %
+    - Price CAGR: 1Y, 3Y, 5Y
+    - Key financial ratios: PE, PB, ROE, ROA, D/E, margins
+    """
+    ticker = ticker.strip().upper()
+    data = get_fundamentals_data(ticker)
+    if not data:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Could not fetch fundamental data for {ticker}. The ticker may be invalid or data unavailable."
+        )
+    return data
