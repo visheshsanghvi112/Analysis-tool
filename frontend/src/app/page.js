@@ -12,6 +12,7 @@ import PeerComparison from './components/PeerComparison';
 import SectorIntelligence from './components/SectorIntelligence';
 import Backtesting from './components/Backtesting';
 import LongTermAnalysis from './components/LongTermAnalysis';
+import MonteCarloSimulation from './components/MonteCarloSimulation';
 import {
   TrendingUp, Brain, Newspaper, PieChart,
   Activity, ArrowRight, CheckCircle, Clock, AlertTriangle,
@@ -299,6 +300,7 @@ export default function Dashboard() {
               </div>
               <PortfolioMetrics ticker={selectedTicker} />
               <Backtesting ticker={selectedTicker} />
+              <MonteCarloSimulation ticker={selectedTicker} />
               <LongTermAnalysis ticker={selectedTicker} />
 
               {/* ── Peer & Sector Intelligence Tabs ───────────────────── */}

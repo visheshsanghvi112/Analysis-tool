@@ -1936,3 +1936,170 @@ def optimize_portfolio(req: PortfolioRequest):
         "simulated_portfolios": sampled_sim
     }
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /api/monte-carlo — Geometric Brownian Motion Monte Carlo Price Simulations
+# ─────────────────────────────────────────────────────────────────────────────
+@app.get("/api/monte-carlo")
+def get_monte_carlo(
+    ticker: str = Query(..., description="Stock ticker symbol, e.g. HDFCBANK.NS"),
+    horizon_days: int = Query(30, description="Horizon: 30, 60, or 90 days"),
+    simulations: int = Query(1000, description="Number of simulation paths"),
+):
+    """
+    Simulates future price paths for a stock using Geometric Brownian Motion (GBM).
+    Returns historical price series transition, percentiles (2.5, 25, 50, 75, 97.5),
+    5 sample paths, and probability statistics for target returns.
+    """
+    try:
+        from datetime import timedelta
+        ticker_clean = ticker.strip().upper()
+        df = get_history(ticker_clean, period="1y")
+        if df is None or df.empty or len(df) < 30:
+            raise HTTPException(status_code=400, detail="Insufficient historical price data")
+
+        close_prices = df["Close"].dropna()
+        last_price = float(close_prices.iloc[-1])
+        last_date = close_prices.index[-1]
+
+        # Calculate daily log returns
+        log_returns = np.log(close_prices / close_prices.shift(1)).dropna()
+        if len(log_returns) < 10:
+            raise HTTPException(status_code=400, detail="Insufficient returns data for volatility calculation")
+
+        mu_daily = float(log_returns.mean())
+        sigma_daily = float(log_returns.std())
+
+        # Annualize drift and volatility (252 trading days)
+        mu = mu_daily * 252
+        sigma = sigma_daily * np.sqrt(252)
+
+        # Handle zero volatility edge case
+        if sigma <= 0:
+            sigma = 0.01
+
+        N = int(horizon_days)
+        M = int(simulations)
+
+        if N not in [30, 60, 90]:
+            N = 30
+        if M <= 0 or M > 5000:
+            M = 1000
+
+        dt = 1.0 / 252.0
+
+        # Simulate paths using GBM
+        paths = np.zeros((M, N + 1))
+        paths[:, 0] = last_price
+
+        for t in range(1, N + 1):
+            Z = np.random.standard_normal(M)
+            paths[:, t] = paths[:, t - 1] * np.exp((mu - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * Z)
+
+        # Percentiles for each step
+        percentiles = {}
+        for pct in [2.5, 25.0, 50.0, 75.0, 97.5]:
+            percentiles[pct] = np.percentile(paths, pct, axis=0)
+
+        # Generate future weekday dates (trading days)
+        future_dates = []
+        curr_date = last_date
+        while len(future_dates) < N:
+            curr_date += timedelta(days=1)
+            if curr_date.weekday() < 5:  # Mon-Fri
+                future_dates.append(curr_date)
+
+        # Historical series (last 30 days)
+        hist_data = []
+        hist_len = min(30, len(close_prices))
+        hist_subset = close_prices.iloc[-hist_len:]
+        for d, p in hist_subset.items():
+            hist_data.append({
+                "date": str(d.date()) if hasattr(d, "date") else str(d)[:10],
+                "close": round(float(p), 2),
+                "is_simulated": False
+            })
+
+        # Simulated series (Day 0 to Day N)
+        sim_data = []
+        sim_data.append({
+            "date": str(last_date.date()) if hasattr(last_date, "date") else str(last_date)[:10],
+            "p025": round(last_price, 2),
+            "p250": round(last_price, 2),
+            "p500": round(last_price, 2),
+            "p750": round(last_price, 2),
+            "p975": round(last_price, 2),
+            "is_simulated": True
+        })
+
+        for t in range(1, N + 1):
+            f_date = future_dates[t - 1]
+            sim_data.append({
+                "date": str(f_date.date()) if hasattr(f_date, "date") else str(f_date)[:10],
+                "p025": round(float(percentiles[2.5][t]), 2),
+                "p250": round(float(percentiles[25.0][t]), 2),
+                "p500": round(float(percentiles[50.0][t]), 2),
+                "p750": round(float(percentiles[75.0][t]), 2),
+                "p975": round(float(percentiles[97.5][t]), 2),
+                "is_simulated": True
+            })
+
+        # Pick 5 random sample paths to overlay on the chart
+        sample_paths = []
+        import random as py_random
+        random_indices = py_random.sample(range(M), min(5, M))
+        for idx in random_indices:
+            path_values = paths[idx, :]
+            path_points = []
+            path_points.append({
+                "date": str(last_date.date()) if hasattr(last_date, "date") else str(last_date)[:10],
+                "price": round(last_price, 2)
+            })
+            for t in range(1, N + 1):
+                f_date = future_dates[t - 1]
+                path_points.append({
+                    "date": str(f_date.date()) if hasattr(f_date, "date") else str(f_date)[:10],
+                    "price": round(float(path_values[t]), 2)
+                })
+            sample_paths.append(path_points)
+
+        # Target stats at horizon
+        horizon_prices = paths[:, N]
+        prob_up = float((horizon_prices > last_price).mean() * 100)
+        prob_gain_5 = float((horizon_prices >= last_price * 1.05).mean() * 100)
+        prob_gain_10 = float((horizon_prices >= last_price * 1.10).mean() * 100)
+        prob_gain_20 = float((horizon_prices >= last_price * 1.20).mean() * 100)
+        prob_loss_5 = float((horizon_prices <= last_price * 0.95).mean() * 100)
+        prob_loss_10 = float((horizon_prices <= last_price * 0.90).mean() * 100)
+        prob_loss_20 = float((horizon_prices <= last_price * 0.80).mean() * 100)
+
+        stats = {
+            "current_price": round(last_price, 2),
+            "expected_price_horizon": round(float(np.mean(horizon_prices)), 2),
+            "expected_return_pct": round(((np.mean(horizon_prices) / last_price) - 1) * 100, 2),
+            "median_price_horizon": round(float(np.median(horizon_prices)), 2),
+            "max_simulated_price": round(float(np.max(horizon_prices)), 2),
+            "min_simulated_price": round(float(np.min(horizon_prices)), 2),
+            "ann_volatility_pct": round(sigma * 100, 2),
+            "ann_drift_pct": round(mu * 100, 2),
+            "prob_up": round(prob_up, 2),
+            "prob_gain_5": round(prob_gain_5, 2),
+            "prob_gain_10": round(prob_gain_10, 2),
+            "prob_gain_20": round(prob_gain_20, 2),
+            "prob_loss_5": round(prob_loss_5, 2),
+            "prob_loss_10": round(prob_loss_10, 2),
+            "prob_loss_20": round(prob_loss_20, 2)
+        }
+
+        return {
+            "ticker": ticker_clean,
+            "horizon_days": N,
+            "simulations": M,
+            "historical": hist_data,
+            "simulated": sim_data,
+            "sample_paths": sample_paths,
+            "stats": stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Monte Carlo simulation failed: {str(e)}")
+
