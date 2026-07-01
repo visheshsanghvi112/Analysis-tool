@@ -60,6 +60,8 @@ Imagine you're considering buying HDFC Bank. Here's what StockIQ Pro gives you i
 ✅ DuPont ROE breakdown — is the company profitable because it's efficient, or just leveraged?
 ✅ Financial health score — does this pass the 10-criteria long-term investor checklist?
 ✅ Portfolio recovery advisor — which of my losing stocks should I average down on?
+✅ Portfolio optimizer — what is the mathematically ideal allocation across my holdings?
+✅ Monte Carlo simulations — what is the range of probable outcomes over the next 30/60/90 days?
 ```
 
 This is not a simple screener. This is a **decision-support system** — built for investors who want to go beyond price and make informed, evidence-based decisions.
@@ -93,7 +95,122 @@ This is not a simple screener. This is a **decision-support system** — built f
 
 ## Feature Deep-Dive
 
-### 💰 Long-Term Investment & Valuation Hub _(New)_
+### 📐 Markowitz Portfolio Optimizer — Modern Portfolio Theory
+
+> _"Diversification is the only free lunch in finance." — Harry Markowitz_
+
+Most retail investors hold portfolios built on intuition — overweight in familiar names, with no idea of how correlated their holdings are or what weight distribution actually maximises risk-adjusted return. StockIQ Pro's **Portfolio Optimizer** solves this with institutional-grade Modern Portfolio Theory (MPT) mathematics.
+
+#### How It Works
+
+The optimizer fetches 1 year of daily price history for every stock in your portfolio, then:
+
+**Step 1 — Build the return distribution:**
+```
+Expected Return (μ) = mean daily return × 252     (annualised)
+Volatility (σ)      = std(daily returns) × √252   (annualised)
+Covariance Matrix   = pairwise return covariances across all assets
+```
+
+**Step 2 — Simulate 1,000 random portfolios:**  
+Each simulation draws a random set of weights that sum to 1.0, then computes that portfolio's annualised return, volatility, and Sharpe Ratio. The resulting **efficient frontier scatter plot** shows all feasible risk/return combinations.
+
+**Step 3 — Precise SLSQP optimisation:**  
+Two exact solutions are found using the `scipy.optimize.minimize` quadratic solver (SLSQP method):
+
+| Solution | Objective | What it means |
+|---|---|---|
+| **Max Sharpe Portfolio** | Maximise (Return − 6.5%) / Volatility | Best risk-adjusted return per unit of risk taken |
+| **Min Volatility Portfolio** | Minimise portfolio standard deviation | Lowest-risk allocation of your current holdings |
+
+**Step 4 — Rebalancing plan:**  
+The UI shows a side-by-side comparison of your current weights vs. the optimal weights, with a diff column (`+/-`). One click on **Apply Optimized Weights** automatically rescales your share quantities to match the target allocation.
+
+```
+Sharpe Ratio = (Portfolio Return − Risk-Free Rate) / Portfolio Volatility
+             = (μ_p − 0.065) / σ_p
+
+Portfolio Volatility = √(wᵀ Σ w)
+  where w = weight vector, Σ = annualised covariance matrix
+```
+
+The India risk-free rate of **6.5%** (approximate 10-year G-Sec yield) is used throughout — unlike generic tools that use US T-bill rates.
+
+#### What You See
+- 🔵 **Efficient Frontier Scatter** — 250 sampled simulated portfolios, coloured by Sharpe Ratio
+- 🔴 **Current Portfolio** — your actual weight allocation pinned on the chart
+- ⭐ **Max Sharpe Portfolio** — the star marker showing where you *should* be
+- 🔺 **Min Volatility Portfolio** — the triangle marking the safest possible point
+- 📊 **3-metric comparison table** — Annualised Return, Volatility, Sharpe for Current vs. Optimal
+- 📋 **Weight diff table** — per-stock current weight → target weight → difference
+
+---
+
+### 🎲 GBM Monte Carlo Price Simulations
+
+> _"Uncertainty is not the same as risk. Risk can be measured. Monte Carlo makes uncertainty measurable."_
+
+Where will a stock price be in 30, 60, or 90 days? Nobody knows — but we can model the **probability distribution** of outcomes using Geometric Brownian Motion, the same stochastic process that underpins the Black-Scholes options pricing model.
+
+#### The Mathematics
+
+Stock prices under GBM follow the stochastic differential equation:
+
+```
+dS = μS dt + σS dW
+```
+
+where `μ` is the drift (expected return), `σ` is the volatility, and `dW` is a Wiener process increment. The exact analytical solution is the **Euler-Maruyama discretisation**:
+
+```
+S(t + Δt) = S(t) × exp((μ − σ²/2) × Δt + σ × √Δt × Z)
+  where Z ~ N(0,1)  (standard normal random shock)
+        Δt = 1/252  (one trading day)
+```
+
+The `σ²/2` Itô correction term accounts for the fact that the expected value of the log-normal process must equal `μ` — this is what prevents simulated drift from being systematically biased upward.
+
+#### What the Backend Computes
+
+1. **Calibrate parameters** from 1 year of daily log-returns:
+   ```
+   μ_daily = mean(ln(S_t / S_{t-1})) → annualised as μ × 252
+   σ_daily = std(ln(S_t / S_{t-1}))  → annualised as σ × √252
+   ```
+   A minimum volatility floor of 1% prevents numerical instability for illiquid stocks.
+
+2. **Simulate 1,000 independent paths** over the chosen horizon (30 / 60 / 90 trading days)
+
+3. **Extract percentile bands** at each time step: P2.5, P25, P50, P75, P97.5
+
+4. **Sample 5 individual paths** to visually illustrate stochastic variety
+
+5. **Compute terminal probabilities** across all 1,000 endpoints:
+
+| Probability | Description |
+|---|---|
+| `prob_up` | Stock finishes above starting price |
+| `prob_gain_5` | Gain ≥ 5% by horizon |
+| `prob_gain_10` | Gain ≥ 10% by horizon |
+| `prob_gain_20` | Gain ≥ 20% by horizon |
+| `prob_loss_5` | Loss ≥ 5% by horizon |
+| `prob_loss_10` | Loss ≥ 10% by horizon |
+
+#### What You See
+
+- 📈 **Fan Chart** — the last 30 days of actual historical prices seamlessly transition into the forward simulation at Day 0
+- 🔵 **95% Confidence Band** (P2.5–P97.5) — lighter blue fill: 95% of all 1,000 paths finished within this range
+- 🟦 **50% Confidence Band** (P25–P75) — darker blue fill: the most likely outcome corridor
+- 💚 **Median Path** (P50) — dashed green line: expected price trajectory
+- 🟣 **5 Sample Paths** — individual random walks shown in purple to illustrate stochastic variety
+- 📊 **Progress Bars** — visual probability distribution for each target (5%, 10%, 20% gain/loss)
+- 📋 **Statistics Grid** — Expected Price, Expected Return %, Annualised Volatility, Annualised Drift, Simulated Max/Min bounds
+
+> ⚠️ **Disclaimer**: GBM assumes constant drift and volatility (log-normal returns). Real markets exhibit volatility clustering, fat tails, and regime changes — captured by separate GARCH and HMM models. Monte Carlo outputs are probabilistic scenarios, not price forecasts.
+
+---
+
+### 💰 Long-Term Investment & Valuation Hub
 
 > _"Price is what you pay. Value is what you get." — Warren Buffett_
 
@@ -326,43 +443,55 @@ For investors with losing positions, StockIQ Pro provides an intelligent recover
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        USER BROWSER                             │
-│                                                                 │
-│   ┌────────────────────────────────────────────────────────┐   │
-│   │              Next.js 16 Frontend (React 19)             │   │
-│   │                                                         │   │
-│   │  LivePrice → StockChart → MLPrediction (SHAP chart)    │   │
-│   │  Backtesting → PortfolioMetrics → AdvancedNews         │   │
-│   │  LongTermAnalysis (DCF · DuPont · Health Score)        │   │
-│   │  PeerComparison → SectorIntelligence                   │   │
-│   │  PortfolioTracker → RecoveryAdvisor → CapitalAdvisor   │   │
-│   └──────────────────────────┬─────────────────────────────┘   │
-└─────────────────────────────-│──────────────────────────────────┘
-                               │ REST API (JSON)
-                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     FastAPI Backend (Python)                     │
-│                                                                 │
-│   /api/live              → yf_client.get_quote()               │
-│   /api/analyze           → engine.analyze_ticker()             │
-│   /api/ml-predict        → 6-model stacked ensemble + SHAP     │
-│   /api/backtest          → RSI+MACD strategy simulation        │
-│   /api/portfolio-metrics → VaR, Sharpe, Beta, Black-Scholes    │
-│   /api/advanced-news     → sentiment scoring + impact analysis  │
-│   /api/peer-compare      → head-to-head metrics                │
-│   /api/sector-rank       → composite peer ranking              │
-│   /api/valuation         → DCF, DuPont, Graham, Health Score   │
-│   /api/portfolio-insight → Recovery Advisor per holding        │
-│   /api/capital-allocate  → Smart capital distribution engine   │
-│   /api/tickers           → 1,900+ NSE stocks (in-memory cache) │
-│                                                                 │
-│   Data Layer (yf_client.py):                                    │
-│   ├── Yahoo Finance v8 /chart API (OHLCV, live quotes)         │
-│   ├── Yahoo Finance v10 quoteSummary (crumb + cookie auth)     │
-│   ├── NSE India CSV (EQUITY_L.csv — ticker universe)           │
-│   └── RSS feeds + News APIs (multi-source aggregation)         │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                          USER BROWSER                               │
+│                                                                     │
+│   ┌──────────────────────────────────────────────────────────────┐  │
+│   │               Next.js 16 Frontend (React 19)                 │  │
+│   │                                                              │  │
+│   │  LivePrice   → StockChart   → MLPrediction (SHAP chart)     │  │
+│   │  Backtesting → PortfolioMetrics → AdvancedNews              │  │
+│   │  MonteCarloSimulation (GBM fan chart · 30/60/90d horizons)  │  │
+│   │  LongTermAnalysis (DCF · DuPont · Health Score · Graham)    │  │
+│   │  PeerComparison → SectorIntelligence                        │  │
+│   │  PortfolioTracker (MPT Optimizer · Correlation Heatmap)     │  │
+│   │  RecoveryAdvisor → SmartCapitalAdvisor                      │  │
+│   └───────────────────────────┬──────────────────────────────────┘  │
+└───────────────────────────────│──────────────────────────────────────┘
+                                │ REST API (JSON)
+                                ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      FastAPI Backend (Python)                        │
+│                                                                     │
+│   /api/live              → yf_client.get_quote()                   │
+│   /api/analyze           → engine.analyze_ticker()                 │
+│   /api/ml-predict        → 6-model stacked ensemble + SHAP         │
+│   /api/backtest          → RSI+MACD strategy simulation            │
+│   /api/portfolio-metrics → VaR, Sharpe, Beta, Black-Scholes        │
+│   /api/advanced-news     → sentiment scoring + impact analysis      │
+│   /api/peer-compare      → head-to-head metrics                    │
+│   /api/sector-rank       → composite peer ranking                  │
+│   /api/valuation         → DCF, DuPont, Graham, Health Score       │
+│   /api/portfolio-analyze → P&L, weights, corr matrix, equity curve │
+│   /api/portfolio-optimize→ MPT optimizer: Max Sharpe + Min Vol     │
+│   /api/monte-carlo       → GBM 1,000-path simulation + percentiles │
+│   /api/portfolio-insight → Recovery Advisor per holding            │
+│   /api/capital-allocate  → Smart capital distribution engine       │
+│   /api/tickers           → 1,900+ NSE stocks (in-memory cache)    │
+│                                                                     │
+│   Quantitative Layer:                                               │
+│   ├── scipy.optimize SLSQP  (Markowitz efficient frontier)         │
+│   ├── NumPy GBM simulator   (Euler-Maruyama SDE discretisation)    │
+│   ├── hmmlearn Gaussian HMM (3-state market regime detection)      │
+│   ├── arch GARCH(1,1)       (conditional volatility forecasting)    │
+│   └── SHAP TreeExplainer    (model interpretability)               │
+│                                                                     │
+│   Data Layer (yf_client.py):                                        │
+│   ├── Yahoo Finance v8 /chart API (OHLCV, live quotes)             │
+│   ├── Yahoo Finance v10 quoteSummary (crumb + cookie auth)         │
+│   ├── NSE India CSV (EQUITY_L.csv — ticker universe)               │
+│   └── RSS feeds + News APIs (multi-source aggregation)             │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -406,18 +535,20 @@ npm run dev
 | `GET` | `/health` | Health check |
 | `GET` | `/api/tickers?q=hdfc` | Search 1,900+ NSE stocks |
 | `GET` | `/api/live?ticker=HDFCBANK.NS` | Live price quote |
-| `GET` | `/api/analyze?ticker=HDFCBANK.NS` | Full technical analysis |
-| `GET` | `/api/ml-predict?ticker=HDFCBANK.NS` | 5-day prediction + SHAP |
-| `GET` | `/api/backtest?ticker=HDFCBANK.NS&period=2y` | RSI+MACD backtest |
-| `GET` | `/api/portfolio-metrics?ticker=HDFCBANK.NS` | VaR, Sharpe, Greeks |
-| `GET` | `/api/advanced-news?ticker=HDFCBANK.NS` | News + AI sentiment |
-| `GET` | `/api/compare?tickers=TCS.NS,INFY.NS` | Peer comparison |
-| `GET` | `/api/sector-rank?ticker=HDFCBANK.NS` | Sector leaderboard |
-| `GET` | `/api/valuation?ticker=HDFCBANK.NS` | **DCF · DuPont · Graham · Health Score** |
-| `GET` | `/api/optimize-portfolio?tickers=TCS.NS,INFY.NS` | **Markowitz Efficient Frontier optimizer** |
-| `GET` | `/api/monte-carlo?ticker=HDFCBANK.NS` | **GBM Monte Carlo price path simulations** |
-| `POST` | `/api/portfolio-insight` | Recovery Advisor for portfolio holdings |
-| `POST` | `/api/capital-allocate` | Smart capital allocation plan |
+| `GET` | `/api/analyze?ticker=HDFCBANK.NS` | Full technical analysis (RSI, MACD, Bollinger, ADX, ATR) |
+| `GET` | `/api/ml-predict?ticker=HDFCBANK.NS` | 5-day ensemble prediction + SHAP waterfall |
+| `GET` | `/api/backtest?ticker=HDFCBANK.NS&period=2y` | RSI+MACD strategy equity curve + trade log |
+| `GET` | `/api/portfolio-metrics?ticker=HDFCBANK.NS` | VaR, Sharpe, Beta, Black-Scholes Greeks |
+| `GET` | `/api/advanced-news?ticker=HDFCBANK.NS` | News + AI sentiment + breaking news flag |
+| `GET` | `/api/compare?tickers=TCS.NS,INFY.NS` | Head-to-head peer comparison |
+| `GET` | `/api/sector-rank?ticker=HDFCBANK.NS` | Composite sector leaderboard |
+| `GET` | `/api/valuation?ticker=HDFCBANK.NS` | **DCF · DuPont · Graham Number · Health Score** |
+| `GET` | `/api/monte-carlo?ticker=HDFCBANK.NS&horizon_days=60` | **GBM Monte Carlo: 1,000 paths, percentile bands, probabilities** |
+| `GET` | `/api/market-screener` | Live market-wide screener (all NSE stocks) |
+| `POST` | `/api/portfolio-analyze` | Full portfolio P&L, weights, correlation matrix, equity curve |
+| `POST` | `/api/portfolio-optimize` | **Markowitz MPT: Max Sharpe + Min Volatility + frontier scatter** |
+| `POST` | `/api/portfolio-insight` | Recovery Advisor: RSI + sentiment + avg-down calculator |
+| `POST` | `/api/capital-allocate` | Smart capital allocation: softmax-weighted deployment plan |
 
 ---
 
