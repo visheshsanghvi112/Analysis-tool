@@ -1769,3 +1769,170 @@ def capital_allocate(req: CapitalAllocatorRequest):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Capital allocation failed: {str(e)}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /api/portfolio-optimize — Portfolio Optimizer & Markowitz Efficient Frontier
+# ─────────────────────────────────────────────────────────────────────────────
+@app.post("/api/portfolio-optimize")
+def optimize_portfolio(req: PortfolioRequest):
+    """
+    Accepts a list of holdings and returns:
+    - Expected annual returns, annualized volatility, and Sharpe ratio of current portfolio
+    - Expected annual returns, annualized volatility, and Sharpe ratio of Max Sharpe Portfolio
+    - Expected annual returns, annualized volatility, and Sharpe ratio of Min Volatility Portfolio
+    - A sample of simulated portfolios for the scatter plot
+    """
+    import random
+    from scipy.optimize import minimize
+
+    if not req.holdings:
+        raise HTTPException(status_code=400, detail="No holdings provided")
+    if len(req.holdings) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 holdings are required for optimization")
+    if len(req.holdings) > 15:
+        raise HTTPException(status_code=400, detail="Max 15 holdings supported")
+
+    # Fetch 1-year historical returns for each ticker
+    returns_dict = {}
+    current_prices = {}
+    
+    for h in req.holdings:
+        tk = h.ticker.strip().upper()
+        try:
+            df = get_history(tk, period="1y")
+            if df is not None and not df.empty and len(df) > 30:
+                r = df["Close"].pct_change().dropna()
+                returns_dict[tk] = r
+                current_prices[tk] = float(df["Close"].iloc[-1])
+            else:
+                raise ValueError(f"Insufficient historical data")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to fetch 1Y history for {tk}: {str(e)}")
+
+    tickers = list(returns_dict.keys())
+    if len(tickers) < 2:
+        raise HTTPException(status_code=400, detail="Insufficient historical price data for optimization")
+
+    # Align data by date index
+    ret_df = pd.DataFrame(returns_dict).dropna()
+    if len(ret_df) < 30:
+        raise HTTPException(status_code=400, detail="Insufficient overlapping price history between stocks")
+
+    # Calculate expected daily returns and covariance matrix
+    mean_daily_returns = ret_df.mean()
+    cov_matrix = ret_df.cov()
+
+    # Annualize (252 trading days)
+    ann_returns = mean_daily_returns * 252
+    ann_cov = cov_matrix * 252
+
+    # India risk-free rate ~ 6.5% (0.065)
+    rf = 0.065
+
+    # 1. Calculate metrics for CURRENT portfolio
+    total_val = 0.0
+    weights_current = []
+    
+    for tk in tickers:
+        h = next(item for item in req.holdings if item.ticker == tk)
+        val = h.qty * current_prices[tk]
+        total_val += val
+        weights_current.append(val)
+        
+    if total_val == 0:
+        weights_current = np.ones(len(tickers)) / len(tickers)
+    else:
+        weights_current = np.array(weights_current) / total_val
+
+    def portfolio_performance(w):
+        ret = np.sum(ann_returns * w)
+        vol = np.sqrt(np.dot(w.T, np.dot(ann_cov, w)))
+        sharpe = (ret - rf) / vol if vol > 0 else 0.0
+        return ret, vol, sharpe
+
+    curr_ret, curr_vol, curr_sharpe = portfolio_performance(weights_current)
+
+    # 2. Monte Carlo Simulation (1000 portfolios)
+    num_portfolios = 1000
+    sim_results = []
+    all_weights = []
+    
+    for _ in range(num_portfolios):
+        w = np.random.random(len(tickers))
+        w = w / np.sum(w)
+        all_weights.append(w)
+        ret, vol, sharpe = portfolio_performance(w)
+        sim_results.append({
+            "return_pct": round(float(ret * 100), 2),
+            "volatility_pct": round(float(vol * 100), 2),
+            "sharpe": round(float(sharpe), 3)
+        })
+
+    all_weights = np.array(all_weights)
+    sim_sharpes = np.array([p["sharpe"] for p in sim_results])
+    max_sharpe_idx = np.argmax(sim_sharpes)
+    w_max_sharpe_sim = all_weights[max_sharpe_idx]
+    
+    sim_vols = np.array([p["volatility_pct"] for p in sim_results])
+    min_vol_idx = np.argmin(sim_vols)
+    w_min_vol_sim = all_weights[min_vol_idx]
+
+    # Precise Max Sharpe Optimizer
+    def neg_sharpe(w):
+        ret, vol, sharpe = portfolio_performance(w)
+        return -sharpe
+
+    constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
+    bounds = tuple((0.0, 1.0) for _ in range(len(tickers)))
+    init_guess = np.ones(len(tickers)) / len(tickers)
+
+    opt_max_sharpe = minimize(neg_sharpe, init_guess, method='SLSQP', bounds=bounds, constraints=constraints)
+    w_max_sharpe = opt_max_sharpe.x if opt_max_sharpe.success else w_max_sharpe_sim
+
+    # Precise Min Volatility Optimizer
+    def portfolio_vol(w):
+        return portfolio_performance(w)[1]
+
+    opt_min_vol = minimize(portfolio_vol, init_guess, method='SLSQP', bounds=bounds, constraints=constraints)
+    w_min_vol = opt_min_vol.x if opt_min_vol.success else w_min_vol_sim
+
+    # Compute exact values
+    ms_ret, ms_vol, ms_sharpe = portfolio_performance(w_max_sharpe)
+    mv_ret, mv_vol, mv_sharpe = portfolio_performance(w_min_vol)
+
+    def make_weights_list(w_arr):
+        return [
+            {
+                "ticker": tk,
+                "ticker_short": tk.replace('.NS', '').replace('.BO', ''),
+                "weight_pct": round(float(w_arr[i] * 100), 2)
+            }
+            for i, tk in enumerate(tickers)
+        ]
+
+    sampled_sim = random.sample(sim_results, 250) if len(sim_results) > 250 else sim_results
+
+    return {
+        "tickers": tickers,
+        "current": {
+            "return_pct": round(float(curr_ret * 100), 2),
+            "volatility_pct": round(float(curr_vol * 100), 2),
+            "sharpe": round(float(curr_sharpe), 3),
+            "weights": make_weights_list(weights_current)
+        },
+        "max_sharpe": {
+            "return_pct": round(float(ms_ret * 100), 2),
+            "volatility_pct": round(float(ms_vol * 100), 2),
+            "sharpe": round(float(ms_sharpe), 3),
+            "weights": make_weights_list(w_max_sharpe)
+        },
+        "min_volatility": {
+            "return_pct": round(float(mv_ret * 100), 2),
+            "volatility_pct": round(float(mv_vol * 100), 2),
+            "sharpe": round(float(mv_sharpe), 3),
+            "weights": make_weights_list(w_min_vol)
+        },
+        "simulated_portfolios": sampled_sim
+    }
+

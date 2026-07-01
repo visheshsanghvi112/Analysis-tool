@@ -4,6 +4,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
+  ScatterChart, Scatter, ZAxis,
 } from 'recharts';
 import {
   Plus, Trash2, RefreshCw, TrendingUp, TrendingDown,
@@ -13,7 +14,7 @@ import {
 import SmartCapitalAdvisor from './SmartCapitalAdvisor';
 import Header from './Header';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://stock-analysis-backend-seven.vercel.app';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 
 const PORTFOLIO_KEY = 'stockiq_portfolio_v1';
 
@@ -377,6 +378,185 @@ function PriceHistoryChart({ history, holdings }) {
   );
 }
 
+// ── Portfolio Optimizer (Markowitz Frontier) ──────────────────────────────────
+function PortfolioOptimizer({ optResult, loading, error, onRebalance }) {
+  const [activeTab, setActiveTab] = useState('max_sharpe'); // 'max_sharpe' or 'min_vol'
+
+  if (loading) {
+    return (
+      <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-6 text-center">
+        <RefreshCw className="h-6 w-6 text-indigo-400 animate-spin mx-auto mb-2" />
+        <p className="text-xs text-slate-300 font-medium animate-pulse">Running Markowitz Portfolio Optimization &amp; Monte Carlo Simulations...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-4 text-rose-400 text-xs flex items-center gap-2">
+        <AlertCircle className="h-4 w-4 shrink-0" />
+        <span>Optimization Error: {error}</span>
+      </div>
+    );
+  }
+
+  if (!optResult) {
+    return (
+      <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-6 text-center text-slate-500 text-xs">
+        Add at least 2 valid stocks and click &quot;Analyse Portfolio&quot; to run Markowitz Efficient Frontier optimization.
+      </div>
+    );
+  }
+
+  const selected = activeTab === 'max_sharpe' ? optResult.max_sharpe : optResult.min_volatility;
+  const current = optResult.current;
+
+  // Custom scatter tooltip
+  const CustomScatterTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-[#09090b]/95 border border-white/[0.08] p-3 rounded-xl shadow-2xl backdrop-blur-md text-[10px]">
+          <p className="font-bold text-slate-450 uppercase tracking-wider mb-1">Simulated Portfolio</p>
+          <div className="space-y-0.5 font-mono text-white">
+            <p>Ann. Return: <span className="font-bold text-indigo-400">{data.return_pct}%</span></p>
+            <p>Ann. Volatility: <span className="font-bold text-slate-300">{data.volatility_pct}%</span></p>
+            <p>Sharpe Ratio: <span className="font-bold text-emerald-405">{data.sharpe}</span></p>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-4 sm:p-5 space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.05] pb-3">
+        <div>
+          <p className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-indigo-400 animate-pulse" />
+            Markowitz Efficient Frontier &amp; Optimizer
+          </p>
+          <p className="text-[9px] text-slate-400">Institutional-grade Modern Portfolio Theory (MPT) weight reallocation</p>
+        </div>
+        
+        {/* Tab Selector */}
+        <div className="flex bg-[#0a0a0f] border border-white/[0.08] p-0.5 rounded-lg text-[10px] font-bold">
+          <button
+            onClick={() => setActiveTab('max_sharpe')}
+            className={`px-3 py-1.5 rounded-md transition cursor-pointer ${activeTab === 'max_sharpe' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            Max Sharpe Ratio
+          </button>
+          <button
+            onClick={() => setActiveTab('min_vol')}
+            className={`px-3 py-1.5 rounded-md transition cursor-pointer ${activeTab === 'min_vol' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            Min Volatility
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+        
+        {/* SCATTER CHART */}
+        <div className="space-y-2">
+          <p className="text-[10px] text-slate-300 uppercase tracking-wider font-bold">Efficient Frontier Scatter (1Y Returns)</p>
+          <div className="h-[200px] w-full bg-white/[0.01] border border-white/[0.03] rounded-xl overflow-hidden p-2 relative">
+            <ResponsiveContainer width="100%" height="100%">
+              <ScatterChart margin={{ top: 10, right: 10, bottom: -10, left: -25 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                <XAxis type="number" dataKey="volatility_pct" name="Volatility" unit="%" tick={{ fontSize: 8, fill: '#555' }} domain={['auto', 'auto']} tickLine={false} axisLine={false} />
+                <YAxis type="number" dataKey="return_pct" name="Return" unit="%" tick={{ fontSize: 8, fill: '#555' }} domain={['auto', 'auto']} tickLine={false} axisLine={false} />
+                <ZAxis type="number" dataKey="sharpe" range={[15, 15]} />
+                <RTooltip content={<CustomScatterTooltip />} />
+                <Scatter name="Simulated" data={optResult.simulated_portfolios} fill="#4338ca" opacity={0.3} shape="circle" />
+                <Scatter name="Current" data={[optResult.current]} fill="#ef4444" shape="circle" />
+                <Scatter name="Max Sharpe" data={[optResult.max_sharpe]} fill="#10b981" shape="star" />
+                <Scatter name="Min Vol" data={[optResult.min_volatility]} fill="#f59e0b" shape="triangle" />
+              </ScatterChart>
+            </ResponsiveContainer>
+            
+            {/* Chart Legend Labels overlays */}
+            <div className="absolute bottom-2 right-2 flex flex-wrap items-center gap-3 text-[8px] bg-[#09090b]/80 backdrop-blur px-2 py-1 rounded border border-white/[0.08] pointer-events-none">
+              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-[#4338ca]" /> Simulations</span>
+              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-[#ef4444]" /> Current</span>
+              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 bg-[#10b981]" style={{clipPath: 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)'}} /> Max Sharpe</span>
+              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 bg-[#f59e0b]" style={{clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)'}} /> Min Vol</span>
+            </div>
+          </div>
+        </div>
+
+        {/* COMPARATIVE ANALYSIS & REBALANCE */}
+        <div className="flex flex-col justify-between space-y-4">
+          <div className="space-y-3">
+            {/* Comparison Metrics */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="bg-white/[0.02] border border-white/[0.04] p-2.5 rounded-lg">
+                <p className="text-[8px] text-slate-500 uppercase tracking-wider mb-0.5">Annualized Return</p>
+                <div className="text-xs font-bold text-slate-350">{current.return_pct}%</div>
+                <div className="text-[10px] font-bold text-indigo-400 mt-0.5">→ {selected.return_pct}%</div>
+              </div>
+              <div className="bg-white/[0.02] border border-white/[0.04] p-2.5 rounded-lg">
+                <p className="text-[8px] text-slate-500 uppercase tracking-wider mb-0.5">Annualized Volatility</p>
+                <div className="text-xs font-bold text-slate-350">{current.volatility_pct}%</div>
+                <div className="text-[10px] font-bold text-indigo-400 mt-0.5">→ {selected.volatility_pct}%</div>
+              </div>
+              <div className="bg-white/[0.02] border border-white/[0.04] p-2.5 rounded-lg">
+                <p className="text-[8px] text-slate-500 uppercase tracking-wider mb-0.5">Sharpe Ratio</p>
+                <div className="text-xs font-bold text-slate-350">{current.sharpe}</div>
+                <div className="text-[10px] font-bold text-indigo-400 mt-0.5">→ {selected.sharpe}</div>
+              </div>
+            </div>
+
+            {/* Weights Compare Table */}
+            <div className="max-h-[120px] overflow-y-auto border border-white/[0.05] rounded-lg">
+              <table className="w-full text-[10px] border-collapse">
+                <thead>
+                  <tr className="bg-white/[0.03] border-b border-white/[0.05] sticky top-0">
+                    <th className="px-2.5 py-1.5 text-left text-[8px] text-slate-400 font-bold uppercase">Asset</th>
+                    <th className="px-2.5 py-1.5 text-right text-[8px] text-slate-400 font-bold uppercase">Current Wt</th>
+                    <th className="px-2.5 py-1.5 text-right text-[8px] text-slate-400 font-bold uppercase">Target Wt</th>
+                    <th className="px-2.5 py-1.5 text-right text-[8px] text-slate-400 font-bold uppercase">Diff</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selected.weights.map(w => {
+                    const currW = current.weights.find(cw => cw.ticker === w.ticker)?.weight_pct ?? 0;
+                    const diff = w.weight_pct - currW;
+                    return (
+                      <tr key={w.ticker} className="border-b border-white/[0.02] hover:bg-white/[0.01]">
+                        <td className="px-2.5 py-1.5 font-bold text-white">{w.ticker_short}</td>
+                        <td className="px-2.5 py-1.5 text-right text-slate-300">{currW}%</td>
+                        <td className="px-2.5 py-1.5 text-right font-bold text-indigo-400">{w.weight_pct}%</td>
+                        <td className={`px-2.5 py-1.5 text-right font-bold ${diff > 0 ? 'text-emerald-400' : diff < 0 ? 'text-rose-400' : 'text-slate-400'}`}>
+                          {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Action button */}
+          <button
+            onClick={() => onRebalance(selected.weights)}
+            className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-all shadow-md shadow-indigo-600/10 cursor-pointer flex items-center justify-center gap-1.5 border border-indigo-500/25"
+          >
+            Apply Optimized Weights (Auto-Scale Quantities)
+          </button>
+        </div>
+      </div>
+      
+      <p className="text-[8px] text-slate-600 text-center leading-relaxed">
+        Calculated using Markowitz Mean-Variance optimization assuming 252 annual trading days. Returns are based on historical 1Y prices. Rebalancing scales share quantities to align current capital with target weights based on last-traded stock prices.
+      </p>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 const emptyRow = () => ({ id: Math.random().toString(), ticker: '', qty: '', buy_price: '' });
 
@@ -395,6 +575,11 @@ export default function PortfolioTracker() {
   const [simQty, setSimQty]       = useState('10');
   const [simPrice, setSimPrice]   = useState('');
   const [simResult, setSimResult] = useState(null);
+
+  // Portfolio Optimizer States
+  const [optResult, setOptResult] = useState(null);
+  const [optLoading, setOptLoading] = useState(false);
+  const [optError, setOptError] = useState(null);
 
   // Persist to localStorage
   useEffect(() => {
@@ -430,6 +615,8 @@ export default function PortfolioTracker() {
     setAdvice(null);
     setSimTicker('');
     setSimResult(null);
+    setOptResult(null);
+    setOptError(null);
   };
 
   const clearAll = () => {
@@ -438,17 +625,20 @@ export default function PortfolioTracker() {
     setAdvice(null);
     setSimTicker('');
     setSimResult(null);
+    setOptResult(null);
+    setOptError(null);
   };
 
-  const analyze = useCallback(async () => {
-    if (!validRows.length) return;
+  const analyze = useCallback(async (customRows = null) => {
+    const rowsToUse = customRows || validRows;
+    if (!rowsToUse.length) return;
     setLoading(true); setError(null); setResult(null);
     try {
       const res = await fetch(`${API_BASE_URL}/api/portfolio-analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          holdings: validRows.map(r => ({
+          holdings: rowsToUse.map(r => ({
             ticker: r.ticker.trim().toUpperCase(),
             qty: +r.qty,
             buy_price: +r.buy_price,
@@ -464,6 +654,67 @@ export default function PortfolioTracker() {
       setLoading(false);
     }
   }, [validRows]);
+
+  const runOptimization = useCallback(async () => {
+    if (!validRows.length || validRows.length < 2) return;
+    setOptLoading(true);
+    setOptError(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/portfolio-optimize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          holdings: validRows.map(r => ({
+            ticker: r.ticker.trim().toUpperCase(),
+            qty: +r.qty,
+            buy_price: +r.buy_price,
+          })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.detail || 'Optimization failed');
+      setOptResult(json);
+    } catch (e) {
+      setOptError(e.message);
+    } finally {
+      setOptLoading(false);
+    }
+  }, [validRows]);
+
+  useEffect(() => {
+    if (result && result.holdings && result.holdings.length >= 2) {
+      runOptimization();
+    } else {
+      setOptResult(null);
+      setOptError(null);
+    }
+  }, [result, runOptimization]);
+
+  const applyRebalance = (targetWeights) => {
+    if (!result || !result.holdings) return;
+    const totalValue = result.summary.total_value;
+    const newRows = rows.map(row => {
+      const tickerClean = row.ticker.trim().toUpperCase();
+      const targetWeightObj = targetWeights.find(w => w.ticker === tickerClean);
+      const holdingObj = result.holdings.find(h => h.ticker === tickerClean);
+      
+      if (targetWeightObj && holdingObj && holdingObj.live_price > 0) {
+        const targetVal = (targetWeightObj.weight_pct / 100) * totalValue;
+        const targetQty = Math.round(targetVal / holdingObj.live_price);
+        return {
+          ...row,
+          qty: String(Math.max(1, targetQty))
+        };
+      }
+      return row;
+    });
+    
+    setRows(newRows);
+    
+    // Auto re-analyze!
+    const validNewRows = newRows.filter(r => r.ticker && +r.qty > 0 && +r.buy_price > 0);
+    analyze(validNewRows);
+  };
 
   const getAdvice = useCallback(async () => {
     if (!validRows.length) return;
@@ -830,6 +1081,16 @@ export default function PortfolioTracker() {
               <CorrelationHeatmap
                 pairs={risk.correlation_pairs}
                 tickers={result.holdings.map(h => h.ticker)}
+              />
+            )}
+
+            {/* Portfolio Optimizer */}
+            {result.holdings.length >= 2 && (
+              <PortfolioOptimizer
+                optResult={optResult}
+                loading={optLoading}
+                error={optError}
+                onRebalance={applyRebalance}
               />
             )}
 

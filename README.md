@@ -1,4 +1,4 @@
-<div align="center">
+    <div align="center">
 
 ![StockIQ Pro Banner](./stockiq_pro_banner.png)
 
