@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
   LineChart, Line, Legend,
@@ -12,6 +12,34 @@ import {
 } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
+
+// ── Chart Container Wrapper for Responsive Recharts ──────────────────────────
+function ChartContainer({ height = 280, children }) {
+  const ref = useRef(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height });
+
+  useEffect(() => {
+    if (!ref.current) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 10) {
+          setDimensions({
+            width: entry.contentRect.width,
+            height: entry.contentRect.height || height
+          });
+        }
+      }
+    });
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, [height]);
+
+  return (
+    <div ref={ref} className="w-full chart-container" style={{ height, minHeight: height }}>
+      {dimensions.width > 0 ? children(dimensions.width, dimensions.height) : null}
+    </div>
+  );
+}
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 const fmtCr = (v) => {
@@ -133,27 +161,29 @@ function EarningsPanel({ annual, quarterly, ratios, price_cagr }) {
 
       {/* Bar Chart */}
       {data?.length > 0 ? (
-        <div className="h-52">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} barCategoryGap="25%" margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" />
-              <XAxis dataKey={xKey} tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false}
-                tickFormatter={v => fmtCr(v).replace('₹', '')} width={48} />
-              <Tooltip content={<ChartTooltip formatter={fmtCr} />} />
-              <Bar dataKey="revenue" name="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]}>
-                {data.map((_, i) => <Cell key={i} fill={i === data.length - 1 ? '#818cf8' : '#6366f155'} />)}
-              </Bar>
-              <Bar dataKey="net_income" name="Net Income" fill="#10b981" radius={[4, 4, 0, 0]}>
-                {data.map((entry, i) => (
-                  <Cell key={i} fill={
-                    entry.net_income < 0 ? '#f43f5e88'
-                    : i === data.length - 1 ? '#10b981' : '#10b98155'
-                  } />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="bg-white/[0.01] rounded-xl p-3 border border-white/[0.04]">
+          <ChartContainer height={220}>
+            {(width, height) => (
+              <BarChart width={width} height={height} data={data} barCategoryGap="25%" margin={{ top: 4, right: 4, left: -25, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" />
+                <XAxis dataKey={xKey} tick={{ fill: '#555', fontSize: 9 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#555', fontSize: 9 }} axisLine={false} tickLine={false}
+                  tickFormatter={v => fmtCr(v).replace('₹', '')} width={45} tickCount={4} />
+                <Tooltip content={<ChartTooltip formatter={fmtCr} />} />
+                <Bar dataKey="revenue" name="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]}>
+                  {data.map((_, i) => <Cell key={i} fill={i === data.length - 1 ? '#818cf8' : '#6366f155'} />)}
+                </Bar>
+                <Bar dataKey="net_income" name="Net Income" fill="#10b981" radius={[4, 4, 0, 0]}>
+                  {data.map((entry, i) => (
+                    <Cell key={i} fill={
+                      entry.net_income < 0 ? '#f43f5e88'
+                      : i === data.length - 1 ? '#10b981' : '#10b98155'
+                    } />
+                  ))}
+                </Bar>
+              </BarChart>
+            )}
+          </ChartContainer>
         </div>
       ) : (
         <div className="h-32 flex items-center justify-center text-slate-600 text-sm">
@@ -241,21 +271,23 @@ function DividendPanel({ dividend }) {
 
           {/* Annual dividends bar chart */}
           {annual_totals?.length > 0 && (
-            <div className="h-36">
+            <div className="bg-white/[0.01] rounded-xl p-3 border border-white/[0.04]">
               <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mb-2">Annual Dividend Per Share (₹)</p>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={annual_totals} margin={{ top: 0, right: 4, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff06" />
-                  <XAxis dataKey="year" tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} width={32} />
-                  <Tooltip content={<ChartTooltip formatter={v => `₹${v}`} />} />
-                  <Bar dataKey="dividend" name="Dividend" radius={[4, 4, 0, 0]}>
-                    {annual_totals.map((_, i) => (
-                      <Cell key={i} fill={i === annual_totals.length - 1 ? '#10b981' : '#10b98155'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              <ChartContainer height={150}>
+                {(width, height) => (
+                  <BarChart width={width} height={height} data={annual_totals} margin={{ top: 0, right: 4, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff06" />
+                    <XAxis dataKey="year" tick={{ fill: '#555', fontSize: 9 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: '#555', fontSize: 9 }} axisLine={false} tickLine={false} width={30} tickCount={4} />
+                    <Tooltip content={<ChartTooltip formatter={v => `₹${v}`} />} />
+                    <Bar dataKey="dividend" name="Dividend" radius={[4, 4, 0, 0]}>
+                      {annual_totals.map((_, i) => (
+                        <Cell key={i} fill={i === annual_totals.length - 1 ? '#10b981' : '#10b98155'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                )}
+              </ChartContainer>
             </div>
           )}
 

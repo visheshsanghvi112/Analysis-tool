@@ -318,7 +318,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
             </div>
 
             {/* ── Right nav + badges ──────────────────────────────────── */}
-            <div className="hidden md:flex" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div className="hidden md:flex items-center gap-4" style={{ marginLeft: 'auto' }}>
               <Link
                 href="/browse"
                 style={{

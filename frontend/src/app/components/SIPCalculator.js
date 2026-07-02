@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   ReferenceLine, Legend,
@@ -9,6 +9,34 @@ import {
   Calculator, TrendingUp, IndianRupee, Target, Calendar,
   Sparkles, BarChart3, Info, ChevronDown, ChevronUp,
 } from 'lucide-react';
+
+// ── Chart Container Wrapper for Responsive Recharts ──────────────────────────
+function ChartContainer({ height = 280, children }) {
+  const ref = useRef(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height });
+
+  useEffect(() => {
+    if (!ref.current) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 10) {
+          setDimensions({
+            width: entry.contentRect.width,
+            height: entry.contentRect.height || height
+          });
+        }
+      }
+    });
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, [height]);
+
+  return (
+    <div ref={ref} className="w-full chart-container" style={{ height, minHeight: height }}>
+      {dimensions.width > 0 ? children(dimensions.width, dimensions.height) : null}
+    </div>
+  );
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtINR = (n) =>
@@ -273,30 +301,32 @@ export default function SIPCalculator({ ticker }) {
         <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mb-2">
           Corpus Growth — Invested vs. Projected Value
         </p>
-        <div className="h-48">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={result.series} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="sipGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#10b981" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                </linearGradient>
-                <linearGradient id="invGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#6366f1" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ffffff07" />
-              <XAxis dataKey="year" tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false}
-                tickFormatter={v => fmtCr(v).replace('₹', '')} width={52} />
-              <Tooltip content={<SIPTooltip />} />
-              <Area type="monotone" dataKey="invested" name="invested" stroke="#6366f1" strokeWidth={1.5}
-                fill="url(#invGrad)" dot={false} />
-              <Area type="monotone" dataKey="value" name="value" stroke="#10b981" strokeWidth={2}
-                fill="url(#sipGrad)" dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
+        <div className="bg-white/[0.01] rounded-xl p-3 border border-white/[0.04]">
+          <ChartContainer height={180}>
+            {(width, height) => (
+              <AreaChart width={width} height={height} data={result.series} margin={{ top: 4, right: 4, left: -25, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="sipGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#10b981" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                  </linearGradient>
+                  <linearGradient id="invGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#6366f1" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff07" />
+                <XAxis dataKey="year" tick={{ fill: '#555', fontSize: 9 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#555', fontSize: 9 }} axisLine={false} tickLine={false}
+                  tickFormatter={v => fmtCr(v).replace('₹', '')} width={45} tickCount={4} />
+                <Tooltip content={<SIPTooltip />} />
+                <Area type="monotone" dataKey="invested" name="invested" stroke="#6366f1" strokeWidth={1.5}
+                  fill="url(#invGrad)" dot={false} />
+                <Area type="monotone" dataKey="value" name="value" stroke="#10b981" strokeWidth={2}
+                  fill="url(#sipGrad)" dot={false} />
+              </AreaChart>
+            )}
+          </ChartContainer>
         </div>
         <div className="flex gap-4 mt-1 text-[10px] text-slate-500">
           <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-indigo-500 rounded inline-block" /> Invested</span>

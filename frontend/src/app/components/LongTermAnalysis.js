@@ -335,11 +335,13 @@ export default function LongTermAnalysis({ ticker }) {
           </div>
 
           {/* Quick math breakdown disclosure */}
-          <div className="mt-4 p-3 bg-white/[0.01] border border-white/[0.03] rounded-lg text-[10px] text-slate-500 leading-relaxed space-y-1">
-            <span className="font-bold text-slate-400 block mb-0.5">DCF Valuation Method Note:</span>
-            Enterprise Value = PV of cash flows for years 1-5 + PV of terminal value. 
-            Equity Value = Enterprise Value + Cash ({formatVal(data.total_cash)}) - Debt ({formatVal(data.total_debt)}).
-            Intrinsic Value = Equity Value / Shares Outstanding ({data.shares_outstanding ? (data.shares_outstanding/1e9).toFixed(2) + 'B' : 'N/A'}).
+          <div className="mt-4 p-3 bg-white/[0.01] border border-white/[0.03] rounded-lg text-[10px] text-slate-500 leading-relaxed break-words">
+            <span className="font-bold text-slate-400 block mb-1">DCF Valuation Method:</span>
+            <ul className="list-disc pl-4 space-y-1">
+              <li><strong>Enterprise Value:</strong> PV of cash flows (Yr 1-5) + PV of terminal value.</li>
+              <li><strong>Equity Value:</strong> Enterprise Value + Cash ({formatVal(data.total_cash)}) - Debt ({formatVal(data.total_debt)}).</li>
+              <li><strong>Intrinsic Value:</strong> Equity Value / Shares Outstanding ({data.shares_outstanding ? (data.shares_outstanding/1e9).toFixed(2) + 'B' : 'N/A'}).</li>
+            </ul>
           </div>
         </div>
 

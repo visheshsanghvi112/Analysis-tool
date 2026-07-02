@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, Legend,
   ResponsiveContainer, CartesianGrid, ReferenceLine
@@ -11,6 +11,34 @@ import {
 } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
+
+// ── Chart Container Wrapper for Responsive Recharts ──────────────────────────
+function ChartContainer({ height = 280, children }) {
+  const ref = useRef(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height });
+
+  useEffect(() => {
+    if (!ref.current) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 10) {
+          setDimensions({
+            width: entry.contentRect.width,
+            height: entry.contentRect.height || height
+          });
+        }
+      }
+    });
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, [height]);
+
+  return (
+    <div ref={ref} className="w-full chart-container" style={{ height, minHeight: height }}>
+      {dimensions.width > 0 ? children(dimensions.width, dimensions.height) : null}
+    </div>
+  );
+}
 
 // Helpers
 const fmt = (n, decimals = 2) =>
@@ -251,93 +279,95 @@ export default function MonteCarloSimulation({ ticker }) {
                 </div>
               </div>
               
-              <ResponsiveContainer width="100%" height={260}>
-                <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.03)" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 9, fill: '#555' }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v) => v.slice(5)}
-                  />
-                  <YAxis
-                    domain={['auto', 'auto']}
-                    tick={{ fontSize: 9, fill: '#555' }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v) => `₹${v}`}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  
-                  {/* Outer 95% Confidence Interval (2.5% to 97.5%) */}
-                  <Area
-                    type="monotone"
-                    dataKey="p975"
-                    stroke="none"
-                    fill="#3b82f6"
-                    fillOpacity={0.05}
-                    connectNulls={true}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="p025"
-                    stroke="none"
-                    fill="#3b82f6"
-                    fillOpacity={0}
-                    connectNulls={true}
-                  />
+              <ChartContainer height={260}>
+                {(width, height) => (
+                  <AreaChart width={width} height={height} data={chartData} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.03)" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 9, fill: '#555' }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(v) => v.slice(5)}
+                    />
+                    <YAxis
+                      domain={['auto', 'auto']}
+                      tick={{ fontSize: 9, fill: '#555' }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(v) => `₹${v}`}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    
+                    {/* Outer 95% Confidence Interval (2.5% to 97.5%) */}
+                    <Area
+                      type="monotone"
+                      dataKey="p975"
+                      stroke="none"
+                      fill="#3b82f6"
+                      fillOpacity={0.05}
+                      connectNulls={true}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="p025"
+                      stroke="none"
+                      fill="#3b82f6"
+                      fillOpacity={0}
+                      connectNulls={true}
+                    />
 
-                  {/* Inner 50% Confidence Interval (25% to 75%) */}
-                  <Area
-                    type="monotone"
-                    dataKey="p750"
-                    stroke="none"
-                    fill="#3b82f6"
-                    fillOpacity={0.15}
-                    connectNulls={true}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="p250"
-                    stroke="none"
-                    fill="#3b82f6"
-                    fillOpacity={0}
-                    connectNulls={true}
-                  />
+                    {/* Inner 50% Confidence Interval (25% to 75%) */}
+                    <Area
+                      type="monotone"
+                      dataKey="p750"
+                      stroke="none"
+                      fill="#3b82f6"
+                      fillOpacity={0.15}
+                      connectNulls={true}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="p250"
+                      stroke="none"
+                      fill="#3b82f6"
+                      fillOpacity={0}
+                      connectNulls={true}
+                    />
 
-                  {/* Sample Stochastic Paths */}
-                  <Line type="monotone" dataKey="path_0" stroke="#c084fc" strokeWidth={1} dot={false} opacity={0.3} connectNulls={true} />
-                  <Line type="monotone" dataKey="path_1" stroke="#c084fc" strokeWidth={1} dot={false} opacity={0.3} connectNulls={true} />
-                  <Line type="monotone" dataKey="path_2" stroke="#c084fc" strokeWidth={1} dot={false} opacity={0.3} connectNulls={true} />
-                  <Line type="monotone" dataKey="path_3" stroke="#c084fc" strokeWidth={1} dot={false} opacity={0.3} connectNulls={true} />
-                  <Line type="monotone" dataKey="path_4" stroke="#c084fc" strokeWidth={1} dot={false} opacity={0.3} connectNulls={true} />
+                    {/* Sample Stochastic Paths */}
+                    <Line type="monotone" dataKey="path_0" stroke="#c084fc" strokeWidth={1} dot={false} opacity={0.3} connectNulls={true} />
+                    <Line type="monotone" dataKey="path_1" stroke="#c084fc" strokeWidth={1} dot={false} opacity={0.3} connectNulls={true} />
+                    <Line type="monotone" dataKey="path_2" stroke="#c084fc" strokeWidth={1} dot={false} opacity={0.3} connectNulls={true} />
+                    <Line type="monotone" dataKey="path_3" stroke="#c084fc" strokeWidth={1} dot={false} opacity={0.3} connectNulls={true} />
+                    <Line type="monotone" dataKey="path_4" stroke="#c084fc" strokeWidth={1} dot={false} opacity={0.3} connectNulls={true} />
 
-                  {/* Historical Line */}
-                  <Line
-                    type="monotone"
-                    dataKey="close"
-                    stroke="#3b82f6"
-                    strokeWidth={2.5}
-                    dot={false}
-                    connectNulls={true}
-                  />
+                    {/* Historical Line */}
+                    <Line
+                      type="monotone"
+                      dataKey="close"
+                      stroke="#3b82f6"
+                      strokeWidth={2.5}
+                      dot={false}
+                      connectNulls={true}
+                    />
 
-                  {/* Median Projected Line */}
-                  <Line
-                    type="monotone"
-                    dataKey="p500"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    strokeDasharray="4 3"
-                    dot={false}
-                    connectNulls={true}
-                  />
+                    {/* Median Projected Line */}
+                    <Line
+                      type="monotone"
+                      dataKey="p500"
+                      stroke="#10b981"
+                      strokeWidth={2}
+                      strokeDasharray="4 3"
+                      dot={false}
+                      connectNulls={true}
+                    />
 
-                  {/* Reference line showing current price */}
-                  <ReferenceLine y={stats.current_price} stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                </AreaChart>
-              </ResponsiveContainer>
+                    {/* Reference line showing current price */}
+                    <ReferenceLine y={stats.current_price} stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                  </AreaChart>
+                )}
+              </ChartContainer>
             </div>
 
             {/* Probability Breakdown Column */}
