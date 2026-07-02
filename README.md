@@ -1,4 +1,4 @@
-    <div align="center">
+<div align="center">
 
 ![StockIQ Pro Banner](./stockiq_pro_banner.png)
 
@@ -25,22 +25,51 @@ made free, open-source, and built for NSE & BSE.**
 
 ---
 
-## The Problem: You're Investing Blind
+## 🌟 Our Vision & Core Philosophy
 
-You open Zerodha or Groww. You see a price chart and a buy button.  
-But **what is that price actually telling you?**
+Retail investing in India is experiencing an unprecedented boom. Millions of new Demat accounts are opened monthly. Yet, the information gap between the retail trader and the institutional hedge fund has never been wider. 
 
-- Is the stock overbought or building momentum?
-- Is the recent rally backed by volume or just noise?
-- What does the market *feel* about this stock right now — fear or greed?
-- Is the stock fairly valued, or are you overpaying for it?
-- What is this company's intrinsic worth based on its cash flows?
-- Is management efficiently converting revenue into shareholder returns?
-- How much could you lose on a bad day — statistically?
+While institutions deploy advanced quantitative models, multi-stage machine learning pipelines, and statistical risk controls, retail investors are left with basic line charts, generic news feeds, and noisy social media tips. 
 
-**Most retail investors don't have answers to these questions.** Not because they're not smart — but because the tools that answer them cost ₹2,00,000+/year (Bloomberg Terminal), require a CFA to interpret, or simply don't exist for Indian markets.
+**StockIQ Pro is built to bridge this chasm.** 
 
-**StockIQ Pro changes that.**
+Our vision is to **democratize quantitative finance**. We believe that every individual investor should have access to state-of-the-art analytical tools—free of charge, open-source, and specifically calibrated for the Indian markets (NSE & BSE).
+
+### Our Core Tenets:
+1. **No Black Boxes (Explainable AI)**: Predictors should not just output a number; they must justify *why* using mathematical attribution (SHAP).
+2. **Probability Over Certainty**: The future of stock prices is a distribution of outcomes, not a single line. We model risk corridors (Monte Carlo), not false promises of exact targets.
+3. **Rigorous Evidence**: If an indicator cannot be backtested and statistically validated, it shouldn't guide your capital.
+4. **Institutional Math Made Accessible**: Presenting complex concepts like modern portfolio optimization, Hidden Markov Models, and GARCH volatility through a gorgeous, intuitive, and highly responsive user interface.
+
+---
+
+## 🛠️ The Architecture & The "Why" Behind Our Choices
+
+To build a platform that is both computationally robust and visually premium, we had to be highly deliberate about our technology choices:
+
+```mermaid
+graph TD
+    A[Next.js 16/React 19 SPA] -->|Fast REST JSON API| B[FastAPI Backend]
+    B -->|Quantitative Engines| C[SciPy / SLSQP Optimizer]
+    B -->|Stochastic Processes| D[NumPy GBM Simulator]
+    B -->|Machine Learning| E[scikit-learn / XGB / LightGBM]
+    B -->|Statistical Models| F[hmmlearn HMM + arch GARCH]
+    B -->|Financial Data| G[Yahoo Finance / CSV / RSS]
+```
+
+### 1. Why FastAPI? (The Engine)
+- **High Performance**: Built on top of Starlette and Pydantic, FastAPI is one of the fastest Python frameworks available, matching Node and Go speeds.
+- **Quantitative Integration**: The Python quantitative ecosystem (NumPy, SciPy, scikit-learn, arch, hmmlearn) is unmatched. FastAPI serves as the perfect, lightweight conduit to run these models and serve the results instantly.
+- **Asynchronous Execution**: Stock analysis requires fetching external data and running intensive math. FastAPI's async capabilities ensure our endpoints don't block requests, handling high concurrency gracefully.
+
+### 2. Why Next.js 16 & React 19? (The Face)
+- **Turbopack Build Performance**: Instant hot module replacement (HMR) and extremely fast compilation speeds.
+- **Component-Driven Visuals**: Allows us to compose a complex dashboard of responsive components (`StockChart`, `MLPrediction`, `SIPCalculator`, etc.) that load and update independently.
+- **Tailwind CSS & Glassmorphism**: Provides complete stylistic control to create a premium, dark-mode design system with curated HSL color palettes and smooth animations.
+
+### 3. Why Stacked Ensemble ML? (The Intelligence)
+- Financial markets are highly chaotic, non-linear, and filled with noise. Single models (like simple regressions or single decision trees) suffer from high variance and overfit quickly.
+- By stacking five distinct learners (Random Forest, Gradient Boosting, XGBoost, LightGBM, and Extra Trees) and combining them using a regularized Ridge meta-learner, we reduce variance, capture multi-dimensional interactions, and achieve stable predictions.
 
 ---
 
@@ -101,7 +130,10 @@ This is not a simple screener. This is a **decision-support system** — built f
 
 Most retail investors hold portfolios built on intuition — overweight in familiar names, with no idea of how correlated their holdings are or what weight distribution actually maximises risk-adjusted return. StockIQ Pro's **Portfolio Optimizer** solves this with institutional-grade Modern Portfolio Theory (MPT) mathematics.
 
-#### How It Works
+#### Why We Use It
+Instead of letting you pick allocations blindly, this module calculates the mathematically optimal weight distribution across your current assets to either maximize returns for your risk level or minimize risk entirely.
+
+#### How It Works (The Mathematics)
 
 The optimizer fetches 1 year of daily price history for every stock in your portfolio, then:
 
@@ -152,6 +184,9 @@ The India risk-free rate of **6.5%** (approximate 10-year G-Sec yield) is used t
 
 Where will a stock price be in 30, 60, or 90 days? Nobody knows — but we can model the **probability distribution** of outcomes using Geometric Brownian Motion, the same stochastic process that underpins the Black-Scholes options pricing model.
 
+#### Why We Use It
+Rather than providing a single, likely-incorrect future price target, Monte Carlo simulations run 1,000 independent mathematical scenarios to show you the *range* of possible prices and the statistical probability of the stock going up or down.
+
 #### The Mathematics
 
 Stock prices under GBM follow the stochastic differential equation:
@@ -199,7 +234,7 @@ The `σ²/2` Itô correction term accounts for the fact that the expected value 
 #### What You See
 
 - 📈 **Fan Chart** — the last 30 days of actual historical prices seamlessly transition into the forward simulation at Day 0
-- 🔵 **95% Confidence Band** (P2.5–P97.5) — lighter blue fill: 95% of all 1,000 paths finished within this range
+- 🔵 **95% Confidence Band** (P2.5–P97.5) — lighter blue fill: 95% of all 1,00,000 paths finished within this range
 - 🟦 **50% Confidence Band** (P25–P75) — darker blue fill: the most likely outcome corridor
 - 💚 **Median Path** (P50) — dashed green line: expected price trajectory
 - 🟣 **5 Sample Paths** — individual random walks shown in purple to illustrate stochastic variety
@@ -214,12 +249,10 @@ The `σ²/2` Itô correction term accounts for the fact that the expected value 
 
 > _"Price is what you pay. Value is what you get." — Warren Buffett_
 
-The most important question in investing isn't "where is the price going?" — it's **"what is this business worth?"** StockIQ Pro now answers this with four interconnected models:
+The most important question in investing isn't "where is the price going?" — it's **"what is this business worth?"** StockIQ Pro answers this with four interconnected models:
 
 #### 1. Interactive DCF Intrinsic Value Calculator
-
 A fully dynamic **Discounted Cash Flow model** that lets you explore valuation scenarios in real time:
-
 - **Starting Cash Flow**: Switch between Free Cash Flow, Net Income, or Operating Cash Flow as your baseline
 - **Growth Rate** slider (0–30%): Adjust the projected 5-year growth assumption
 - **WACC** slider (5–20%): Set your weighted average cost of capital (pre-filled via CAPM: Risk-free rate + Beta × Equity Risk Premium)
@@ -236,50 +269,31 @@ Margin of Safety = (Intrinsic Value − Market Price) / Intrinsic Value
 The **Margin of Safety** badge turns green (undervalued), yellow (fair), or red (overvalued) in real time as you move sliders — giving you immediate visual feedback on your assumptions.
 
 #### 2. DuPont ROE Decomposition
-
 Breaks **Return on Equity (ROE)** into its three fundamental drivers using the DuPont Identity:
-
 ```
 ROE = Net Profit Margin × Asset Turnover × Equity Multiplier
     = (Net Income / Revenue) × (Revenue / Assets) × (Assets / Equity)
 ```
 
-| Component | What it reveals |
-|---|---|
-| **Net Profit Margin** | How much of each rupee of revenue becomes profit (pricing power & cost control) |
-| **Asset Turnover** | How efficiently the company uses its assets to generate revenue |
-| **Equity Multiplier** | How much of the balance sheet is funded by debt (financial leverage) |
+- **Net Profit Margin**: Reveals operating efficiency (how much profit per rupee of sales).
+- **Asset Turnover**: Reveals asset efficiency (how fast assets are utilized to generate sales).
+- **Equity Multiplier**: Reveals financial leverage (how much debt is being used to amplify returns).
 
-This decomposition tells you *why* a company has a high or low ROE — whether it's because they're operationally excellent, asset-light, or simply highly leveraged.
+DuPont tells you if a company is highly profitable because it is run efficiently, or simply because it has loaded up on leverage.
 
 #### 3. Graham Defensive Valuation Number
-
 Based on Benjamin Graham's formula from *The Intelligent Investor*:
-
 ```
 Graham Number = √(22.5 × EPS × Book Value Per Share)
 ```
-
 This represents the **maximum price a defensive investor should pay** for a stock. If the current market price exceeds the Graham Number, the stock is trading at a premium over its fundamental defensive value.
 
 #### 4. 10-Criteria Long-Term Financial Health Score
-
 A transparent, checklist-based scoring system (0–10) that evaluates:
-
-| # | Criterion | Threshold |
-|---|---|---|
-| 1 | Return on Equity (ROE) | ≥ 12% |
-| 2 | Return on Assets (ROA) | ≥ 5% |
-| 3 | Net Profit Margin | ≥ 8% |
-| 4 | Debt to Equity Ratio | ≤ 1.0x |
-| 5 | Current Ratio | ≥ 1.2x |
-| 6 | Free Cash Flow | > 0 |
-| 7 | Price to Earnings (P/E) | < 30x |
-| 8 | Promoter / Insider Holding | ≥ 40% |
-| 9 | Revenue Growth (YoY) | ≥ 8% |
-| 10 | Earnings Growth (YoY) | ≥ 5% |
-
-A score of **8–10** = Strong long-term candidate. **5–7** = Watchlist. **0–4** = Caution.
+- Profitability: ROE ≥ 12%, ROA ≥ 5%, Net Profit Margin ≥ 8%
+- Balance Sheet: Debt to Equity ≤ 1.0x, Current Ratio ≥ 1.2x, positive Free Cash Flow
+- Valuation & Ownership: P/E < 30x, Promoter Holding ≥ 40%
+- Growth: Revenue Growth YoY ≥ 8%, Earnings Growth YoY ≥ 5%
 
 ---
 
@@ -287,35 +301,20 @@ A score of **8–10** = Strong long-term candidate. **5–7** = Watchlist. **0�
 
 > _"Single models fail in finance. Markets are noisy, non-linear, and regime-dependent. The solution is ensemble stacking."_
 
-StockIQ Pro trains **5 diverse base learners** simultaneously on 2 years of daily data, then combines them using a **Ridge meta-learner** that learns the optimal weight for each model's output:
+#### Why We Use It
+Single machine learning models often overfit or make wild predictions due to market noise. We train 5 diverse base learners simultaneously and feed their predictions to a regularized Ridge Meta-Learner, yielding a stable, ensemble prediction.
 
-| Model | What it captures |
-|---|---|
-| **Random Forest** | Non-linear price patterns via bagging |
-| **Gradient Boosting** | Sequential error correction |
-| **XGBoost** | Regularized tree boosting (L1/L2) |
-| **LightGBM** | Leaf-wise growth for deep feature interactions |
-| **Extra Trees** | High-variance reduction via extreme randomization |
-| **Ridge Meta-Learner** | Combines all 5, prevents multicollinearity |
-
-**40+ engineered features** feed into the ensemble:
-- **Momentum**: RSI(14), Williams %R, Stochastic %K/%D
-- **Trend**: MACD, EMA Cross (9/21), MA Ratios (5/10/20/50/100d)
-- **Volatility**: ATR Ratio, Bollinger Band Position & Width, 20d/60d σ
-- **Volume**: Volume Ratio, OBV Ratio
-- **Statistical**: Rolling Skewness & Kurtosis (20d), 52-week high/low proximity
-- **Calendar**: Day-of-week effect, month effect
-- **Lagged returns**: 1d, 2d, 3d, 5d, 10d lags
-
-**News sentiment fusion** — the final prediction is an 80/20 blend of ML signal and live news sentiment, so breaking news nudges the model the same way it moves real markets.
+#### How It Works
+1. **Base Learners**: Random Forest, Gradient Boosting, XGBoost, LightGBM, and Extra Trees are trained on historical daily technical parameters.
+2. **Feature Engineering**: Over 40 indicators are generated (RSI, MACD, Bollinger Bands, ADX, ATR, calendar effects, lagged returns, etc.).
+3. **Ridge Meta-Learner**: Combines the predictions, minimizing multicollinearity.
+4. **Sentiment Fusion**: Incorporates a weighted sentiment score (80% ML, 20% News Sentiment) to adjust predictions based on breaking news.
 
 ---
 
 ### 🔍 SHAP Explainability — _Why_ Did the Model Predict That?
 
-Most AI tools are black boxes. StockIQ Pro is not.
-
-Every prediction comes with a **SHAP (SHapley Additive exPlanations) waterfall chart** showing exactly which features pushed the model toward a BUY signal and which pushed it toward SELL:
+AI should not be a black box when real money is on the line. StockIQ Pro uses **SHAP (SHapley Additive exPlanations)** to break down the exact mathematical contribution of each technical feature:
 
 ```
 ▲ RSI (14)              +0.0312   ████████████████████ → Bullish push
@@ -325,118 +324,44 @@ Every prediction comes with a **SHAP (SHapley Additive exPlanations) waterfall c
 ▼ 20d Volatility        -0.0156   ████████████         → Bearish push
 ```
 
-**Net Bullish → BUY signal.** Now you understand *why*, not just *what*.
-
 ---
 
 ### 🏛️ Market Regime Detection (Hidden Markov Model)
 
-Markets don't behave the same every day. There are distinct **structural regimes**:
-- 📈 **Low Volatility** — stable bull market, trending up
-- ➡️ **Medium Volatility** — sideways/neutral, consolidating
-- 📉 **High Volatility** — panic, selling pressure, high risk
+StockIQ Pro fits a **3-state Gaussian Hidden Markov Model (HMM)** to log-returns to automatically classify the stock's current regime:
+- 📈 **Low Volatility**: Stable bull trend.
+- ➡️ **Medium Volatility**: Sideways consolidation.
+- 📉 **High Volatility**: Panic, selling pressure, higher risk.
 
-StockIQ Pro fits a **3-state Gaussian Hidden Markov Model** directly to a stock's log-return series. The HMM learns transition probabilities between states and classifies which regime the stock is currently in — **without any hardcoded rules**.
-
-**Why this matters for you:** In a High Volatility regime, the prediction thresholds widen automatically (from 1.8% to 3.0% expected return required to trigger a signal). This prevents false buy signals in choppy markets.
+In high volatility regimes, our models automatically widen the confidence margins to filter out noise and protect your capital from false breakout signals.
 
 ---
 
 ### 📊 GARCH(1,1) Volatility Forecasting
 
-Volatility clusters — calm periods are followed by calm periods, and turbulent periods by turbulent ones. **GARCH(1,1)** models this conditional variance:
+Volatility in stock returns is not constant; it clusters over time. StockIQ Pro uses a **GARCH(1,1)** time series model:
 
 $$\sigma_t^2 = \omega + \alpha \epsilon_{t-1}^2 + \beta \sigma_{t-1}^2$$
 
-StockIQ Pro fits GARCH to each stock's return series and forecasts **expected annualized volatility over the next 5 days**. This forward-looking vol estimate is displayed alongside the prediction — so you know not just the direction, but how rough the ride might be.
+This forecasts the expected annualized volatility over the next 5 trading days, indicating how turbulent the near-term price movement is expected to be.
 
 ---
 
 ### 🧪 Signal Backtesting — Did This Strategy Actually Work?
 
-> _"Past performance doesn't guarantee future results — but understanding the past is the only rational basis for future decisions."_
-
-The backtesting engine runs a **RSI(14) + MACD Crossover + ATR Stop-Loss** strategy on historical data and shows:
-
-**Entry signal:** RSI crosses above 35 from oversold + MACD line above signal line  
-**Exit signal:** RSI reaches 65 (overbought) OR MACD turns bearish OR price drops below 2×ATR stop
-
-**What you get:**
-- 📈 **Equity curve** — your ₹1,00,000 vs buy-and-hold vs Nifty 50, plotted over time
-- 📊 **Alpha** — did the strategy beat simply holding the stock?
-- 🏆 **Sharpe Ratio** — risk-adjusted return
-- 📉 **Max Drawdown** — worst-case loss from peak
-- 🎯 **Calmar Ratio** — return per unit of drawdown risk
-- 📋 **Full trade log** — every buy/sell date, entry price, exit price, P&L
+Run a complete **RSI(14) + MACD Crossover + ATR Stop-Loss** backtest on historical data to see:
+- 📈 **Equity Curve**: Visual progression of ₹1,00,000 invested under the strategy vs. Buy & Hold.
+- 📊 **Metrics**: Alpha, Sharpe Ratio, Max Drawdown, Calmar Ratio.
+- 📋 **Trade Log**: Exact entry/exit dates, prices, and P&L results.
 
 ---
 
-### 📰 AI News Intelligence
+### 🩺 Portfolio Recovery Advisor & Smart Capital Allocator
 
-Every news article about a stock is scored in real time:
-
-| Metric | What it measures |
-|---|---|
-| **Sentiment Score** | -1.0 (very bearish) to +1.0 (very bullish) |
-| **Impact Score** | 0–100 based on keyword relevance and recency |
-| **Breaking News Flag** | High-impact articles less than 6 hours old |
-
-Aggregate stats give you: overall market mood, positive vs negative article count, and a composite market impact score. This sentiment score is then **fused directly into the ML prediction** — a strongly negative news day will nudge the model's signal accordingly.
-
----
-
-### 💼 Portfolio Risk Analytics
-
-For every stock, StockIQ Pro computes institutional-grade risk metrics from 1 year of daily return history:
-
-| Metric | What it tells you |
-|---|---|
-| **VaR 95% / 99%** | "On 95% of days, I won't lose more than X%" |
-| **Expected Shortfall** | Average loss when things *do* go bad |
-| **Max Drawdown** | Worst peak-to-trough loss over the trailing year |
-| **Sharpe Ratio** | How much return per unit of risk (6.5% India risk-free) |
-| **Beta vs Nifty 50** | How much does this stock amplify the market's moves? |
-| **Information Ratio** | Skill of the stock vs the benchmark |
-| **Skewness / Kurtosis** | Are returns normally distributed, or are there fat tails? |
-
----
-
-### ⚙️ Black-Scholes Options Pricing
-
-For any NSE stock, StockIQ Pro computes at-the-money (ATM) European options for a 30-day horizon:
-
-- **Call & Put prices** in ₹
-- **Delta** — directional exposure (how much the option moves per ₹1 stock move)
-- **Gamma** — rate of delta change
-- **Vega** — sensitivity to volatility
-- **Theta** — time decay per day
-- **Implied Volatility** — the market's forward-looking volatility estimate
-
----
-
-### 🏆 Peer Comparison & Sector Ranking
-
-**Head-to-head:** Compare any two stocks on 8 metrics — 1M/3M/6M/1Y returns, Sharpe ratio, volatility, RSI, ML signal. Winner is highlighted per metric.
-
-**Sector leaderboard:** Rank all stocks in a sector using a **composite score**:
-- Sharpe Ratio weight: 30%
-- 3M Return rank: 25%
-- Low Volatility rank: 20%
-- RSI health (40–65 ideal): 15%
-- 1Y Return rank: 10%
-
----
-
-### 🩺 Portfolio Recovery Advisor _(New)_
-
-For investors with losing positions, StockIQ Pro provides an intelligent recovery analysis for each holding:
-
-- **RSI Signal** — Is the stock oversold (potential reversal) or overbought?
-- **News Sentiment** — Is the macro/news environment supportive of recovery?
-- **Averaging-Down Calculator** — Exact cost of doubling your position, new average price, and how much the stock needs to recover to break even
-- **Recommendation engine**: `AVERAGE_DOWN` / `HOLD & MONITOR` / `CUT LOSS` / `BOOK PROFIT`
-
-**Smart Capital Allocator** distributes spare capital across your losing positions by composite score (RSI + sentiment + momentum + volatility fit).
+If you hold losing positions, the **Recovery Advisor** helps you make evidence-based decisions:
+- **Recommendation Engine**: Categorizes positions into `AVERAGE_DOWN`, `HOLD & MONITOR`, `CUT LOSS`, or `BOOK PROFIT` based on RSI signals, support proximity, and news sentiment.
+- **Averaging-Down Calculator**: Shows exactly how much capital is required to double down, your new average cost, and the required recovery percentage to break even.
+- **Smart Allocator**: Distributes spare cash across eligible averaging positions using a mathematical allocation strategy.
 
 ---
 
@@ -507,23 +432,23 @@ git clone https://github.com/visheshsanghvi112/Analysis-tool.git
 cd Analysis-tool
 ```
 
-### 2. Backend
+### 2. Backend Setup
 ```bash
 cd backend
 pip install -r requirements.txt
 cp .env.example .env
 python main.py
-# → API at http://localhost:8000
-# → Interactive docs at http://localhost:8000/docs
+# → API will run at http://localhost:8000
+# → Swagger API Docs available at http://localhost:8000/docs
 ```
 
-### 3. Frontend
+### 3. Frontend Setup
 ```bash
-cd frontend
+cd ../frontend
 npm install
 echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
 npm run dev
-# → App at http://localhost:3000
+# → Web App will run at http://localhost:3000
 ```
 
 ---
@@ -535,106 +460,70 @@ npm run dev
 | `GET` | `/health` | Health check |
 | `GET` | `/api/tickers?q=hdfc` | Search 1,900+ NSE stocks |
 | `GET` | `/api/live?ticker=HDFCBANK.NS` | Live price quote |
-| `GET` | `/api/analyze?ticker=HDFCBANK.NS` | Full technical analysis (RSI, MACD, Bollinger, ADX, ATR) |
-| `GET` | `/api/ml-predict?ticker=HDFCBANK.NS` | 5-day ensemble prediction + SHAP waterfall |
-| `GET` | `/api/backtest?ticker=HDFCBANK.NS&period=2y` | RSI+MACD strategy equity curve + trade log |
-| `GET` | `/api/portfolio-metrics?ticker=HDFCBANK.NS` | VaR, Sharpe, Beta, Black-Scholes Greeks |
-| `GET` | `/api/advanced-news?ticker=HDFCBANK.NS` | News + AI sentiment + breaking news flag |
-| `GET` | `/api/compare?tickers=TCS.NS,INFY.NS` | Head-to-head peer comparison |
-| `GET` | `/api/sector-rank?ticker=HDFCBANK.NS` | Composite sector leaderboard |
-| `GET` | `/api/valuation?ticker=HDFCBANK.NS` | **DCF · DuPont · Graham Number · Health Score** |
-| `GET` | `/api/monte-carlo?ticker=HDFCBANK.NS&horizon_days=60` | **GBM Monte Carlo: 1,000 paths, percentile bands, probabilities** |
-| `GET` | `/api/market-screener` | Live market-wide screener (all NSE stocks) |
-| `POST` | `/api/portfolio-analyze` | Full portfolio P&L, weights, correlation matrix, equity curve |
-| `POST` | `/api/portfolio-optimize` | **Markowitz MPT: Max Sharpe + Min Volatility + frontier scatter** |
-| `POST` | `/api/portfolio-insight` | Recovery Advisor: RSI + sentiment + avg-down calculator |
-| `POST` | `/api/capital-allocate` | Smart capital allocation: softmax-weighted deployment plan |
+| `GET` | `/api/analyze?ticker=HDFCBANK.NS` | Technical indicators (RSI, MACD, Bollinger, ADX, ATR) |
+| `GET` | `/api/ml-predict?ticker=HDFCBANK.NS` | 5-day ensemble prediction + SHAP explainers |
+| `GET` | `/api/backtest?ticker=HDFCBANK.NS&period=2y` | RSI+MACD backtest statistics and trade logs |
+| `GET` | `/api/portfolio-metrics?ticker=HDFCBANK.NS` | VaR, Expected Shortfall, Black-Scholes Greeks |
+| `GET` | `/api/advanced-news?ticker=HDFCBANK.NS` | Sentiment scoring and impact weights |
+| `GET` | `/api/compare?tickers=TCS.NS,INFY.NS` | Side-by-side peer comparatives |
+| `GET` | `/api/sector-rank?ticker=HDFCBANK.NS` | Sector leaderboard ranking |
+| `GET` | `/api/valuation?ticker=HDFCBANK.NS` | DCF valuation, DuPont details, Graham Number |
+| `GET` | `/api/monte-carlo?ticker=HDFCBANK.NS` | 1,000-path Geometric Brownian Motion details |
+| `POST` | `/api/portfolio-analyze` | Analysis of current user allocations and correlation matrix |
+| `POST` | `/api/portfolio-optimize` | SLSQP portfolio weight adjustments for Max Sharpe/Min Vol |
+| `POST` | `/api/portfolio-insight` | Recovery Advisor recommendations for user holdings |
+| `POST` | `/api/capital-allocate` | Smart softmax allocation plan |
 
 ---
 
-## Tech Stack
+## Tech Stack & Core Libraries
 
-| Layer | Technology |
-|---|---|
-| **Frontend** | Next.js 16, React 19, Tailwind CSS 3, Recharts, Lucide Icons |
-| **Backend** | FastAPI, Python 3.9+, uvicorn (ASGI) |
-| **ML / Quantitative** | scikit-learn, XGBoost, LightGBM, SHAP, hmmlearn, arch (GARCH) |
-| **NLP / Sentiment** | TextBlob, feedparser, multi-source RSS aggregation |
-| **Data Sources** | Yahoo Finance REST API (v8 chart + v10 quoteSummary with crumb auth), NSE India EQUITY_L.csv |
-| **Deployment** | Vercel (serverless, edge CDN, global) |
-| **Security** | slowapi rate limiting, input regex validation, CORS whitelist |
+| Layer | Technology | Key Libraries / Modules |
+|---|---|---|
+| **Frontend** | Next.js 16, React 19, Tailwind CSS 3 | Recharts (Responsive charts), Lucide Icons, Fetch API |
+| **Backend Framework**| FastAPI, Uvicorn, Pydantic | slowapi (rate-limiting), Pydantic v2 validation |
+| **Quantitative Engines**| Python 3.9+ | `scipy.optimize` (SLSQP optimization), `numpy` (stochastic walks) |
+| **Machine Learning** | scikit-learn, XGBoost, LightGBM | `shap` (explainers), stacked meta-regression pipelines |
+| **Statistical Models**| hmmlearn, arch | `GaussianHMM` (market regime), `arch_model` (GARCH volatility) |
+| **Data Scraping** | feedparser, TextBlob | Custom cookie- crumb Yahoo Finance client |
 
 ---
 
 ## Security
 
-| Protection | Implementation |
-|---|---|
-| Rate Limiting | `slowapi` — 30 req/min per IP on data endpoints |
-| Input Validation | Regex ticker validation `[A-Z0-9&.-]{1,15}` |
-| CORS | Origin whitelist via environment variable |
-| AbortController | Client-side stale request cancellation |
-| Error Handling | No stack traces or sensitive data in API responses |
-| Yahoo Finance Auth | Dynamic crumb + cookie seeding for v10 quoteSummary endpoint |
+- **Rate Limiting**: Integrated `slowapi` to protect against DDoS (30 req/min limit on core endpoints).
+- **CORS Whitelist**: Whitelisted origins check to prevent cross-origin scripting issues.
+- **Input Validation**: Tickers strictly matched to uppercase alphanumeric regex rules.
+- **Data Safety**: No database persistence is used; all operations are calculated dynamically over stateless API payloads.
 
 ---
 
 ## Roadmap
 
-- [x] ~~**DCF Valuation model** — intrinsic value vs market price~~ ✅ _Shipped_
-- [x] ~~**DuPont Analysis** — ROE decomposition into 3 drivers~~ ✅ _Shipped_
-- [x] ~~**Financial Health Score** — 10-criteria long-term checklist~~ ✅ _Shipped_
-- [x] ~~**Portfolio Recovery Advisor** — RSI + sentiment + avg-down calculator~~ ✅ _Shipped_
-- [x] ~~**Smart Capital Allocator** — distribute spare capital by recovery score~~ ✅ _Shipped_
-- [x] ~~**Modern Portfolio Theory (MPT) Optimizer** — Markowitz portfolio allocation optimization~~ ✅ _Shipped_
-- [x] ~~**GBM Monte Carlo Simulations** — 1,000 simulated stochastic future price paths~~ ✅ _Shipped_
-- [ ] **WebSocket real-time streaming** — true live prices without polling
-- [ ] **Sector heatmap** — Finviz-style treemap for all NSE stocks
-- [ ] **Altman Z-Score** — financial health / bankruptcy risk gauge
-- [ ] **Earnings surprise predictor** — beat/miss classifier
-- [ ] **User accounts + watchlist** — auth via Clerk or Supabase
-- [ ] **Mobile app** — React Native
-
----
-
-## Deployment
-
-Both services deploy independently to Vercel.
-
-```bash
-# Backend
-cd backend && vercel --prod
-
-# Frontend (set NEXT_PUBLIC_API_URL in Vercel dashboard first)
-cd frontend && vercel --prod
-```
-
-**Backend `.env` variables:**
-```env
-ENVIRONMENT=production
-ALLOWED_ORIGINS=https://your-frontend.vercel.app
-RATE_LIMIT_PER_MINUTE=30
-```
+- [x] **DCF Valuation Model**: Real-time margin of safety calculator.
+- [x] **DuPont ROE decomposition**: 3-stage profitability profiling.
+- [x] **Modern Portfolio Theory (MPT) Optimizer**: Markowitz frontier calculator.
+- [x] **Monte Carlo Price Simulations**: 1,00,000-path stochastic modeling.
+- [x] **Portfolio Recovery Advisor**: Averaging-down guidelines.
+- [ ] **WebSocket Data Streaming**: Live bid-ask feeds.
+- [ ] **Sector Heatmap**: Treemap representation of industry sectors.
+- [ ] **Altman Z-Score**: Financial distress/bankruptcy hazard rating.
 
 ---
 
 ## Contributing
 
-1. Fork the repo
-2. Create a feature branch: `git checkout -b feature/sector-heatmap`
-3. Commit: `git commit -m 'feat: add sector heatmap component'`
-4. Push and open a Pull Request
-
-**Code standards:**
-- JavaScript: ESLint (`eslint-config-next`)
-- Python: `black` formatter, `ruff` linter
-- Commits: [Conventional Commits](https://www.conventionalcommits.org/)
+1. Fork the repository.
+2. Create a new branch: `git checkout -b feature/your-feature-name`.
+3. Commit your updates: `git commit -m 'feat: add awesome feature'`.
+4. Push to origin: `git push origin feature/your-feature-name`.
+5. Open a Pull Request.
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
 
 ---
 
@@ -646,8 +535,6 @@ Built by **[Vishesh Sanghvi](https://github.com/visheshsanghvi112)**
 [![Email](https://img.shields.io/badge/Email-visheshsanghvi112@gmail.com-D14836?style=flat-square&logo=gmail&logoColor=white)](mailto:visheshsanghvi112@gmail.com)
 [![Portfolio](https://img.shields.io/badge/Portfolio-visheshsanghvi.qzz.io-6366f1?style=flat-square&logo=vercel&logoColor=white)](https://visheshsanghvi.qzz.io)
 
-⭐ **If StockIQ Pro helps your investment decisions, please star the repo** — it helps others discover it.
-
-_"The goal of this project is simple: every individual investor deserves the same analytical tools as a hedge fund. Free, transparent, and built for Indian markets."_
+⭐ **If StockIQ Pro helps you make evidence-based decisions, please star this repository!**
 
 </div>
