@@ -1943,18 +1943,26 @@ def optimize_portfolio(req: PortfolioRequest):
 @app.get("/api/monte-carlo")
 def get_monte_carlo(
     ticker: str = Query(..., description="Stock ticker symbol, e.g. HDFCBANK.NS"),
-    horizon_days: int = Query(30, description="Horizon: 30, 60, or 90 days"),
+    horizon_days: int = Query(30, description="Horizon in trading days: 30, 60, 90, 252, 756, 1260"),
     simulations: int = Query(1000, description="Number of simulation paths"),
 ):
     """
-    Simulates future price paths for a stock using Geometric Brownian Motion (GBM).
-    Returns historical price series transition, percentiles (2.5, 25, 50, 75, 97.5),
-    5 sample paths, and probability statistics for target returns.
+    Simulates future price paths using Geometric Brownian Motion (GBM).
+    Supports short horizons (30/60/90 days) and long horizons (1Y/3Y/5Y).
+    Returns percentile fan chart, sample paths, and outcome probability stats.
     """
     try:
         from datetime import timedelta
         ticker_clean = ticker.strip().upper()
-        df = get_history(ticker_clean, period="1y")
+
+        # Allowed horizons: short (days) and long (trading days)
+        ALLOWED = [30, 60, 90, 252, 756, 1260]
+        N = min(ALLOWED, key=lambda x: abs(x - int(horizon_days)))
+        M = max(100, min(int(simulations), 5000))
+
+        # Use 5-year history for long horizons to better calibrate mu/sigma
+        history_period = "5y" if N >= 252 else "1y"
+        df = get_history(ticker_clean, period=history_period)
         if df is None or df.empty or len(df) < 30:
             raise HTTPException(status_code=400, detail="Insufficient historical price data")
 
@@ -1978,13 +1986,8 @@ def get_monte_carlo(
         if sigma <= 0:
             sigma = 0.01
 
-        N = int(horizon_days)
-        M = int(simulations)
-
-        if N not in [30, 60, 90]:
-            N = 30
-        if M <= 0 or M > 5000:
-            M = 1000
+        N = int(N)
+        M = int(M)
 
         dt = 1.0 / 252.0
 
@@ -2002,12 +2005,21 @@ def get_monte_carlo(
             percentiles[pct] = np.percentile(paths, pct, axis=0)
 
         # Generate future weekday dates (trading days)
+        # For long horizons, output monthly data points to keep response size small
         future_dates = []
         curr_date = last_date
         while len(future_dates) < N:
             curr_date += timedelta(days=1)
             if curr_date.weekday() < 5:  # Mon-Fri
                 future_dates.append(curr_date)
+
+        # Thin out data points for long horizons to keep payload manageable
+        if N >= 756:
+            step = 21  # monthly
+        elif N >= 252:
+            step = 5   # weekly
+        else:
+            step = 1   # daily
 
         # Historical series (last 30 days)
         hist_data = []
@@ -2020,7 +2032,7 @@ def get_monte_carlo(
                 "is_simulated": False
             })
 
-        # Simulated series (Day 0 to Day N)
+        # Simulated series — thinned for long horizons to keep payload small
         sim_data = []
         sim_data.append({
             "date": str(last_date.date()) if hasattr(last_date, "date") else str(last_date)[:10],
@@ -2033,6 +2045,8 @@ def get_monte_carlo(
         })
 
         for t in range(1, N + 1):
+            if (t % step) != 0 and t != N:  # always include last point
+                continue
             f_date = future_dates[t - 1]
             sim_data.append({
                 "date": str(f_date.date()) if hasattr(f_date, "date") else str(f_date)[:10],

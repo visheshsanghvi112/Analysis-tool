@@ -186,20 +186,34 @@ export default function MonteCarloSimulation({ ticker }) {
       </div>
 
       {/* Horizon selector */}
-      <div className="flex gap-1 p-0.5 bg-white/[0.02] rounded-lg border border-white/[0.05] mb-5">
-        {[30, 60, 90].map((h) => (
+      <div className="flex flex-wrap gap-1 p-0.5 bg-white/[0.02] rounded-lg border border-white/[0.05] mb-5">
+        {[
+          { label: '30D', days: 30 },
+          { label: '60D', days: 60 },
+          { label: '90D', days: 90 },
+          { label: '1Y',  days: 252 },
+          { label: '3Y',  days: 756 },
+          { label: '5Y',  days: 1260 },
+        ].map(({ label, days }) => (
           <button
-            key={h}
-            onClick={() => { setHorizon(h); }}
+            key={days}
+            onClick={() => setHorizon(days)}
             disabled={loading}
             className={`flex-1 py-1.5 text-[11px] font-semibold rounded-md transition cursor-pointer ${
-              horizon === h ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-900'
+              horizon === days
+                ? days >= 252 ? 'bg-emerald-600 text-white' : 'bg-indigo-600 text-white'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
             } disabled:opacity-50`}
           >
-            {h} Days
+            {label}
           </button>
         ))}
       </div>
+      {horizon >= 252 && (
+        <p className="text-[10px] text-emerald-400/70 mb-3 flex items-center gap-1">
+          ⚡ Long-horizon view: using 5Y calibration data · chart thinned for readability
+        </p>
+      )}
 
       {/* States */}
       {loading && (
