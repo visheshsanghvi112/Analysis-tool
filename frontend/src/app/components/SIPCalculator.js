@@ -275,13 +275,13 @@ export default function SIPCalculator({ ticker }) {
           <div key={label} className="p-3 rounded-xl border bg-white/[0.02] border-white/[0.06] text-center space-y-1">
             <p className="text-base">{icon}</p>
             <p className={`text-sm font-black ${color}`}>{val}</p>
-            <p className="text-[9px] text-slate-500">{label}</p>
+            <p className="text-[9px] text-slate-400">{label}</p>
           </div>
         ))}
       </div>
 
       {/* The Rule of 72 insight */}
-      <div className="flex items-start gap-2 p-3 bg-indigo-500/5 border border-indigo-500/15 rounded-xl text-[11px] text-slate-400 leading-relaxed">
+      <div className="flex items-start gap-2 p-3 bg-indigo-500/5 border border-indigo-500/15 rounded-xl text-[11px] text-slate-300 leading-relaxed">
         <Info className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
         <div>
           <span className="font-bold text-slate-200">Rule of 72: </span>
@@ -298,7 +298,7 @@ export default function SIPCalculator({ ticker }) {
 
       {/* Corpus Growth Chart */}
       <div>
-        <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mb-2">
+        <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-2">
           Corpus Growth — Invested vs. Projected Value
         </p>
         <div className="bg-white/[0.01] rounded-xl p-3 border border-white/[0.04]">
@@ -316,8 +316,8 @@ export default function SIPCalculator({ ticker }) {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff07" />
-                <XAxis dataKey="year" tick={{ fill: '#555', fontSize: 9 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#555', fontSize: 9 }} axisLine={false} tickLine={false}
+                <XAxis dataKey="year" tick={{ fill: '#888', fontSize: 9 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#888', fontSize: 9 }} axisLine={false} tickLine={false}
                   tickFormatter={v => fmtCr(v).replace('₹', '')} width={45} tickCount={4} />
                 <Tooltip content={<SIPTooltip />} />
                 <Area type="monotone" dataKey="invested" name="invested" stroke="#6366f1" strokeWidth={1.5}
@@ -328,10 +328,10 @@ export default function SIPCalculator({ ticker }) {
             )}
           </ChartContainer>
         </div>
-        <div className="flex gap-4 mt-1 text-[10px] text-slate-500">
+        <div className="flex gap-4 mt-1 text-[10px] text-slate-400">
           <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-indigo-500 rounded inline-block" /> Invested</span>
           <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 rounded inline-block" /> Projected Value</span>
-          <span className="flex-1 text-right text-slate-600">*Assumes constant {annualReturn}% p.a. compounding · not financial advice</span>
+          <span className="flex-1 text-right text-slate-400">*Assumes constant {annualReturn}% p.a. compounding · not financial advice</span>
         </div>
       </div>
 

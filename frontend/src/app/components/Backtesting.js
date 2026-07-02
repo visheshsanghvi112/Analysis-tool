@@ -42,9 +42,9 @@ function ChartTooltip({ active, payload, label }) {
 function StatCard({ label, value, sub, accent }) {
   return (
     <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] p-3 flex flex-col gap-0.5">
-      <p className="text-[9px] uppercase tracking-wider font-bold text-slate-500">{label}</p>
+      <p className="text-[9px] uppercase tracking-wider font-bold text-slate-400">{label}</p>
       <p className={`text-sm font-bold ${accent || 'text-white'}`}>{value}</p>
-      {sub && <p className="text-[9px] text-slate-600">{sub}</p>}
+      {sub && <p className="text-[9px] text-slate-400">{sub}</p>}
     </div>
   );
 }
@@ -198,7 +198,7 @@ export default function Backtesting({ ticker }) {
         <div className="text-center py-10">
           <FlaskConical className="h-8 w-8 mx-auto mb-3 text-amber-500/40" />
           <p className="text-sm text-slate-400 mb-1 font-medium">Backtest not run yet</p>
-          <p className="text-[11px] text-slate-600 mb-4">Simulate an RSI+MACD strategy on {ticker?.replace('.NS','')}</p>
+          <p className="text-[11px] text-slate-400 mb-4">Simulate an RSI+MACD strategy on {ticker?.replace('.NS','')}</p>
           <button
             onClick={() => fetchBacktest(period)}
             className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-lg transition cursor-pointer"
@@ -223,7 +223,7 @@ export default function Backtesting({ ticker }) {
               <p className={`text-2xl font-black ${s.alpha >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {pctSign(s.alpha)}{fmt(s.alpha)}%
               </p>
-              <p className="text-[10px] text-slate-500 mt-0.5">
+              <p className="text-[10px] text-slate-400 mt-0.5">
                 Strategy: {pctSign(s.total_return_pct)}{fmt(s.total_return_pct)}% vs B&amp;H: {pctSign(s.bh_return_pct)}{fmt(s.bh_return_pct)}%
               </p>
             </div>
@@ -232,7 +232,7 @@ export default function Backtesting({ ticker }) {
               <p className="text-base font-bold text-white">
                 ₹{Number(s.final_value).toLocaleString('en-IN')}
               </p>
-              <p className="text-[10px] text-slate-500">
+              <p className="text-[10px] text-slate-400">
                 from ₹{Number(s.initial_capital).toLocaleString('en-IN')}
               </p>
             </div>
@@ -249,14 +249,14 @@ export default function Backtesting({ ticker }) {
                   <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" />
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 9, fill: '#555' }}
+                    tick={{ fontSize: 9, fill: '#888' }}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(v) => v.slice(2, 7)}
                     interval="preserveStartEnd"
                   />
                   <YAxis
-                    tick={{ fontSize: 9, fill: '#555' }}
+                    tick={{ fontSize: 9, fill: '#888' }}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}

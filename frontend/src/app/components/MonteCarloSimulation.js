@@ -47,9 +47,9 @@ const fmt = (n, decimals = 2) =>
 function StatCard({ label, value, sub, accent }) {
   return (
     <div className="rounded-lg bg-white/[0.02] border border-white/[0.05] p-3 flex flex-col gap-0.5">
-      <p className="text-[9px] uppercase tracking-wider font-bold text-slate-500">{label}</p>
+      <p className="text-[9px] uppercase tracking-wider font-bold text-slate-400">{label}</p>
       <p className={`text-sm font-bold ${accent || 'text-white'}`}>{value}</p>
-      {sub && <p className="text-[9px] text-slate-600 leading-tight">{sub}</p>}
+      {sub && <p className="text-[9px] text-slate-400 leading-tight">{sub}</p>}
     </div>
   );
 }
@@ -60,7 +60,7 @@ function ProbabilityRow({ label, value, isLoss }) {
   return (
     <div className="flex flex-col gap-1 py-1.5 px-2 rounded bg-white/[0.01] border border-white/[0.03]">
       <div className="flex justify-between items-center text-[11px]">
-        <span className="text-slate-400 font-medium">{label}</span>
+        <span className="text-slate-300 font-medium">{label}</span>
         <span className={`font-mono font-bold ${textColor}`}>{value}%</span>
       </div>
       <div className="w-full bg-white/[0.04] h-1 rounded-full overflow-hidden">
@@ -271,7 +271,7 @@ export default function MonteCarloSimulation({ ticker }) {
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   Simulation Fan Chart ({horizon}-Day Forecast Horizon)
                 </p>
-                <div className="flex gap-3 text-[9px] text-slate-500 font-medium">
+                <div className="flex gap-3 text-[9px] text-slate-400 font-medium">
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-400" /> Median</span>
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-[#3b82f6]/40" /> 50% Conf</span>
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-[#3b82f6]/10" /> 95% Conf</span>
@@ -285,14 +285,14 @@ export default function MonteCarloSimulation({ ticker }) {
                     <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.03)" />
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 9, fill: '#555' }}
+                      tick={{ fontSize: 9, fill: '#888' }}
                       tickLine={false}
                       axisLine={false}
                       tickFormatter={(v) => v.slice(5)}
                     />
                     <YAxis
                       domain={['auto', 'auto']}
-                      tick={{ fontSize: 9, fill: '#555' }}
+                      tick={{ fontSize: 9, fill: '#888' }}
                       tickLine={false}
                       axisLine={false}
                       tickFormatter={(v) => `₹${v}`}

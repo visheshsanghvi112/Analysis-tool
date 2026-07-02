@@ -212,7 +212,7 @@ export default function LongTermAnalysis({ ticker }) {
                   <div className="text-lg sm:text-xl font-extrabold text-indigo-400">
                     ₹{dcfResults.intrinsicValue.toFixed(1)}
                   </div>
-                  <p className="text-[9px] text-slate-600">Fair value per share</p>
+                  <p className="text-[9px] text-slate-400">Fair value per share</p>
                 </div>
                 
                 {/* Current Price */}
@@ -221,7 +221,7 @@ export default function LongTermAnalysis({ ticker }) {
                   <div className="text-lg sm:text-xl font-extrabold text-slate-200">
                     ₹{currentPrice.toFixed(1)}
                   </div>
-                  <p className="text-[9px] text-slate-600">Market quote</p>
+                  <p className="text-[9px] text-slate-400">Market quote</p>
                 </div>
                 
                 {/* Margin of Safety */}
@@ -230,7 +230,7 @@ export default function LongTermAnalysis({ ticker }) {
                   <div className={`text-lg sm:text-xl font-extrabold ${marginOfSafety >= 15 ? 'text-emerald-400' : marginOfSafety >= 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
                     {marginOfSafety >= 0 ? '+' : ''}{marginOfSafety.toFixed(1)}%
                   </div>
-                  <p className="text-[9px] text-slate-600">
+                  <p className="text-[9px] text-slate-400">
                     {marginOfSafety >= 15 ? 'Undervalued (Safe)' : marginOfSafety >= 0 ? 'Fair Value' : 'Overvalued'}
                   </p>
                 </div>
@@ -335,8 +335,8 @@ export default function LongTermAnalysis({ ticker }) {
           </div>
 
           {/* Quick math breakdown disclosure */}
-          <div className="mt-4 p-3 bg-white/[0.01] border border-white/[0.03] rounded-lg text-[10px] text-slate-500 leading-relaxed break-words">
-            <span className="font-bold text-slate-400 block mb-1">DCF Valuation Method:</span>
+          <div className="mt-4 p-3 bg-white/[0.01] border border-white/[0.03] rounded-lg text-[10px] text-slate-300 leading-relaxed break-words">
+            <span className="font-bold text-slate-200 block mb-1">DCF Valuation Method:</span>
             <ul className="list-disc pl-4 space-y-1">
               <li><strong>Enterprise Value:</strong> PV of cash flows (Yr 1-5) + PV of terminal value.</li>
               <li><strong>Equity Value:</strong> Enterprise Value + Cash ({formatVal(data.total_cash)}) - Debt ({formatVal(data.total_debt)}).</li>
@@ -370,7 +370,7 @@ export default function LongTermAnalysis({ ticker }) {
                   )}
                   <div className="min-w-0">
                     <p className="text-[11px] font-bold text-slate-300 truncate">{item.metric}</p>
-                    <p className="text-[9px] text-slate-500">Condition: {item.condition}</p>
+                    <p className="text-[9px] text-slate-400">Condition: {item.condition}</p>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
@@ -391,12 +391,12 @@ export default function LongTermAnalysis({ ticker }) {
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-amber-400">Graham Valuation Number</h4>
-                  <p className="text-[9px] text-slate-500">Max purchase threshold (√(22.5 × EPS × Book Value))</p>
+                  <p className="text-[9px] text-slate-400">Max purchase threshold (√(22.5 × EPS × Book Value))</p>
                 </div>
               </div>
               <div className="text-right">
                 <div className="text-sm font-bold text-amber-400">₹{data.graham_number}</div>
-                <p className="text-[9px] text-slate-500">
+                <p className="text-[9px] text-slate-400">
                   {currentPrice <= data.graham_number 
                     ? '✓ Price <= Graham (Discount)' 
                     : `Premium over Graham (+${((currentPrice - data.graham_number) / data.graham_number * 100).toFixed(0)}%)`}
@@ -418,7 +418,7 @@ export default function LongTermAnalysis({ ticker }) {
             <span className="text-[10px] bg-purple-500/10 text-purple-300 px-2 py-0.5 rounded-full border border-purple-500/20 font-bold">DuPont Model</span>
           </div>
 
-          <p className="text-xs text-slate-400 leading-relaxed">
+          <p className="text-xs text-slate-300 leading-relaxed">
             The DuPont equation decomposes <strong>Return on Equity (ROE)</strong> to show how a business drives shareholder returns.
             It reveals whether profitability is driven by high margins (efficiency), high asset utilization (operational speed), or leverage (financial risk).
           </p>
@@ -431,7 +431,7 @@ export default function LongTermAnalysis({ ticker }) {
               <div className="text-xl font-extrabold text-purple-300">
                 {data.dupont.net_profit_margin ? `${data.dupont.net_profit_margin}%` : 'N/A'}
               </div>
-              <p className="text-[9px] text-slate-500">Operating efficiency (Net Income / Revenue)</p>
+              <p className="text-[9px] text-slate-400">Operating efficiency (Net Income / Revenue)</p>
             </div>
 
             {/* Multiply Sign */}
@@ -444,7 +444,7 @@ export default function LongTermAnalysis({ ticker }) {
               <div className="text-xl font-extrabold text-indigo-300">
                 {data.dupont.asset_turnover ? `${data.dupont.asset_turnover}x` : 'N/A'}
               </div>
-              <p className="text-[9px] text-slate-500">Asset efficiency (Revenue / Total Assets)</p>
+              <p className="text-[9px] text-slate-400">Asset efficiency (Revenue / Total Assets)</p>
             </div>
 
             {/* Multiply Sign */}
@@ -456,7 +456,7 @@ export default function LongTermAnalysis({ ticker }) {
               <div className="text-xl font-extrabold text-sky-300">
                 {data.dupont.equity_multiplier ? `${data.dupont.equity_multiplier}x` : 'N/A'}
               </div>
-              <p className="text-[9px] text-slate-500">Financial leverage (Total Assets / Equity)</p>
+              <p className="text-[9px] text-slate-400">Financial leverage (Total Assets / Equity)</p>
             </div>
 
             {/* Equals Sign + ROE */}
@@ -468,14 +468,14 @@ export default function LongTermAnalysis({ ticker }) {
               <div className="text-xl font-extrabold text-indigo-400">
                 {data.dupont.calculated_roe ? `${data.dupont.calculated_roe}%` : 'N/A'}
               </div>
-              <p className="text-[9px] text-slate-500">Return on Shareholders&apos; Equity</p>
+              <p className="text-[9px] text-slate-400">Return on Shareholders&apos; Equity</p>
             </div>
 
           </div>
 
 
           {/* Analyst Insight */}
-          <div className="p-3.5 bg-white/[0.02] border border-white/[0.05] rounded-xl text-[11px] text-slate-400 leading-relaxed">
+          <div className="p-3.5 bg-white/[0.02] border border-white/[0.05] rounded-xl text-[11px] text-slate-300 leading-relaxed">
             <span className="font-bold text-slate-300">Analyst Insight: </span>
             {data.dupont.net_profit_margin > 15
               ? `Strong net margins (${data.dupont.net_profit_margin}%) indicate the company has significant pricing power and cost discipline — the primary driver of ROE.`

@@ -367,7 +367,7 @@ function OwnershipPanel({ ownership }) {
                 <div key={label} className="p-3 rounded-xl border bg-white/[0.02] border-white/[0.06] text-center space-y-1">
                   <p className="text-[8px] text-slate-500 uppercase tracking-widest font-bold">{label}</p>
                   <p className="text-2xl font-black" style={{ color }}>{pct}%</p>
-                  <p className="text-[9px] text-slate-600">{desc}</p>
+                  <p className="text-[9px] text-slate-400">{desc}</p>
                   {isHighPromoter && (
                     <span className="inline-block text-[8px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-emerald-400">
                       ✓ Strong Promoter Confidence
@@ -384,7 +384,7 @@ function OwnershipPanel({ ownership }) {
           </div>
 
           {/* Interpretation note */}
-          <div className="p-3 bg-indigo-500/5 border border-indigo-500/15 rounded-xl text-[11px] text-slate-400 leading-relaxed">
+          <div className="p-3 bg-indigo-500/5 border border-indigo-500/15 rounded-xl text-[11px] text-slate-300 leading-relaxed">
             <span className="font-bold text-slate-300">How to read: </span>
             High promoter holding (&gt;50%) signals management confidence.
             {institutions_pct > 30 ? ` Strong institutional interest (${institutions_pct}%) — FIIs and DIIs have conviction in the business.` : ''}
@@ -400,11 +400,11 @@ function OwnershipPanel({ ownership }) {
                   <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.02] border border-white/[0.04] text-xs">
                     <div>
                       <p className="text-slate-300 font-semibold">{h.name}</p>
-                      <p className="text-slate-600 text-[10px]">{h.relation}</p>
+                      <p className="text-slate-400 text-[10px]">{h.relation}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-slate-400">{h.transaction || '—'}</p>
-                      {h.shares && <p className="text-slate-500 text-[10px]">{Number(h.shares).toLocaleString('en-IN')} shares</p>}
+                      {h.shares && <p className="text-slate-400 text-[10px]">{Number(h.shares).toLocaleString('en-IN')} shares</p>}
                     </div>
                   </div>
                 ))}
