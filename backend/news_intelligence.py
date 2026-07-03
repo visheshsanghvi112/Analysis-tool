@@ -330,9 +330,13 @@ class NewsIntelligence:
         else:
             return 'Neutral'
 
+
 # Global news intelligence instance
 news_intelligence = NewsIntelligence()
 
+from utils.cache import cache_ttl
+
+@cache_ttl(seconds=600)
 def get_advanced_news_analysis(ticker, company_name=None):
     """Get comprehensive news analysis for a stock"""
     try:

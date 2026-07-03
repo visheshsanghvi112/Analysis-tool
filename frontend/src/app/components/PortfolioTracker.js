@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
@@ -600,7 +600,7 @@ export default function PortfolioTracker() {
 
   const addRow = () => setRows(r => [...r, emptyRow()]);
 
-  const validRows = rows.filter(r => r.ticker && +r.qty > 0 && +r.buy_price > 0);
+  const validRows = useMemo(() => rows.filter(r => r.ticker && +r.qty > 0 && +r.buy_price > 0), [rows]);
 
   const loadDemo = () => {
     const demoHoldings = [
@@ -630,9 +630,10 @@ export default function PortfolioTracker() {
   };
 
   const analyze = useCallback(async (customRows = null) => {
-    const rowsToUse = customRows || validRows;
+    const rowsToUse = (customRows && Array.isArray(customRows)) ? customRows : validRows;
     if (!rowsToUse.length) return;
     setLoading(true); setError(null); setResult(null);
+    console.log("Fetching from:", `${API_BASE_URL}/api/portfolio-analyze`);
     try {
       const res = await fetch(`${API_BASE_URL}/api/portfolio-analyze`, {
         method: 'POST',
@@ -645,10 +646,16 @@ export default function PortfolioTracker() {
           })),
         }),
       });
+      console.log("Response status:", res.status);
       const json = await res.json();
-      if (!res.ok) throw new Error(json.detail || 'Analysis failed');
+      console.log("Response JSON:", json);
+      if (!res.ok) {
+        const errorMsg = typeof json.detail === 'string' ? json.detail : JSON.stringify(json.detail) || 'Analysis failed';
+        throw new Error(errorMsg);
+      }
       setResult(json);
     } catch (e) {
+      console.error("ANALYZE ERROR:", e);
       setError(e.message);
     } finally {
       setLoading(false);

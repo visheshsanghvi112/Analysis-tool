@@ -347,6 +347,6 @@ All free! Check it out: [your-url]"
 
 Made with ❤️ by Vishesh Sanghvi
 
-[Deploy to Vercel](https://vercel.com/new) | [View Docs](README.md) | [Get Help](DEPLOYMENT.md)
+[Deploy to Vercel](https://vercel.com/new) | [View Docs](../../README.md) | [Get Help](deployment.md)
 
 </div>

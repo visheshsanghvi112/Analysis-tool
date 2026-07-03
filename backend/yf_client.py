@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timezone, timedelta
 import time
+from utils.cache import cache_ttl
 
 _SESSION = requests.Session()
 _SESSION.headers.update({
@@ -42,6 +43,7 @@ def _get(url, params=None, retries=2):
     return None
 
 
+@cache_ttl(seconds=300)
 def get_history(ticker: str, period: str = None, interval: str = "1d", start_date: str = None, end_date: str = None) -> pd.DataFrame:
     """
     Returns OHLCV DataFrame for the given ticker.
@@ -104,6 +106,7 @@ def get_history(ticker: str, period: str = None, interval: str = "1d", start_dat
         return pd.DataFrame()
 
 
+@cache_ttl(seconds=60)
 def get_quote(ticker: str) -> dict:
     """
     Returns a live price snapshot dict using the chart meta endpoint.
@@ -189,6 +192,7 @@ def _ensure_crumb():
     return None
 
 
+@cache_ttl(seconds=3600)
 def get_info(ticker: str) -> dict:
     """
     Returns fundamental info via quoteSummary (price + defaultKeyStatistics
@@ -237,6 +241,7 @@ def get_info(ticker: str) -> dict:
         return {}
 
 
+@cache_ttl(seconds=3600)
 def get_fundamentals_data(ticker: str) -> dict:
     """
     Fetches rich fundamental data for long-term investor analysis:
