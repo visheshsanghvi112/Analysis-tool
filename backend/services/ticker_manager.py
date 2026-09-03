@@ -36,6 +36,15 @@ if TICKER_LIST:
     _ticker_list_loaded = True
     print(f"Instantly loaded {len(TICKER_LIST)} instruments (Equities, ETFs, Indices, Global) from master database.")
 
+# Master SECTOR_MAP mapping symbol and raw_symbol to sector name for all instruments
+SECTOR_MAP = {}
+for item in TICKER_LIST:
+    sym = item.get("symbol", "")
+    raw = sym.replace(".NS", "").replace(".BO", "").replace("^", "")
+    sec = item.get("sector", "Others")
+    SECTOR_MAP[sym] = sec
+    SECTOR_MAP[raw] = sec
+
 def ensure_ticker_list():
     """
     Returns the complete master list of all Indian Equities (NSE & BSE),

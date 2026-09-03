@@ -89,3 +89,47 @@ def test_backtest_endpoint(mock_history):
     assert data["ticker"] == "RELIANCE.NS"
     assert "stats" in data
     assert "equity_curves" in data
+
+def test_master_universe_loaded():
+    """Verify that the master universe loads thousands of stocks and ETFs."""
+    from services.ticker_manager import ensure_ticker_list, SECTOR_MAP
+    tickers = ensure_ticker_list()
+    assert len(tickers) >= 5000, f"Expected at least 5000 instruments, got {len(tickers)}"
+    assert "NIFTYBEES.NS" in [t["symbol"] for t in tickers]
+    assert "GOLDBEES.NS" in [t["symbol"] for t in tickers]
+    assert "^NSEI" in [t["symbol"] for t in tickers]
+    assert len(SECTOR_MAP) >= 5000
+
+def test_etf_search_real():
+    """Verify live search for ETFs returns ETF category."""
+    response = client.get("/api/tickers?q=niftybees")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["tickers"]) >= 1
+    symbols = [t["symbol"] for t in data["tickers"]]
+    assert "NIFTYBEES.NS" in symbols
+
+def test_bse_code_search_real():
+    """Verify live search for 6-digit BSE scrip code."""
+    response = client.get("/api/tickers?q=500325")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["tickers"]) >= 1
+    assert "RELIANCE.BO" in [t["symbol"] for t in data["tickers"]]
+
+@patch("routers.tickers.get_quote")
+def test_index_ticker_live_price(mock_quote):
+    """Verify index ticker with leading caret is accepted."""
+    mock_quote.return_value = {
+        "price": 24000.0,
+        "prevClose": 23900.0,
+        "change": 100.0,
+        "changePct": 0.42,
+        "longName": "NIFTY 50"
+    }
+    response = client.get("/api/live?ticker=^NSEI")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ticker"] == "^NSEI"
+    assert data["price"] == 24000.0
+

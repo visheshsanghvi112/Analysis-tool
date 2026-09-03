@@ -34,7 +34,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
   const inputRef     = useRef(null);
   const mobileInputRef = useRef(null);
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://stock-analysis-backend-seven.vercel.app';
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 
   /* Close dropdown on outside click */
   useEffect(() => {
