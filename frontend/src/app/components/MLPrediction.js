@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Brain, TrendingUp, TrendingDown, Target, Zap, AlertCircle, RefreshCw, BarChart2, Info } from 'lucide-react';
+import InfoBadge from './InfoBadge';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 
@@ -278,7 +279,10 @@ export default function MLPrediction({ ticker }) {
             <Brain className="h-4 w-4 text-purple-400" />
           </div>
           <div>
-            <h3 className="text-sm sm:text-base font-bold text-white">AI Price Prediction</h3>
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-sm sm:text-base font-bold text-white">AI Price Prediction</h3>
+              <InfoBadge infoKey="ml_ensemble" />
+            </div>
             <p className="text-[10px] sm:text-xs text-slate-400">Machine Learning Forecast</p>
           </div>
         </div>
@@ -423,7 +427,10 @@ export default function MLPrediction({ ticker }) {
             </div>
 
             <div className="rounded-lg p-2 bg-white/[0.03] border border-white/[0.06] min-w-0">
-              <p className="text-[8px] text-slate-500 uppercase tracking-wider font-bold mb-0.5 truncate">HMM Regime</p>
+              <div className="flex items-center justify-between mb-0.5">
+                <p className="text-[8px] text-slate-500 uppercase tracking-wider font-bold truncate">HMM Regime</p>
+                <InfoBadge infoKey="markov_regime" />
+              </div>
               <p className={`font-bold text-[9px] leading-tight ${
                 prediction.regime === 'LOW_VOLATILITY' ? 'text-emerald-400' :
                 prediction.regime === 'MEDIUM_VOLATILITY' ? 'text-indigo-400' :

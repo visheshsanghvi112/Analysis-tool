@@ -12,6 +12,7 @@ import {
   BarChart3,
   Star
 } from 'lucide-react';
+import InfoBadge from './InfoBadge';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
@@ -51,6 +52,7 @@ const StatusIndicator = ({ error, loading, priceDate }) => {
     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
       <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
       <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Live</span>
+      <InfoBadge infoKey="live_prices" />
       <span className="text-xs text-slate-500 bg-slate-800/60 px-2 py-0.5 rounded-md font-mono">
         ~15min delay
       </span>
@@ -79,19 +81,22 @@ const PriceChangeIndicator = ({ change, changePct }) => {
   );
 };
 
-const MetricCard = ({ label, value, subtitle, color = 'text-slate-200', icon: Icon }) => (
+const MetricCard = ({ label, value, subtitle, color = 'text-slate-200', icon: Icon, infoKey }) => (
   <div className="glass-card p-3 border border-slate-800/60 hover:border-slate-700/80 transition-all duration-200">
     <div className="flex items-start justify-between mb-2">
-      <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold truncate">
-        {label}
-      </span>
-      {Icon && <Icon className="h-3.5 w-3.5 text-slate-500" />}
+      <div className="flex items-center gap-1.5 min-w-0">
+        <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold truncate">
+          {label}
+        </span>
+        {infoKey && <InfoBadge infoKey={infoKey} />}
+      </div>
+      {Icon && <Icon className="h-3.5 w-3.5 text-slate-500 shrink-0" />}
     </div>
     <p className={`font-bold text-sm ${color} truncate`}>
       {value}
     </p>
     {subtitle && (
-      <p className="text-xs text-slate-600 mt-1 truncate">
+      <p className="text-xs text-slate-500 mt-1 truncate">
         {subtitle}
       </p>
     )}
@@ -106,10 +111,16 @@ const DayRangeBar = ({ dayHigh, dayLow, currentPrice }) => {
   
   return (
     <div className="mt-4 p-3 glass-card border border-slate-800/60">
-      <div className="flex justify-between text-xs text-slate-500 mb-2">
-        <span>Low ₹{fmt(dayLow)}</span>
-        <span className="font-semibold text-slate-300">₹{fmt(currentPrice)}</span>
-        <span>High ₹{fmt(dayHigh)}</span>
+      <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+        <div className="flex items-center gap-1.5">
+          <span className="font-medium">Day Range</span>
+          <InfoBadge infoKey="day_range" />
+        </div>
+        <span className="font-semibold text-slate-200">₹{fmt(currentPrice)}</span>
+      </div>
+      <div className="flex justify-between text-[11px] text-slate-500 mb-1.5 font-mono">
+        <span>Low: ₹{fmt(dayLow)}</span>
+        <span>High: ₹{fmt(dayHigh)}</span>
       </div>
       <div className="relative h-2 bg-slate-800 rounded-full overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-red-500/30 via-yellow-500/30 to-emerald-500/30 rounded-full" />
@@ -289,24 +300,28 @@ export default function LivePrice({ ticker }) {
                 value={`₹${fmt(quote.prevClose)}`}
                 subtitle="yesterday"
                 icon={Activity}
+                infoKey="prev_close"
               />
               <MetricCard
                 label="Day High"
                 value={`₹${fmt(quote.dayHigh)}`}
                 color="text-emerald-400"
                 icon={TrendingUp}
+                infoKey="day_range"
               />
               <MetricCard
                 label="Day Low"
                 value={`₹${fmt(quote.dayLow)}`}
                 color="text-red-400"
                 icon={TrendingDown}
+                infoKey="day_range"
               />
               <MetricCard
                 label="Volume"
                 value={formatVolume(quote.volume)}
                 subtitle="today"
                 icon={BarChart3}
+                infoKey="volume"
               />
             </div>
 

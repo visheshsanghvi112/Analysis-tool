@@ -14,6 +14,7 @@ import {
   Cell
 } from 'recharts';
 import { RefreshCw, AlertTriangle } from 'lucide-react';
+import InfoBadge from './InfoBadge';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 
@@ -205,9 +206,12 @@ export default function StockChart({ ticker }) {
       <div className="bg-white/[0.03] rounded-xl p-4 sm:p-5 border border-white/[0.06] space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
-              Live {companyName || ticker.replace('.NS', '').replace('.BO', '')} Share Price Chart
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                Live {companyName || ticker.replace('.NS', '').replace('.BO', '')} Share Price Chart
+              </h2>
+              <InfoBadge infoKey="candlestick_chart" />
+            </div>
             
             {/* O H L C Vol Row */}
             <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-2 text-xs">
@@ -320,10 +324,13 @@ export default function StockChart({ ticker }) {
 
       {/* Volume */}
       <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
-        <h3 className="text-sm font-semibold text-slate-300 mb-1">
-          Volume
+        <div className="flex items-center gap-2 mb-1">
+          <h3 className="text-sm font-semibold text-slate-300">
+            Volume
+          </h3>
+          <InfoBadge infoKey="volume" />
           <span className="text-slate-500 font-normal ml-2 text-xs">green = above avg · red = below avg</span>
-        </h3>
+        </div>
         <ChartContainer height={128}>
           {(width, height) => (
             <ComposedChart 
@@ -356,7 +363,10 @@ export default function StockChart({ ticker }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ minWidth: 0 }}>
         {/* RSI */}
         <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
-          <h3 className="text-sm font-semibold text-slate-300 mb-2">RSI (14)</h3>
+          <div className="flex items-center gap-2 mb-2">
+            <h3 className="text-sm font-semibold text-slate-300">RSI (14)</h3>
+            <InfoBadge infoKey="rsi_indicator" />
+          </div>
           <ChartContainer height={176}>
             {(width, height) => (
               <ComposedChart 
@@ -387,7 +397,10 @@ export default function StockChart({ ticker }) {
 
         {/* MACD + Histogram */}
         <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
-          <h3 className="text-sm font-semibold text-slate-300 mb-2">MACD · Signal · Histogram</h3>
+          <div className="flex items-center gap-2 mb-2">
+            <h3 className="text-sm font-semibold text-slate-300">MACD · Signal · Histogram</h3>
+            <InfoBadge infoKey="macd_indicator" />
+          </div>
           <ChartContainer height={176}>
             {(width, height) => (
               <ComposedChart 

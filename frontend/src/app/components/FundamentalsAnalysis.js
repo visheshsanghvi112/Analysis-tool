@@ -10,6 +10,7 @@ import {
   Calendar, AlertTriangle, RefreshCw, ChevronDown, ChevronUp,
   Award, Landmark, ArrowUpRight, ArrowDownRight, Minus,
 } from 'lucide-react';
+import InfoBadge from './InfoBadge';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 
@@ -84,12 +85,13 @@ function CagrPill({ label, value }) {
 }
 
 // ── Section header ────────────────────────────────────────────────────────────
-function SectionHeader({ icon: Icon, title, badge, color = '#6366f1' }) {
+function SectionHeader({ icon: Icon, title, badge, color = '#6366f1', infoProps }) {
   return (
     <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
       <div className="flex items-center gap-2">
         <Icon className="h-5 w-5" style={{ color }} />
         <h3 className="text-sm font-bold text-white">{title}</h3>
+        {infoProps && <InfoBadge {...infoProps} />}
       </div>
       {badge && (
         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
@@ -122,6 +124,12 @@ function EarningsPanel({ annual, quarterly, ratios, price_cagr }) {
         title="Revenue & Earnings Trend"
         badge={revGrowth ? `Rev ${revGrowth}` : 'Annual Financials'}
         color="#6366f1"
+        infoProps={{
+          title: "Revenue & Earnings Growth",
+          what: "Historical progression of Topline Revenue and Bottomline Net Profit on annual and quarterly cadences.",
+          why: "Consistent double-digit revenue and earnings compounding is the primary fundamental driver of long-term share price appreciation.",
+          interpretation: "Look for Net Profit growing faster than Revenue, indicating expanding operating leverage."
+        }}
       />
 
       {/* Toggle */}
@@ -225,6 +233,12 @@ function DividendPanel({ dividend }) {
         title="Dividend Analysis"
         badge={hasDividends ? `${yield_pct ?? 0}% Yield` : 'No Dividends'}
         color="#10b981"
+        infoProps={{
+          title: "Dividend Yield & Payout Health",
+          what: "Cash distributions returned to shareholders as a percentage of share price and net profit.",
+          why: "Provides direct shareholder yield and signals management confidence in ongoing cash generation.",
+          interpretation: "Healthy payout ratios typically range between 20%–50%; >80% may threaten dividend sustainability."
+        }}
       />
 
       {!hasDividends ? (
@@ -338,6 +352,12 @@ function OwnershipPanel({ ownership }) {
         title="Shareholding Pattern"
         badge="Ownership Breakdown"
         color="#6366f1"
+        infoProps={{
+          title: "Shareholding & Insider Ownership",
+          what: "Equity breakdown between Promoters/Founders, Institutions (FII + DII), and Retail public.",
+          why: "High promoter skin-in-the-game aligns founder interests with minority investors; institutional holding provides valuation support.",
+          interpretation: "Promoter holding > 50% with low or zero shares pledged indicates strong alignment and governance."
+        }}
       />
 
       {!hasData ? (

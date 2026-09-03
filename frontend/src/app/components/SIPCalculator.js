@@ -9,6 +9,7 @@ import {
   Calculator, TrendingUp, IndianRupee, Target, Calendar,
   Sparkles, BarChart3, Info, ChevronDown, ChevronUp,
 } from 'lucide-react';
+import InfoBadge from './InfoBadge';
 
 // ── Chart Container Wrapper for Responsive Recharts ──────────────────────────
 function ChartContainer({ height = 280, children }) {
@@ -164,6 +165,7 @@ export default function SIPCalculator({ ticker }) {
         <div className="flex items-center gap-2">
           <Calculator className="h-5 w-5 text-emerald-400" />
           <h3 className="text-sm font-bold text-white">SIP Return Calculator</h3>
+          <InfoBadge infoKey="sip_calculator" />
         </div>
         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-500/10 border-emerald-500/25 text-emerald-300">
           Compounding Power

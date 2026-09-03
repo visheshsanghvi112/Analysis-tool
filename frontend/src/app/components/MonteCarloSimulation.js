@@ -9,6 +9,7 @@ import {
   Compass, TrendingUp, TrendingDown, RefreshCw, AlertCircle,
   Percent, Activity, ArrowRightLeft, Info
 } from 'lucide-react';
+import InfoBadge from './InfoBadge';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 
@@ -200,7 +201,10 @@ export default function MonteCarloSimulation({ ticker }) {
             <Compass className="h-4 w-4 text-indigo-400" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white">Monte Carlo Price Projections</h3>
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-sm font-bold text-white">Monte Carlo Price Projections</h3>
+              <InfoBadge infoKey="monte_carlo_var" />
+            </div>
             <p className="text-[10px] text-slate-400">Probabilistic price path modeling using Geometric Brownian Motion (GBM)</p>
           </div>
         </div>
@@ -372,9 +376,12 @@ export default function MonteCarloSimulation({ ticker }) {
 
             {/* Probability Breakdown Column */}
             <div className="flex flex-col gap-2 rounded-xl bg-white/[0.01] border border-white/[0.04] p-3 justify-center">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                Horizon Price Probabilities
-              </p>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Horizon Price Probabilities
+                </p>
+                <InfoBadge infoKey="cvar_expected_shortfall" />
+              </div>
               <div className="space-y-1.5">
                 <ProbabilityRow label="Probability of Stock finishing UP" value={stats.prob_up} isLoss={false} />
                 <ProbabilityRow label="Probability of Gain ≥ 5%" value={stats.prob_gain_5} isLoss={false} />

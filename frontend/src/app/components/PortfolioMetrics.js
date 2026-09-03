@@ -12,6 +12,7 @@ import {
   Target,
   Activity
 } from 'lucide-react';
+import InfoBadge from './InfoBadge';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 
@@ -67,7 +68,10 @@ export default function PortfolioMetrics({ ticker }) {
             <Shield className="h-4 w-4 text-indigo-400" />
           </div>
           <div>
-            <h3 className="text-sm sm:text-base font-bold text-white">Portfolio Analytics</h3>
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-sm sm:text-base font-bold text-white">Portfolio Analytics</h3>
+              <InfoBadge infoKey="risk_analytics" />
+            </div>
             <p className="text-[10px] sm:text-xs text-slate-400">Advanced Risk & Performance Metrics</p>
           </div>
         </div>
@@ -102,6 +106,7 @@ export default function PortfolioMetrics({ ticker }) {
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle className="h-4 w-4 text-orange-400" />
               <h4 className="font-bold text-sm text-orange-400">Risk Assessment</h4>
+              <InfoBadge infoKey="sharpe_sortino" />
             </div>
             
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
@@ -160,6 +165,7 @@ export default function PortfolioMetrics({ ticker }) {
             <div className="flex items-center gap-2 mb-3">
               <BarChart3 className="h-4 w-4 text-blue-400" />
               <h4 className="font-bold text-sm text-blue-400">Market Relationship</h4>
+              <InfoBadge infoKey="beta_alpha" />
             </div>
             
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">

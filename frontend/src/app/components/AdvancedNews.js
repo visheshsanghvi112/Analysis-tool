@@ -15,6 +15,7 @@ import {
   Minus,
   Sparkles
 } from 'lucide-react';
+import InfoBadge from './InfoBadge';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 
@@ -88,7 +89,10 @@ export default function AdvancedNews({ ticker, companyName }) {
             <Newspaper className="h-4 w-4 text-blue-400" />
           </div>
           <div>
-            <h3 className="text-sm sm:text-base font-bold text-white">AI News Intelligence</h3>
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-sm sm:text-base font-bold text-white">AI News Intelligence</h3>
+              <InfoBadge infoKey="news_intelligence" />
+            </div>
             <p className="text-[10px] sm:text-xs text-slate-400">Advanced Sentiment & Impact Analysis</p>
           </div>
         </div>
@@ -178,6 +182,12 @@ export default function AdvancedNews({ ticker, companyName }) {
               <div className="flex items-center gap-2 mb-2.5">
                 <Sparkles className="h-4 w-4 text-emerald-400" />
                 <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-400">Identified Corporate Catalysts</h4>
+                <InfoBadge
+                  title="Corporate Catalysts"
+                  what="Automated extraction of high-impact events: contract orders, earnings revisions, capacity expansion, or litigation."
+                  why="Fundamental catalysts trigger immediate institutional re-rating and volume spikes."
+                  interpretation="Bullish catalysts trigger accumulation; management or regulatory flags warrant defensive positioning."
+                />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {newsData.catalysts.map((cat, cidx) => (

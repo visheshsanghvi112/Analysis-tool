@@ -21,9 +21,10 @@ import {
   Activity, ArrowRight, CheckCircle, Clock, AlertTriangle,
   LayoutGrid, BarChart2, Trophy, FileText,
 } from 'lucide-react';
+import InfoBadge from './components/InfoBadge';
 
 /* ── Status badge ─────────────────────────────────────────────────── */
-const StatusBadge = ({ icon: Icon, title, subtitle, status }) => {
+const StatusBadge = ({ icon: Icon, title, subtitle, status, infoKey }) => {
   const color = status === 'active' ? '#00c48c' : status === 'loading' ? '#f5a623' : '#444';
   const bg    = status === 'active' ? 'rgba(0,196,140,0.06)' : 'transparent';
   return (
@@ -33,7 +34,10 @@ const StatusBadge = ({ icon: Icon, title, subtitle, status }) => {
           <Icon style={{ width: '16px', height: '16px', color }} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff', marginBottom: '2px' }}>{title}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+            <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>{title}</p>
+            {infoKey && <InfoBadge infoKey={infoKey} />}
+          </div>
           <p style={{ fontSize: '11px', color: '#555', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</p>
         </div>
         {status === 'active'   && <CheckCircle   style={{ width: '14px', height: '14px', color: '#00c48c', flexShrink: 0 }} />}
@@ -284,10 +288,10 @@ export default function Dashboard() {
                   .dash-main-grid    { grid-template-columns: 2fr 1fr !important; }
                 }
               `}</style>
-              <StatusBadge icon={Activity}  title="Live Prices"       subtitle="Real-time · 15 min delay" status="active" />
-              <StatusBadge icon={Brain}     title="ML Predictions"    subtitle="5-day Random Forest"       status="active" />
-              <StatusBadge icon={Newspaper} title="News Intelligence" subtitle="AI sentiment · Alerts"     status="active" />
-              <StatusBadge icon={PieChart}  title="Risk Analytics"    subtitle="VaR · Options · Portfolio" status="active" />
+              <StatusBadge icon={Activity}  title="Live Prices"       subtitle="Real-time · 15 min delay" status="active" infoKey="live_prices" />
+              <StatusBadge icon={Brain}     title="ML Predictions"    subtitle="5-day Random Forest"       status="active" infoKey="ml_predictions" />
+              <StatusBadge icon={Newspaper} title="News Intelligence" subtitle="AI sentiment · Alerts"     status="active" infoKey="news_intelligence" />
+              <StatusBadge icon={PieChart}  title="Risk Analytics"    subtitle="VaR · Options · Portfolio" status="active" infoKey="risk_analytics" />
             </div>
 
             {/* Quick Action & Research Memo Bar */}

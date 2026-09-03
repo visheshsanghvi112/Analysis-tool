@@ -9,6 +9,7 @@ import {
   FlaskConical, TrendingUp, TrendingDown, RefreshCw,
   AlertCircle, Trophy, Target, Activity, BarChart2,
 } from 'lucide-react';
+import InfoBadge from './InfoBadge';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 
@@ -135,7 +136,10 @@ export default function Backtesting({ ticker }) {
             <FlaskConical className="h-4 w-4 text-amber-400" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white">Signal Backtesting</h3>
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-sm font-bold text-white">Signal Backtesting</h3>
+              <InfoBadge infoKey="strategy_backtesting" />
+            </div>
             <p className="text-[10px] text-slate-400">RSI(14) + MACD Crossover + ATR Stop-Loss</p>
           </div>
         </div>
@@ -217,9 +221,12 @@ export default function Backtesting({ ticker }) {
               : 'bg-rose-500/10 border-rose-500/30'
           }`}>
             <div>
-              <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-0.5">
-                Strategy Alpha vs Buy &amp; Hold
-              </p>
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">
+                  Strategy Alpha vs Buy &amp; Hold
+                </p>
+                <InfoBadge infoKey="beta_alpha" />
+              </div>
               <p className={`text-2xl font-black ${s.alpha >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {pctSign(s.alpha)}{fmt(s.alpha)}%
               </p>

@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { TrendingUp, TrendingDown, Minus, Trophy, Search, X, ChevronRight, Zap, Shield, Activity, BarChart2, AlertCircle, RefreshCw } from 'lucide-react';
+import InfoBadge from './InfoBadge';
 
 const API = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 
@@ -184,7 +185,10 @@ export default function PeerComparison({ ticker }) {
           <BarChart2 style={{ width: '16px', height: '16px', color: '#3b82f6' }} />
         </div>
         <div>
-          <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#fff', margin: 0 }}>Peer-to-Peer Comparison</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#fff', margin: 0 }}>Peer-to-Peer Comparison</h3>
+            <InfoBadge infoKey="peer_valuation" />
+          </div>
           {sector && <p style={{ fontSize: '11px', color: '#666', margin: 0 }}>{sector} Sector</p>}
         </div>
       </div>

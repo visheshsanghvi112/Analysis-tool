@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import SmartCapitalAdvisor from './SmartCapitalAdvisor';
 import Header from './Header';
+import InfoBadge from './InfoBadge';
 import { API_BASE_URL } from '../config';
 
 const PORTFOLIO_KEY = 'stockiq_portfolio_v1';
@@ -144,7 +145,15 @@ function AllocationPie({ holdings }) {
 
   return (
     <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-4">
-      <p className="text-[10px] font-bold text-slate-200 uppercase tracking-wider mb-3">Allocation</p>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[10px] font-bold text-slate-200 uppercase tracking-wider">Asset Allocation</p>
+        <InfoBadge
+          title="Portfolio Asset Allocation"
+          what="Rupee and percentage distribution of your capital across individual stocks, ETFs, and asset classes."
+          why="Determines over 90% of long-term investment return variance according to empirical financial studies."
+          interpretation="Avoid single-stock concentrations >20% to prevent idiosyncratic stock failure risk."
+        />
+      </div>
       <ResponsiveContainer width="100%" height={180}>
         <PieChart>
           <Pie data={data} cx="50%" cy="50%" innerRadius={50} outerRadius={80}
@@ -439,10 +448,13 @@ function PortfolioOptimizer({ optResult, loading, error, onRebalance }) {
     <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-4 sm:p-5 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.05] pb-3">
         <div>
-          <p className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-indigo-400 animate-pulse" />
-            Markowitz Efficient Frontier &amp; Optimizer
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-indigo-400 animate-pulse" />
+              Markowitz Efficient Frontier &amp; Optimizer
+            </p>
+            <InfoBadge infoKey="mpt_efficient_frontier" />
+          </div>
           <p className="text-[9px] text-slate-400">Institutional-grade Modern Portfolio Theory (MPT) weight reallocation</p>
         </div>
         
