@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import WatchlistDrawer from './WatchlistDrawer';
 import StockSearchModal from './StockSearchModal';
+import SideNavDrawer from './SideNavDrawer';
 
 const Header = ({ onTickerSelect, currentTicker }) => {
   const pathname = usePathname();
@@ -33,6 +34,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
   const [watchlistOpen, setWatchlistOpen] = useState(false);
   const [watchlistCount, setWatchlistCount] = useState(0);
   const [spotlightOpen, setSpotlightOpen] = useState(false);
+  const [sideNavOpen, setSideNavOpen]     = useState(false);
 
   // Sync watchlist count from localStorage
   useEffect(() => {
@@ -190,29 +192,40 @@ const Header = ({ onTickerSelect, currentTicker }) => {
         }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div style={{ display: 'flex', alignItems: 'center', height: '60px', gap: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', height: '60px', gap: '16px' }}>
 
-            {/* ── Logo — click navigates home ───────────────────────── */}
-            <Link href="/" onClick={() => { window.dispatchEvent(new CustomEvent('reset-selected-ticker')); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0, textDecoration: 'none' }}>
-              <div style={{
-                width: '32px', height: '32px',
-                background: '#fff',
-                borderRadius: '6px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'opacity 0.15s',
-              }}
-                onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+            {/* ── Left: Side Navigation Toggle & Logo ───────────────── */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+              <button
+                onClick={() => setSideNavOpen(true)}
+                className="p-1.5 -ml-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/[0.08] transition-colors"
+                title="Open Navigation Menu"
+                aria-label="Open Navigation Menu"
               >
-                <TrendingUp style={{ width: '18px', height: '18px', color: '#000' }} />
-              </div>
-              <span
-                className="hidden sm:block"
-                style={{ fontWeight: 700, fontSize: '15px', color: '#fff', letterSpacing: '-0.02em' }}
-              >
-                StockIQ Pro
-              </span>
-            </Link>
+                <Menu className="w-5 h-5 text-slate-300 hover:text-white" />
+              </button>
+
+              <Link href="/" onClick={() => { window.dispatchEvent(new CustomEvent('reset-selected-ticker')); }} style={{ display: 'flex', alignItems: 'center', gap: '9px', textDecoration: 'none' }}>
+                <div style={{
+                  width: '30px', height: '30px',
+                  background: '#fff',
+                  borderRadius: '6px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'opacity 0.15s',
+                }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                >
+                  <TrendingUp style={{ width: '16px', height: '16px', color: '#000' }} />
+                </div>
+                <span
+                  className="hidden sm:block"
+                  style={{ fontWeight: 700, fontSize: '15px', color: '#fff', letterSpacing: '-0.02em' }}
+                >
+                  StockIQ Pro
+                </span>
+              </Link>
+            </div>
 
             {/* ── Divider ─────────────────────────────────────────────── */}
             <div className="hidden sm:block" style={{ width: '1px', height: '20px', background: '#333' }} />
@@ -611,6 +624,13 @@ const Header = ({ onTickerSelect, currentTicker }) => {
           if (onTickerSelect) onTickerSelect(sym);
         }}
         currentTicker={currentTicker}
+      />
+
+      {/* ── Side Navigation Drawer (Left) ─────────────────────────── */}
+      <SideNavDrawer
+        isOpen={sideNavOpen}
+        onClose={() => setSideNavOpen(false)}
+        onOpenSearch={() => setSpotlightOpen(true)}
       />
 
       {/* ── Spotlight Search Command Palette (⌘K) ─────────────────── */}

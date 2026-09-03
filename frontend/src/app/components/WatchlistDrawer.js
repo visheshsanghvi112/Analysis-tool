@@ -10,14 +10,14 @@ import {
   Trash2, 
   Search, 
   ChevronRight,
-  ExternalLink,
-  Coins,
-  Building2,
-  RefreshCw
+  RefreshCw,
+  Loader2,
+  Sparkles
 } from 'lucide-react';
 import { smartSearch, fetchSmartTickers } from '../utils/smartSearch';
 
 const STORAGE_KEY = 'stockiq_pro_watchlist';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 
 const DEFAULT_WATCHLIST = [
   { symbol: 'NIFTYBEES.NS', name: 'Nippon India Nifty 50 BeES', sector: 'ETF' },
@@ -34,9 +34,10 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
   const [searchResults, setSearchResults] = useState([]);
   const [quotes, setQuotes] = useState({});
   const [loadingQuotes, setLoadingQuotes] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState(null);
   const searchInputRef = useRef(null);
 
-  // Load watchlist from localStorage on mount
+  // ── 1. Load watchlist from localStorage on mount ────────────────────────
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -56,7 +57,7 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
     } catch (_) {}
   }, []);
 
-  // Listen to global watchlist updates from other components
+  // ── 2. Listen to global watchlist updates from other components ────────
   useEffect(() => {
     const handleStorage = () => {
       try {
@@ -68,7 +69,7 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
     return () => window.removeEventListener('stockiq-watchlist-changed', handleStorage);
   }, []);
 
-  // Load static tickers database for quick adding
+  // ── 3. Load full 7,954 master database for instant local smart search ───
   useEffect(() => {
     if (allTickers.length === 0 && isOpen) {
       fetch('/tickers.json')
@@ -78,17 +79,52 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
     }
   }, [isOpen, allTickers.length]);
 
-  // Focus input when opened
+  // ── 4. Focus input when opened & listen for Escape key ───────────────────
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => searchInputRef.current?.focus(), 150);
+      const handleKeyDown = (e) => {
+        if (e.key === 'Escape') onClose();
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
     } else {
       setSearchQuery('');
       setSearchResults([]);
     }
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
-  // Smart filter search results
+  // ── 5. Batch-fetch live price quotes for all watchlist items ───────────
+  const fetchWatchlistQuotes = useCallback(async () => {
+    if (watchlist.length === 0) return;
+    setLoadingQuotes(true);
+    try {
+      const symbolsParam = watchlist.map((w) => w.symbol).join(',');
+      const res = await fetch(`${API_BASE}/api/batch-quotes?tickers=${encodeURIComponent(symbolsParam)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.quotes) {
+          setQuotes(data.quotes);
+          setLastRefreshed(new Date());
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch batch quotes for watchlist:', e);
+    } finally {
+      setLoadingQuotes(false);
+    }
+  }, [watchlist]);
+
+  useEffect(() => {
+    if (isOpen && watchlist.length > 0) {
+      fetchWatchlistQuotes();
+      // Auto-poll quotes every 30s while drawer is open
+      const timer = setInterval(fetchWatchlistQuotes, 30000);
+      return () => clearInterval(timer);
+    }
+  }, [isOpen, watchlist, fetchWatchlistQuotes]);
+
+  // ── 6. Smart filter search results (Handles aliases, typos, BSE codes) ───
   useEffect(() => {
     const q = searchQuery.trim();
     if (!q) {
@@ -97,13 +133,13 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
     }
     const inWatchlist = new Set(watchlist.map((w) => w.symbol));
 
-    // 1. Instant local smart search preview (handles aliases, typos, BSE codes)
+    // Instant local smart search
     const localMatches = smartSearch(allTickers, q, { limit: 10 })
       .filter((t) => !inWatchlist.has(t.symbol))
       .slice(0, 6);
     setSearchResults(localMatches);
 
-    // 2. Fetch from smart backend endpoint to ensure freshest relevance
+    // Complement with backend smart search
     let isCurrent = true;
     fetchSmartTickers(q, allTickers, 10).then((apiMatches) => {
       if (isCurrent && apiMatches && apiMatches.length > 0) {
@@ -115,7 +151,7 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
     return () => { isCurrent = false; };
   }, [searchQuery, allTickers, watchlist]);
 
-  // Persist watchlist changes
+  // ── 7. Watchlist actions ───────────────────────────────────────────────
   const saveWatchlist = useCallback((newList) => {
     setWatchlist(newList);
     try {
@@ -147,67 +183,85 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm transition-opacity duration-200"
+      className="fixed inset-0 z-[120] flex justify-end bg-black/75 backdrop-blur-md transition-opacity duration-200"
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-md bg-[#0a0a0c] border-l border-white/10 h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-200"
+        className="w-full max-w-md bg-[#0d0e12] border-l border-white/10 h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-250 select-none"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
+        {/* ── Drawer Header ─────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.08] bg-white/[0.02]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center shadow-inner">
               <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-white tracking-wide">Watchlist</h2>
-              <p className="text-[11px] text-slate-400">{watchlist.length} saved instruments</p>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-white tracking-wide">Watchlist</h2>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                  {watchlist.length}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">Live prices &amp; intraday change</p>
             </div>
           </div>
-          <button 
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors"
-            title="Close drawer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={fetchWatchlistQuotes}
+              disabled={loadingQuotes}
+              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors disabled:opacity-50"
+              title="Refresh live prices"
+            >
+              <RefreshCw className={`w-4 h-4 ${loadingQuotes ? 'animate-spin text-blue-400' : ''}`} />
+            </button>
+            <button 
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors"
+              title="Close drawer (Esc)"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Quick Add Search */}
-        <div className="p-4 border-b border-white/[0.06] bg-black/40">
+        {/* ── Quick Add Search Bar ──────────────────────────────────────── */}
+        <div className="p-4 border-b border-white/[0.06] bg-[#0b0c0f]">
           <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               ref={searchInputRef}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Add stock or ETF (e.g. NIFTYBEES, RELIANCE)…"
-              className="w-full bg-[#111114] border border-white/10 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+              placeholder="Search 7,950+ stocks or ETFs to add..."
+              className="w-full bg-[#14151b] border border-white/10 rounded-xl pl-10 pr-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/40 transition-all"
             />
           </div>
 
           {/* Search Dropdown Results */}
           {searchResults.length > 0 && (
-            <div className="mt-2 bg-[#141418] border border-white/10 rounded-lg overflow-hidden shadow-xl max-h-48 overflow-y-auto">
+            <div className="mt-2 bg-[#16171f] border border-white/10 rounded-xl overflow-hidden shadow-2xl max-h-56 overflow-y-auto divide-y divide-white/[0.04]">
               {searchResults.map((t) => (
                 <button
                   key={t.symbol}
                   onClick={() => addTicker(t)}
-                  className="w-full text-left px-3 py-2 flex items-center justify-between hover:bg-white/[0.06] transition-colors border-b border-white/[0.03] last:border-0"
+                  className="w-full text-left px-3.5 py-2.5 flex items-center justify-between hover:bg-white/[0.06] transition-colors group"
                 >
                   <div className="min-w-0 pr-2">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-white">{t.symbol}</span>
-                      {t.sector === 'ETF' && (
-                        <span className="text-[9px] px-1.5 py-0.2 bg-amber-500/20 text-amber-300 font-semibold rounded">ETF</span>
-                      )}
+                      <span className="text-xs font-bold text-white group-hover:text-blue-400 transition-colors">
+                        {t.symbol.replace('.NS', '').replace('.BO', '')}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/[0.06] text-slate-400 font-medium">
+                        {t.sector || 'Equity'}
+                      </span>
                     </div>
-                    <p className="text-[10px] text-slate-400 truncate">{t.name}</p>
+                    <p className="text-[10px] text-slate-400 truncate mt-0.5">{t.name}</p>
                   </div>
-                  <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 shrink-0">
-                    <Plus className="w-3.5 h-3.5" /> Add
+                  <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 shrink-0 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-md">
+                    <Plus className="w-3 h-3" /> Add
                   </div>
                 </button>
               ))}
@@ -215,18 +269,28 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
           )}
         </div>
 
-        {/* Watchlist Items */}
+        {/* ── Watchlist Rows with Live Price & Change % ─────────────────── */}
         <div className="flex-1 overflow-y-auto divide-y divide-white/[0.04]">
           {watchlist.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 text-center px-6">
-              <Star className="w-8 h-8 text-slate-700 mb-2" />
-              <p className="text-xs text-slate-400 font-medium">Your watchlist is empty</p>
-              <p className="text-[11px] text-slate-600 mt-1">Search above to pin any of 7,900+ stocks or ETFs</p>
+            <div className="flex flex-col items-center justify-center h-64 text-center px-6">
+              <Star className="w-10 h-10 text-slate-700 mb-3" />
+              <p className="text-sm text-slate-300 font-semibold">Your watchlist is empty</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-[240px]">
+                Search above to pin any of our 7,954 NSE, BSE, ETF, or global instruments.
+              </p>
             </div>
           ) : (
             watchlist.map((item) => {
               const isSelected = currentTicker === item.symbol;
               const isETF = item.sector === 'ETF';
+              const isIndex = item.symbol.startsWith('^') || item.sector === 'Indices';
+              const quote = quotes[item.symbol];
+
+              const price = quote?.price;
+              const changePct = quote?.changePct;
+              const isPositive = changePct > 0;
+              const isNegative = changePct < 0;
+
               return (
                 <div
                   key={item.symbol}
@@ -234,18 +298,23 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
                     onSelectTicker(item.symbol);
                     onClose();
                   }}
-                  className={`group flex items-center justify-between px-4 py-3 cursor-pointer transition-all hover:bg-white/[0.04] ${
-                    isSelected ? 'bg-blue-500/10 border-l-2 border-blue-500' : ''
+                  className={`group flex items-center justify-between px-4 py-3.5 cursor-pointer transition-all hover:bg-white/[0.04] ${
+                    isSelected ? 'bg-blue-500/10 border-l-4 border-blue-500' : 'border-l-4 border-transparent'
                   }`}
                 >
+                  {/* Left: Ticker identity */}
                   <div className="min-w-0 flex-1 pr-3">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-white group-hover:text-blue-400 transition-colors">
-                        {item.symbol}
+                        {item.symbol.replace('.NS', '').replace('.BO', '')}
                       </span>
                       {isETF ? (
                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 font-semibold border border-amber-500/30">
                           ETF
+                        </span>
+                      ) : isIndex ? (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 font-semibold border border-sky-500/30">
+                          INDEX
                         </span>
                       ) : (
                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.05] text-slate-400 font-medium">
@@ -256,10 +325,40 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
                     <p className="text-[11px] text-slate-400 truncate mt-0.5 font-normal">{item.name}</p>
                   </div>
 
-                  <div className="flex items-center gap-3 shrink-0">
+                  {/* Right: Real-Time Price & Day Change % */}
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <div className="text-right">
+                      {price !== undefined && price !== null ? (
+                        <>
+                          <div className="text-xs font-bold text-white font-mono">
+                            ₹{typeof price === 'number' ? price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : price}
+                          </div>
+                          {changePct !== undefined && changePct !== null && (
+                            <div className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5 ${
+                              isPositive ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' :
+                              isNegative ? 'bg-rose-500/15 text-rose-400 border border-rose-500/25' :
+                              'bg-slate-500/15 text-slate-400 border border-slate-500/25'
+                            }`}>
+                              {isPositive && <TrendingUp className="w-2.5 h-2.5" />}
+                              {isNegative && <TrendingDown className="w-2.5 h-2.5" />}
+                              <span>{isPositive ? '+' : ''}{changePct.toFixed(2)}%</span>
+                            </div>
+                          )}
+                        </>
+                      ) : loadingQuotes ? (
+                        <div className="space-y-1 text-right">
+                          <div className="w-14 h-3.5 bg-white/10 rounded animate-pulse" />
+                          <div className="w-10 h-3 bg-white/5 rounded animate-pulse ml-auto" />
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-slate-600 font-mono">--</span>
+                      )}
+                    </div>
+
+                    {/* Delete action */}
                     <button
                       onClick={(e) => removeTicker(item.symbol, e)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-red-400 rounded hover:bg-red-500/10 transition-all"
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-all"
                       title="Remove from watchlist"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -272,10 +371,15 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-3.5 border-t border-white/[0.08] bg-white/[0.01] flex items-center justify-between text-[11px] text-slate-500">
-          <span>Synced locally across sessions</span>
-          <span className="font-mono text-slate-600">StockIQ Universe</span>
+        {/* ── Drawer Footer ─────────────────────────────────────────────── */}
+        <div className="p-3.5 border-t border-white/[0.08] bg-black/40 flex items-center justify-between text-[11px] text-slate-500">
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>100% Live Quotes</span>
+          </div>
+          <span className="text-slate-600 font-mono">
+            {lastRefreshed ? `Updated ${lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Auto-synced'}
+          </span>
         </div>
       </div>
     </div>

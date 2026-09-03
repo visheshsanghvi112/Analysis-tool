@@ -357,6 +357,31 @@ def get_live_price(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/batch-quotes")
+def get_batch_quotes(tickers: str = Query(..., description="Comma-separated ticker list, max 30")):
+    """
+    Returns real-time price quotes for multiple tickers simultaneously using thread pooling.
+    Guarantees fast hydration of Watchlist and Portfolio components.
+    """
+    syms = [s.strip().upper() for s in tickers.split(",") if s.strip()][:30]
+    if not syms:
+        return {"quotes": {}}
+
+    def fetch_single(sym):
+        try:
+            q = get_quote(sym)
+            if q and q.get("price") is not None:
+                return sym, q
+        except Exception:
+            pass
+        return sym, None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(syms), 15)) as executor:
+        results = dict(executor.map(fetch_single, syms))
+
+    return {"quotes": {k: v for k, v in results.items() if v is not None}}
+
+
 @router.get("/fundamentals")
 async def fundamentals(request: Request, ticker: str = Query(..., description="NSE/BSE ticker, e.g. HDFCBANK.NS")):
     """
