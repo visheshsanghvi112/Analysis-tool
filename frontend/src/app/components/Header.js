@@ -14,7 +14,9 @@ import {
   ChevronRight,
   Loader2,
   Briefcase,
+  Star,
 } from 'lucide-react';
+import WatchlistDrawer from './WatchlistDrawer';
 
 const Header = ({ onTickerSelect, currentTicker }) => {
   const pathname = usePathname();
@@ -27,6 +29,24 @@ const Header = ({ onTickerSelect, currentTicker }) => {
   const [isSearching, setIsSearching]   = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [watchlistOpen, setWatchlistOpen] = useState(false);
+  const [watchlistCount, setWatchlistCount] = useState(0);
+
+  // Sync watchlist count from localStorage
+  useEffect(() => {
+    const updateCount = () => {
+      try {
+        const saved = localStorage.getItem('stockiq_pro_watchlist');
+        if (saved) {
+          const list = JSON.parse(saved);
+          setWatchlistCount(Array.isArray(list) ? list.length : 0);
+        }
+      } catch (_) {}
+    };
+    updateCount();
+    window.addEventListener('stockiq-watchlist-changed', updateCount);
+    return () => window.removeEventListener('stockiq-watchlist-changed', updateCount);
+  }, []);
 
   const timeoutRef   = useRef(null);
   const abortRef     = useRef(null);
@@ -361,6 +381,27 @@ const Header = ({ onTickerSelect, currentTicker }) => {
                 <Briefcase style={{ width: '13px', height: '13px' }} />
                 Portfolio
               </Link>
+              <button
+                onClick={() => setWatchlistOpen(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '5px 11px', background: 'rgba(234, 179, 8, 0.08)',
+                  border: '1px solid rgba(234, 179, 8, 0.25)', borderRadius: '6px',
+                  color: '#facc15', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(234, 179, 8, 0.15)'; e.currentTarget.style.borderColor = 'rgba(234, 179, 8, 0.4)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(234, 179, 8, 0.08)'; e.currentTarget.style.borderColor = 'rgba(234, 179, 8, 0.25)'; }}
+              >
+                <Star style={{ width: '13px', height: '13px', fill: '#facc15', color: '#facc15' }} />
+                <span>Watchlist</span>
+                {watchlistCount > 0 && (
+                  <span style={{
+                    fontSize: '10px', background: '#eab308', color: '#000',
+                    padding: '0 5px', borderRadius: '999px', fontWeight: 800, lineHeight: '16px'
+                  }}>{watchlistCount}</span>
+                )}
+              </button>
               <div style={{ width: '1px', height: '16px', background: '#2a2a2a' }} />
               <span className="v-badge v-badge-green">
                 <span className="live-dot" style={{ marginRight: '2px' }} />
@@ -515,13 +556,29 @@ const Header = ({ onTickerSelect, currentTicker }) => {
                 borderRadius: '8px',
                 color: isPortfolioActive ? '#a5b4fc' : '#818cf8',
                 fontSize: '13px', fontWeight: 500,
-                textDecoration: 'none', marginBottom: '16px',
+                textDecoration: 'none', marginBottom: '8px',
               }}
               onClick={() => setMobileMenuOpen(false)}
             >
               <Briefcase style={{ width: '14px', height: '14px' }} />
               Portfolio Tracker
             </Link>
+            <button
+              onClick={() => { setMobileMenuOpen(false); setWatchlistOpen(true); }}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                width: '100%', padding: '12px',
+                background: 'rgba(234, 179, 8, 0.1)',
+                border: '1px solid rgba(234, 179, 8, 0.3)',
+                borderRadius: '8px',
+                color: '#facc15',
+                fontSize: '13px', fontWeight: 600,
+                cursor: 'pointer', marginBottom: '16px',
+              }}
+            >
+              <Star style={{ width: '14px', height: '14px', fill: '#facc15' }} />
+              Watchlist ({watchlistCount})
+            </button>
             <p style={{ fontSize: '11px', color: '#555', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Quick access
             </p>
@@ -543,6 +600,16 @@ const Header = ({ onTickerSelect, currentTicker }) => {
           </div>
         )}
       </header>
+
+      {/* ── Watchlist Drawer ────────────────────────────────────────── */}
+      <WatchlistDrawer
+        isOpen={watchlistOpen}
+        onClose={() => setWatchlistOpen(false)}
+        onSelectTicker={(sym) => {
+          if (onTickerSelect) onTickerSelect(sym);
+        }}
+        currentTicker={currentTicker}
+      />
 
       {/* Global CSS for spin animation */}
       <style>{`

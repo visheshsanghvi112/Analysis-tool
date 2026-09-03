@@ -9,7 +9,8 @@ import {
   Activity,
   AlertTriangle,
   Clock,
-  BarChart3
+  BarChart3,
+  Star
 } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
@@ -128,6 +129,43 @@ export default function LivePrice({ ticker }) {
   const [lastUpdated, setLastUpdated] = useState(null);
   const timerRef = useRef(null);
   const abortControllerRef = useRef(null);
+  const [isStarred, setIsStarred] = useState(false);
+
+  // Sync star status from localStorage
+  useEffect(() => {
+    if (!ticker) return;
+    const checkStarred = () => {
+      try {
+        const saved = localStorage.getItem('stockiq_pro_watchlist');
+        if (saved) {
+          const list = JSON.parse(saved);
+          setIsStarred(list.some(item => item.symbol === ticker));
+        }
+      } catch (_) {}
+    };
+    checkStarred();
+    window.addEventListener('stockiq-watchlist-changed', checkStarred);
+    return () => window.removeEventListener('stockiq-watchlist-changed', checkStarred);
+  }, [ticker]);
+
+  const toggleWatchlist = () => {
+    if (!ticker) return;
+    try {
+      const saved = localStorage.getItem('stockiq_pro_watchlist');
+      let list = saved ? JSON.parse(saved) : [];
+      const exists = list.some(item => item.symbol === ticker);
+      if (exists) {
+        list = list.filter(item => item.symbol !== ticker);
+        setIsStarred(false);
+      } else {
+        const isETF = ticker.includes('BEES') || ticker.includes('ETF') || ticker.includes('GOLD') || ticker.includes('SILVER');
+        list = [{ symbol: ticker, name: quote?.longName || quote?.shortName || ticker, sector: isETF ? 'ETF' : 'Equity' }, ...list];
+        setIsStarred(true);
+      }
+      localStorage.setItem('stockiq_pro_watchlist', JSON.stringify(list));
+      window.dispatchEvent(new CustomEvent('stockiq-watchlist-changed'));
+    } catch (_) {}
+  };
 
   const fetchLive = async () => {
     if (!ticker) return;
@@ -198,6 +236,17 @@ export default function LivePrice({ ticker }) {
               })}
             </span>
           )}
+          <button
+            onClick={toggleWatchlist}
+            className={`p-2 rounded-lg transition-all focus-ring ${
+              isStarred
+                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-sm'
+                : 'hover:bg-slate-800/60 text-slate-500 hover:text-slate-300'
+            }`}
+            title={isStarred ? "Remove from Watchlist" : "Add to Watchlist"}
+          >
+            <Star className={`h-4 w-4 ${isStarred ? 'fill-amber-400 text-amber-400' : ''}`} />
+          </button>
           <button
             onClick={fetchLive}
             disabled={loading}

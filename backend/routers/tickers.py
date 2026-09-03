@@ -3,6 +3,7 @@ import concurrent.futures
 from fastapi import APIRouter, Query, HTTPException, Request
 from utils.limiter import limiter
 from utils.constants import NIFTY_50_TICKERS
+from utils.cache import cache_ttl
 from services.ticker_manager import ensure_ticker_list
 from yf_client import get_quote, get_fundamentals_data
 
@@ -132,12 +133,15 @@ def get_sectors():
     }
 
 
-@router.get("/market-screener")
-@limiter.limit("20/minute")
-def get_market_screener(request: Request):
+SCREENER_POOL = NIFTY_50_TICKERS + [
+    'NIFTYBEES.NS', 'BANKBEES.NS', 'GOLDBEES.NS', 'SILVERBEES.NS', 'ITBEES.NS', 'MON100.NS', 'CPSEETF.NS'
+]
+
+@cache_ttl(seconds=60)
+def _compute_market_screener():
     """
-    Returns real-time lists of Top Gainers, Top Losers, Volume Shockers,
-    52-Week Highs, and 52-Week Lows for Nifty 50 stocks.
+    Computes real-time market screener data across Nifty 50 and key ETFs.
+    Cached for 60 seconds to ensure sub-millisecond responses and eliminate rate limits.
     """
     def fetch_quote_safe(ticker):
         try:
@@ -149,8 +153,8 @@ def get_market_screener(request: Request):
             pass
         return None
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
-        raw_results = list(executor.map(fetch_quote_safe, NIFTY_50_TICKERS))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
+        raw_results = list(executor.map(fetch_quote_safe, SCREENER_POOL))
     
     quotes = [r for r in raw_results if r is not None]
 
@@ -208,6 +212,17 @@ def get_market_screener(request: Request):
         "high52w": high_52w[:20],
         "low52w": low_52w[:20]
     }
+
+
+@router.get("/market-screener")
+@limiter.limit("60/minute")
+def get_market_screener(request: Request):
+    """
+    Returns real-time lists of Top Gainers, Top Losers, Volume Shockers,
+    52-Week Highs, and 52-Week Lows for Nifty 50 and popular ETFs.
+    """
+    return _compute_market_screener()
+
 
 
 @router.get("/live")

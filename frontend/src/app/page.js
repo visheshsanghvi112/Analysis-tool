@@ -15,10 +15,11 @@ import LongTermAnalysis from './components/LongTermAnalysis';
 import MonteCarloSimulation from './components/MonteCarloSimulation';
 import FundamentalsAnalysis from './components/FundamentalsAnalysis';
 import SIPCalculator from './components/SIPCalculator';
+import ResearchReportModal from './components/ResearchReportModal';
 import {
   TrendingUp, Brain, Newspaper, PieChart,
   Activity, ArrowRight, CheckCircle, Clock, AlertTriangle,
-  LayoutGrid, BarChart2, Trophy,
+  LayoutGrid, BarChart2, Trophy, FileText,
 } from 'lucide-react';
 
 /* ── Status badge ─────────────────────────────────────────────────── */
@@ -236,6 +237,7 @@ const LoadingState = ({ ticker }) => (
 export default function Dashboard() {
   const [selectedTicker, setSelectedTicker] = useState('');
   const [isLoading, setIsLoading]           = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
   // Read ?ticker= param on mount (set by /browse page)
   useEffect(() => {
@@ -286,6 +288,35 @@ export default function Dashboard() {
               <StatusBadge icon={Brain}     title="ML Predictions"    subtitle="5-day Random Forest"       status="active" />
               <StatusBadge icon={Newspaper} title="News Intelligence" subtitle="AI sentiment · Alerts"     status="active" />
               <StatusBadge icon={PieChart}  title="Risk Analytics"    subtitle="VaR · Options · Portfolio" status="active" />
+            </div>
+
+            {/* Quick Action & Research Memo Bar */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: '14px', background: 'rgba(255,255,255,0.02)',
+              border: '1px solid #1a1a22', borderRadius: '10px', padding: '10px 16px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '12px', color: '#777', fontWeight: 500 }}>Active Asset:</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff', background: '#111', border: '1px solid #282828', padding: '2px 8px', borderRadius: '6px' }}>
+                  {selectedTicker}
+                </span>
+              </div>
+              <button
+                onClick={() => setReportModalOpen(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '6px 13px', background: 'rgba(59, 130, 246, 0.1)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '7px',
+                  color: '#60a5fa', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                  transition: 'all 0.15s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.18)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'}
+              >
+                <FileText style={{ width: '13px', height: '13px' }} />
+                <span>Export Research Memo</span>
+              </button>
             </div>
 
             {/* Charts grid */}
@@ -346,6 +377,13 @@ export default function Dashboard() {
           </p>
         </div>
       </footer>
+
+      {/* Research Memo Export Modal */}
+      <ResearchReportModal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        ticker={selectedTicker}
+      />
     </div>
   );
 }
