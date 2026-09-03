@@ -21,16 +21,10 @@ import StockSearchModal from './StockSearchModal';
 import SideNavDrawer from './SideNavDrawer';
 
 const Header = ({ onTickerSelect, currentTicker }) => {
-  const pathname = usePathname();
-  const isBrowseActive = pathname === '/browse';
-  const isPortfolioActive = pathname === '/portfolio';
-  const isFeaturesActive = pathname === '/features';
-
   const [searchQuery, setSearchQuery]   = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching]   = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [watchlistOpen, setWatchlistOpen] = useState(false);
   const [watchlistCount, setWatchlistCount] = useState(0);
   const [spotlightOpen, setSpotlightOpen] = useState(false);
@@ -56,7 +50,6 @@ const Header = ({ onTickerSelect, currentTicker }) => {
   const abortRef     = useRef(null);
   const wrapperRef   = useRef(null);
   const inputRef     = useRef(null);
-  const mobileInputRef = useRef(null);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 
@@ -70,18 +63,6 @@ const Header = ({ onTickerSelect, currentTicker }) => {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
-
-  // Auto-focus mobile search input when mobile menu opens
-  useEffect(() => {
-    if (mobileMenuOpen) {
-      const timer = setTimeout(() => {
-        if (mobileInputRef.current) {
-          mobileInputRef.current.focus();
-        }
-      }, 150);
-      return () => clearTimeout(timer);
-    }
-  }, [mobileMenuOpen]);
 
   // Handle global search focus events & hotkeys
   useEffect(() => {
@@ -192,40 +173,29 @@ const Header = ({ onTickerSelect, currentTicker }) => {
         }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div style={{ display: 'flex', alignItems: 'center', height: '60px', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', height: '60px', gap: '20px' }}>
 
-            {/* ── Left: Side Navigation Toggle & Logo ───────────────── */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-              <button
-                onClick={() => setSideNavOpen(true)}
-                className="p-1.5 -ml-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/[0.08] transition-colors"
-                title="Open Navigation Menu"
-                aria-label="Open Navigation Menu"
+            {/* ── Left: Logo — click navigates home ─────────────────── */}
+            <Link href="/" onClick={() => { window.dispatchEvent(new CustomEvent('reset-selected-ticker')); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0, textDecoration: 'none' }}>
+              <div style={{
+                width: '32px', height: '32px',
+                background: '#fff',
+                borderRadius: '6px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'opacity 0.15s',
+              }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
               >
-                <Menu className="w-5 h-5 text-slate-300 hover:text-white" />
-              </button>
-
-              <Link href="/" onClick={() => { window.dispatchEvent(new CustomEvent('reset-selected-ticker')); }} style={{ display: 'flex', alignItems: 'center', gap: '9px', textDecoration: 'none' }}>
-                <div style={{
-                  width: '30px', height: '30px',
-                  background: '#fff',
-                  borderRadius: '6px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'opacity 0.15s',
-                }}
-                  onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-                >
-                  <TrendingUp style={{ width: '16px', height: '16px', color: '#000' }} />
-                </div>
-                <span
-                  className="hidden sm:block"
-                  style={{ fontWeight: 700, fontSize: '15px', color: '#fff', letterSpacing: '-0.02em' }}
-                >
-                  StockIQ Pro
-                </span>
-              </Link>
-            </div>
+                <TrendingUp style={{ width: '18px', height: '18px', color: '#000' }} />
+              </div>
+              <span
+                className="hidden sm:block"
+                style={{ fontWeight: 700, fontSize: '15px', color: '#fff', letterSpacing: '-0.02em' }}
+              >
+                StockIQ Pro
+              </span>
+            </Link>
 
             {/* ── Divider ─────────────────────────────────────────────── */}
             <div className="hidden sm:block" style={{ width: '1px', height: '20px', background: '#333' }} />
@@ -357,88 +327,59 @@ const Header = ({ onTickerSelect, currentTicker }) => {
               )}
             </div>
 
-            {/* ── Right nav + badges ──────────────────────────────────── */}
-            <div className="hidden md:flex items-center gap-4" style={{ marginLeft: 'auto' }}>
-              <Link
-                href="/browse"
-                style={{
-                  fontSize: '13px', fontWeight: 500, color: isBrowseActive ? '#fff' : '#888',
-                  textDecoration: 'none', transition: 'color 0.15s',
-                  whiteSpace: 'nowrap',
-                }}
-                onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-                onMouseLeave={e => e.currentTarget.style.color = isBrowseActive ? '#fff' : '#888'}
-              >
-                Browse Stocks
-              </Link>
-              <Link
-                href="/features"
-                style={{
-                  fontSize: '13px', fontWeight: 500, color: isFeaturesActive ? '#fff' : '#888',
-                  textDecoration: 'none', transition: 'color 0.15s',
-                  whiteSpace: 'nowrap',
-                }}
-                onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-                onMouseLeave={e => e.currentTarget.style.color = isFeaturesActive ? '#fff' : '#888'}
-              >
-                Deep-dive Features
-              </Link>
-              <Link
-                href="/portfolio"
-                style={{
-                  fontSize: '13px', fontWeight: 500, color: isPortfolioActive ? '#fff' : '#888',
-                  textDecoration: 'none', transition: 'color 0.15s',
-                  whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px',
-                }}
-                onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-                onMouseLeave={e => e.currentTarget.style.color = isPortfolioActive ? '#fff' : '#888'}
-              >
-                <Briefcase style={{ width: '13px', height: '13px' }} />
-                Portfolio
-              </Link>
+            {/* ── Right: Watchlist + Live + Menu Button ─────────────── */}
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {/* Watchlist button */}
               <button
                 onClick={() => setWatchlistOpen(true)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '6px',
-                  padding: '5px 11px', background: 'rgba(234, 179, 8, 0.08)',
-                  border: '1px solid rgba(234, 179, 8, 0.25)', borderRadius: '6px',
+                  padding: '6px 12px', background: 'rgba(234, 179, 8, 0.08)',
+                  border: '1px solid rgba(234, 179, 8, 0.25)', borderRadius: '7px',
                   color: '#facc15', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                   transition: 'all 0.15s',
                 }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(234, 179, 8, 0.15)'; e.currentTarget.style.borderColor = 'rgba(234, 179, 8, 0.4)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(234, 179, 8, 0.08)'; e.currentTarget.style.borderColor = 'rgba(234, 179, 8, 0.25)'; }}
+                title="Open Watchlist"
               >
                 <Star style={{ width: '13px', height: '13px', fill: '#facc15', color: '#facc15' }} />
-                <span>Watchlist</span>
+                <span className="hidden sm:inline">Watchlist</span>
                 {watchlistCount > 0 && (
                   <span style={{
                     fontSize: '10px', background: '#eab308', color: '#000',
-                    padding: '0 5px', borderRadius: '999px', fontWeight: 800, lineHeight: '16px'
+                    padding: '0 6px', borderRadius: '999px', fontWeight: 800, lineHeight: '16px'
                   }}>{watchlistCount}</span>
                 )}
               </button>
-              <div style={{ width: '1px', height: '16px', background: '#2a2a2a' }} />
-              <span className="v-badge v-badge-green">
+
+              {/* Live status badge */}
+              <span className="hidden sm:inline-flex v-badge v-badge-green">
                 <span className="live-dot" style={{ marginRight: '2px' }} />
                 Live
               </span>
-              <span className="v-badge v-badge-blue">
-                <Brain style={{ width: '11px', height: '11px' }} />
-                AI
-              </span>
-            </div>
 
-            {/* ── Mobile: hamburger ───────────────────────────────────── */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden"
-              style={{
-                marginLeft: 'auto', padding: '6px', background: 'transparent',
-                border: '1px solid #333', borderRadius: '6px', color: '#aaa', cursor: 'pointer',
-              }}
-            >
-              {mobileMenuOpen ? <X style={{ width: '18px', height: '18px' }} /> : <Menu style={{ width: '18px', height: '18px' }} />}
-            </button>
+              <div className="hidden sm:block" style={{ width: '1px', height: '18px', background: '#222' }} />
+
+              {/* ── Menu Bar Icon on the RIGHT SIDE ───────────────────── */}
+              <button
+                onClick={() => setSideNavOpen(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '6px 12px', background: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.14)', borderRadius: '7px',
+                  color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.28)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.14)'; }}
+                title="Open Navigation Menu"
+                aria-label="Open Navigation Menu"
+              >
+                <Menu style={{ width: '16px', height: '16px', color: '#fff' }} />
+                <span className="hidden sm:inline">Menu</span>
+              </button>
+            </div>
           </div>
 
           {/* ── Analysing ticker strip ─────────────────────────────────── */}
@@ -464,156 +405,6 @@ const Header = ({ onTickerSelect, currentTicker }) => {
             </div>
           )}
         </div>
-
-        {/* ── Mobile menu ─────────────────────────────────────────────── */}
-        {mobileMenuOpen && (
-          <div style={{
-            borderTop: '1px solid #222',
-            background: '#0a0a0a',
-            padding: '16px',
-          }}>
-            {/* Mobile search */}
-            <div style={{ position: 'relative', marginBottom: '16px' }}>
-              <Search style={{
-                position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)',
-                width: '15px', height: '15px', color: '#666', pointerEvents: 'none',
-              }} />
-              <input
-                ref={mobileInputRef}
-                type="text"
-                value={searchQuery}
-                onChange={handleSearch}
-                placeholder="Search stocks…"
-                className="v-input"
-                style={{ width: '100%', paddingLeft: '38px', paddingRight: '12px', paddingTop: '10px', paddingBottom: '10px' }}
-              />
-            </div>
-
-            {/* Mobile search results */}
-            {searchResults.length > 0 && (
-              <div style={{
-                background: '#111', border: '1px solid #222', borderRadius: '8px',
-                overflow: 'hidden', marginBottom: '16px',
-              }}>
-                {searchResults.slice(0, 8).map((ticker, i) => (
-                  <button
-                    key={ticker.symbol}
-                    onClick={() => selectTicker(ticker)}
-                    style={{
-                      width: '100%', display: 'flex', justifyContent: 'space-between',
-                      alignItems: 'center', padding: '12px 14px', background: 'transparent',
-                      border: 'none', borderBottom: i < Math.min(searchResults.length, 8) - 1 ? '1px solid #1a1a1a' : 'none',
-                      cursor: 'pointer', color: '#ededed', textAlign: 'left',
-                    }}
-                  >
-                    <div>
-                      <p style={{ fontSize: '13px', fontWeight: 600 }}>
-                        {ticker.symbol.replace('.NS', '').replace('.BO', '')}
-                      </p>
-                      <p style={{ fontSize: '12px', color: '#777', marginTop: '2px' }}>{ticker.name}</p>
-                    </div>
-                    {ticker.sector && (
-                      <span style={{
-                        fontSize: '11px', padding: '2px 7px',
-                        background: ticker.sector === 'ETF' ? 'rgba(234,179,8,0.12)' : ticker.sector === 'Indices' ? 'rgba(56,189,248,0.12)' : ticker.sector === 'Global' ? 'rgba(168,85,247,0.12)' : 'rgba(0,112,243,0.1)',
-                        border: ticker.sector === 'ETF' ? '1px solid rgba(234,179,8,0.3)' : ticker.sector === 'Indices' ? '1px solid rgba(56,189,248,0.3)' : ticker.sector === 'Global' ? '1px solid rgba(168,85,247,0.3)' : '1px solid rgba(0,112,243,0.2)',
-                        borderRadius: '4px',
-                        color: ticker.sector === 'ETF' ? '#facc15' : ticker.sector === 'Indices' ? '#38bdf8' : ticker.sector === 'Global' ? '#c084fc' : '#4fa3ff',
-                      }}>
-                        {ticker.sector}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Browse link + popular chips */}
-            <Link
-              href="/browse"
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: '100%', padding: '12px',
-                background: isBrowseActive ? 'rgba(99, 102, 241, 0.1)' : '#111',
-                border: isBrowseActive ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid #222',
-                borderRadius: '8px',
-                color: isBrowseActive ? '#a5b4fc' : '#fff',
-                fontSize: '13px', fontWeight: 500,
-                textDecoration: 'none', marginBottom: '16px',
-              }}
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Browse all sectors →
-            </Link>
-            <Link
-              href="/features"
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: '100%', padding: '12px',
-                background: isFeaturesActive ? 'rgba(99, 102, 241, 0.1)' : '#111',
-                border: isFeaturesActive ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid #222',
-                borderRadius: '8px',
-                color: isFeaturesActive ? '#a5b4fc' : '#fff',
-                fontSize: '13px', fontWeight: 500,
-                textDecoration: 'none', marginBottom: '16px',
-              }}
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Deep-dive Features
-            </Link>
-            <Link
-              href="/portfolio"
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                width: '100%', padding: '12px',
-                background: isPortfolioActive ? 'rgba(99, 102, 241, 0.1)' : '#0d0d18',
-                border: isPortfolioActive ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid #2a2a40',
-                borderRadius: '8px',
-                color: isPortfolioActive ? '#a5b4fc' : '#818cf8',
-                fontSize: '13px', fontWeight: 500,
-                textDecoration: 'none', marginBottom: '8px',
-              }}
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <Briefcase style={{ width: '14px', height: '14px' }} />
-              Portfolio Tracker
-            </Link>
-            <button
-              onClick={() => { setMobileMenuOpen(false); setWatchlistOpen(true); }}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                width: '100%', padding: '12px',
-                background: 'rgba(234, 179, 8, 0.1)',
-                border: '1px solid rgba(234, 179, 8, 0.3)',
-                borderRadius: '8px',
-                color: '#facc15',
-                fontSize: '13px', fontWeight: 600,
-                cursor: 'pointer', marginBottom: '16px',
-              }}
-            >
-              <Star style={{ width: '14px', height: '14px', fill: '#facc15' }} />
-              Watchlist ({watchlistCount})
-            </button>
-            <p style={{ fontSize: '11px', color: '#555', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Quick access
-            </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {popularStocks.map(s => (
-                <button
-                  key={s.symbol}
-                  onClick={() => selectTicker(s)}
-                  style={{
-                    fontSize: '13px', fontWeight: 500, padding: '8px 14px',
-                    background: '#111', border: '1px solid #222', borderRadius: '8px',
-                    color: '#fff', cursor: 'pointer',
-                  }}
-                >
-                  {s.symbol.replace('.NS', '')}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </header>
 
       {/* ── Watchlist Drawer ────────────────────────────────────────── */}

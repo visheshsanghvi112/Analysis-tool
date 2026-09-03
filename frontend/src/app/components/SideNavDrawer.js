@@ -130,11 +130,11 @@ export default function SideNavDrawer({ isOpen, onClose, onOpenSearch }) {
 
   return (
     <div 
-      className="fixed inset-0 z-[130] flex justify-start bg-black/80 backdrop-blur-md transition-opacity duration-200"
+      className="fixed inset-0 z-[130] flex justify-end bg-black/80 backdrop-blur-md transition-opacity duration-200"
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-sm sm:max-w-md bg-[#0b0c10] border-r border-white/10 h-full flex flex-col shadow-2xl animate-in slide-in-from-left duration-250 select-none overflow-hidden"
+        className="w-full max-w-sm sm:max-w-md bg-[#0b0c10] border-l border-white/10 h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-250 select-none overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Side Menu Header ─────────────────────────────────────────── */}
