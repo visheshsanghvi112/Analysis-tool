@@ -15,6 +15,7 @@ import {
   Building2,
   RefreshCw
 } from 'lucide-react';
+import { smartSearch, fetchSmartTickers } from '../utils/smartSearch';
 
 const STORAGE_KEY = 'stockiq_pro_watchlist';
 
@@ -87,22 +88,31 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
     }
   }, [isOpen]);
 
-  // Filter search results
+  // Smart filter search results
   useEffect(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q || allTickers.length === 0) {
+    const q = searchQuery.trim();
+    if (!q) {
       setSearchResults([]);
       return;
     }
-    const cleanQ = q.replace('.ns', '').replace('.bo', '');
     const inWatchlist = new Set(watchlist.map((w) => w.symbol));
 
-    const matches = allTickers
+    // 1. Instant local smart search preview (handles aliases, typos, BSE codes)
+    const localMatches = smartSearch(allTickers, q, { limit: 10 })
       .filter((t) => !inWatchlist.has(t.symbol))
-      .filter((t) => t.symbol.toLowerCase().includes(cleanQ) || t.name.toLowerCase().includes(q))
       .slice(0, 6);
+    setSearchResults(localMatches);
 
-    setSearchResults(matches);
+    // 2. Fetch from smart backend endpoint to ensure freshest relevance
+    let isCurrent = true;
+    fetchSmartTickers(q, allTickers, 10).then((apiMatches) => {
+      if (isCurrent && apiMatches && apiMatches.length > 0) {
+        const filtered = apiMatches.filter((t) => !inWatchlist.has(t.symbol)).slice(0, 6);
+        if (filtered.length > 0) setSearchResults(filtered);
+      }
+    });
+
+    return () => { isCurrent = false; };
   }, [searchQuery, allTickers, watchlist]);
 
   // Persist watchlist changes

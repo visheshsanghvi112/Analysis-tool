@@ -13,8 +13,7 @@ import {
 } from 'lucide-react';
 import SmartCapitalAdvisor from './SmartCapitalAdvisor';
 import Header from './Header';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
+import { API_BASE_URL } from '../config';
 
 const PORTFOLIO_KEY = 'stockiq_portfolio_v1';
 
@@ -61,15 +60,17 @@ function TickerSearch({ value, onChange }) {
   }, []);
 
   useEffect(() => {
-    if (query.length < 1) { setResults([]); return; }
+    if (query.trim().length < 1) { setResults([]); return; }
     const t = setTimeout(async () => {
       try {
-        const r = await fetch(`${API_BASE_URL}/api/tickers?q=${encodeURIComponent(query)}&limit=8`);
-        const j = await r.json();
-        setResults(j.tickers || []);
-        setOpen(true);
+        const r = await fetch(`${API_BASE_URL}/api/tickers?q=${encodeURIComponent(query.trim())}&limit=8`);
+        if (r.ok) {
+          const j = await r.json();
+          setResults(j.tickers || []);
+          setOpen(true);
+        }
       } catch { setResults([]); }
-    }, 250);
+    }, 150);
     return () => clearTimeout(t);
   }, [query]);
 
@@ -87,15 +88,20 @@ function TickerSearch({ value, onChange }) {
         <input
           value={query}
           onChange={e => { setQuery(e.target.value); onChange(e.target.value); }}
+          onFocus={() => { if (results.length > 0) setOpen(true); }}
           onBlur={() => {
-            // auto-append .NS if no suffix given
-            if (query && !query.includes('.')) {
+            // If results are open and user didn't pick, pick the #1 match
+            if (results.length > 0 && results[0]?.symbol) {
+              pick(results[0]);
+              return;
+            }
+            if (query && !query.includes('.') && !query.startsWith('^')) {
               const sym = query.toUpperCase() + '.NS';
               setQuery(sym);
               onChange(sym);
             }
           }}
-          placeholder="Search stock…"
+          placeholder="Smart search (e.g. SBI, Tata Motors, 500325)…"
           className="bg-transparent text-xs text-white placeholder-slate-600 outline-none flex-1 min-w-0"
         />
         {query && (

@@ -54,10 +54,53 @@ export default function PeerComparison({ ticker }) {
   const [sector, setSector]         = useState('');
   const [selectedPeer, setSelectedPeer] = useState(null);
   const [customInput, setCustomInput]   = useState('');
+  const [suggestions, setSuggestions]   = useState([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [searching, setSearching]       = useState(false);
   const [comparison, setComparison]     = useState(null);
   const [loading, setLoading]           = useState(false);
   const [peersLoading, setPeersLoading] = useState(true);
   const [error, setError]               = useState(null);
+  const searchRef                       = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleOutside = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
+  // Debounced smart search for custom peer input
+  useEffect(() => {
+    const q = customInput.trim();
+    if (q.length < 1) {
+      setSuggestions([]);
+      setDropdownOpen(false);
+      return;
+    }
+
+    setSearching(true);
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API}/api/tickers?q=${encodeURIComponent(q)}&limit=6`);
+        if (res.ok) {
+          const data = await res.json();
+          setSuggestions(data.tickers || []);
+          setDropdownOpen(true);
+        }
+      } catch (_) {
+        setSuggestions([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 150);
+
+    return () => clearTimeout(timeout);
+  }, [customInput]);
 
   // Load suggested peers on ticker change
   useEffect(() => {
@@ -85,6 +128,7 @@ export default function PeerComparison({ ticker }) {
     setComparison(null);
     setError(null);
     setLoading(true);
+    setDropdownOpen(false);
 
     fetch(`${API}/api/peer-compare?ticker=${encodeURIComponent(ticker)}&peer=${encodeURIComponent(peer)}`)
       .then(r => { if (!r.ok) throw new Error('Failed'); return r.json(); })
@@ -93,12 +137,39 @@ export default function PeerComparison({ ticker }) {
       .finally(() => setLoading(false));
   };
 
-  const handleCustom = (e) => {
+  const handleCustom = async (e) => {
     e.preventDefault();
-    if (!customInput.trim()) return;
-    const sym = customInput.trim().toUpperCase();
-    const full = sym.endsWith('.NS') || sym.endsWith('.BO') ? sym : sym + '.NS';
+    const q = customInput.trim();
+    if (!q) return;
+
+    // 1. If suggestions already loaded, pick top match
+    if (suggestions.length > 0) {
+      const top = suggestions[0].symbol;
+      setCustomInput('');
+      setDropdownOpen(false);
+      loadComparison(top);
+      return;
+    }
+
+    // 2. Query smart search API to resolve canonical ticker (handles aliases, typos, BSE codes)
+    try {
+      const res = await fetch(`${API}/api/tickers?q=${encodeURIComponent(q)}&limit=1`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.tickers && data.tickers.length > 0) {
+          setCustomInput('');
+          setDropdownOpen(false);
+          loadComparison(data.tickers[0].symbol);
+          return;
+        }
+      }
+    } catch (_) {}
+
+    // Fallback direct format
+    const sym = q.toUpperCase();
+    const full = sym.endsWith('.NS') || sym.endsWith('.BO') || sym.startsWith('^') ? sym : sym + '.NS';
     setCustomInput('');
+    setDropdownOpen(false);
     loadComparison(full);
   };
 
@@ -159,16 +230,58 @@ export default function PeerComparison({ ticker }) {
         <p style={{ fontSize: '12px', color: '#444', marginBottom: '14px' }}>No suggested peers in database for this ticker. Enter one below.</p>
       )}
 
-      {/* Custom Peer Input */}
-      <form onSubmit={handleCustom} style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-        <div style={{ flex: 1, position: 'relative' }}>
-          <Search style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', width: '13px', height: '13px', color: '#555' }} />
+      {/* Custom Peer Input with Smart Autocomplete */}
+      <form onSubmit={handleCustom} style={{ display: 'flex', gap: '8px', marginBottom: '20px', position: 'relative' }}>
+        <div ref={searchRef} style={{ flex: 1, position: 'relative' }}>
+          <Search style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', width: '13px', height: '13px', color: searching ? '#3b82f6' : '#555' }} />
           <input
             value={customInput}
             onChange={e => setCustomInput(e.target.value)}
-            placeholder="Enter any NSE ticker (e.g. TATAMOTORS)"
+            onFocus={() => { if (suggestions.length > 0) setDropdownOpen(true); }}
+            placeholder="Smart Search: any stock, ETF, alias, or BSE code (e.g. SBI, Tata Motors, 500325)..."
             style={{ width: '100%', background: '#111', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '8px 10px 8px 30px', fontSize: '12px', color: '#fff', outline: 'none' }}
           />
+
+          {/* Smart Suggestions Dropdown */}
+          {dropdownOpen && suggestions.length > 0 && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+              background: '#0e0e12', border: '1px solid #282835', borderRadius: '10px',
+              zIndex: 50, boxShadow: '0 10px 30px rgba(0,0,0,0.8)', overflow: 'hidden'
+            }}>
+              {suggestions.map((item) => (
+                <div
+                  key={item.symbol}
+                  onClick={() => {
+                    setCustomInput('');
+                    setDropdownOpen(false);
+                    loadComparison(item.symbol);
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #1a1a22',
+                    transition: 'background 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>
+                      {item.symbol.replace('.NS', '').replace('.BO', '')}
+                    </span>
+                    <span style={{ fontSize: '11px', color: '#888', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.name}
+                    </span>
+                  </div>
+                  {item.sector && (
+                    <span style={{ fontSize: '10px', padding: '1px 6px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', color: '#aaa' }}>
+                      {item.sector}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <button
           type="submit"

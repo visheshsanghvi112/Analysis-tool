@@ -7,6 +7,7 @@ import {
   ArrowLeft, Search, X, TrendingUp, TrendingDown,
   ChevronRight, Sparkles, Filter, RefreshCw, Flame, Award, ShieldAlert
 } from 'lucide-react';
+import { smartSearch } from '../utils/smartSearch';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 
@@ -362,7 +363,7 @@ export default function BrowsePage() {
     ];
   }, [sectorGroups, allTickers]);
 
-  // Smart Fuzzy Matcher
+  // Smart Search & Fuzzy Matcher
   const filteredTickers = useMemo(() => {
     let list = allTickers;
     
@@ -371,12 +372,7 @@ export default function BrowsePage() {
     }
 
     if (query.trim()) {
-      const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-      list = list.filter((t) => {
-        const sym = t.symbol.toLowerCase();
-        const name = t.name.toLowerCase();
-        return words.every(word => sym.includes(word) || name.includes(word));
-      });
+      return smartSearch(list, query.trim(), { limit: 1000 });
     }
 
     return list;
