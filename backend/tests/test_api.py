@@ -133,3 +133,36 @@ def test_index_ticker_live_price(mock_quote):
     assert data["ticker"] == "^NSEI"
     assert data["price"] == 24000.0
 
+def test_smart_search_typo_tolerance():
+    """Verify common typo 'relaince' correctly resolves to RELIANCE.NS as top result."""
+    response = client.get("/api/tickers?q=relaince")
+    assert response.status_code == 200
+    tickers = response.json()["tickers"]
+    assert len(tickers) >= 1
+    assert tickers[0]["symbol"] == "RELIANCE.NS"
+
+def test_smart_search_multi_token_space():
+    """Verify space-separated query 'tata motors' matches Tata Motors."""
+    response = client.get("/api/tickers?q=tata motors")
+    assert response.status_code == 200
+    tickers = response.json()["tickers"]
+    assert len(tickers) >= 1
+    assert any("Tata Motors" in t["name"] for t in tickers)
+
+def test_smart_search_financial_alias():
+    """Verify financial acronym 'sbi' resolves to State Bank of India (SBIN.NS)."""
+    response = client.get("/api/tickers?q=sbi")
+    assert response.status_code == 200
+    tickers = response.json()["tickers"]
+    assert len(tickers) >= 1
+    assert tickers[0]["symbol"] == "SBIN.NS"
+
+def test_smart_search_concept_gold_etf():
+    """Verify conceptual search 'gold etf' resolves to GOLDBEES.NS."""
+    response = client.get("/api/tickers?q=gold etf")
+    assert response.status_code == 200
+    tickers = response.json()["tickers"]
+    assert len(tickers) >= 1
+    assert tickers[0]["symbol"] == "GOLDBEES.NS"
+
+

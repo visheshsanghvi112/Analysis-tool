@@ -1,347 +1,474 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, X, RefreshCw, TrendingUp, Building2, ChevronRight } from 'lucide-react';
+import { 
+  Search, 
+  X, 
+  Clock, 
+  TrendingUp, 
+  Building2, 
+  ChevronRight, 
+  Command, 
+  Layers, 
+  Zap, 
+  Coins, 
+  Globe2, 
+  BarChart3,
+  Sparkles,
+  Trash2
+} from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
-// Popular/quick-pick stocks shown when modal opens before any search
-const POPULAR_STOCKS = [
-  { symbol: 'RELIANCE.NS', name: 'Reliance Industries Ltd', sector: 'Energy' },
-  { symbol: 'TCS.NS',      name: 'Tata Consultancy Services', sector: 'IT' },
-  { symbol: 'HDFCBANK.NS', name: 'HDFC Bank Ltd', sector: 'Banking' },
-  { symbol: 'INFY.NS',     name: 'Infosys Ltd', sector: 'IT' },
-  { symbol: 'ICICIBANK.NS',name: 'ICICI Bank Ltd', sector: 'Banking' },
-  { symbol: 'SBIN.NS',     name: 'State Bank of India', sector: 'Banking' },
-  { symbol: 'WIPRO.NS',    name: 'Wipro Ltd', sector: 'IT' },
-  { symbol: 'HCLTECH.NS',  name: 'HCL Technologies Ltd', sector: 'IT' },
-  { symbol: 'BAJFINANCE.NS', name: 'Bajaj Finance Ltd', sector: 'NBFC' },
-  { symbol: 'ASIANPAINT.NS', name: 'Asian Paints Ltd', sector: 'FMCG' },
-  { symbol: 'TITAN.NS',    name: 'Titan Company Ltd', sector: 'Consumer' },
-  { symbol: 'MARUTI.NS',   name: 'Maruti Suzuki India Ltd', sector: 'Auto' },
+const CATEGORIES = [
+  { id: 'all', label: 'All', icon: Layers },
+  { id: 'equity', label: 'Equities', icon: Building2 },
+  { id: 'etf', label: 'ETFs & Funds', icon: Coins },
+  { id: 'index', label: 'Indices', icon: BarChart3 },
+  { id: 'global', label: 'Global', icon: Globe2 },
 ];
 
-const SECTOR_COLORS = {
-  'IT': 'bg-blue-500/15 text-blue-400 border-blue-500/20',
-  'Banking': 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
-  'Energy': 'bg-orange-500/15 text-orange-400 border-orange-500/20',
-  'NBFC': 'bg-purple-500/15 text-purple-400 border-purple-500/20',
-  'FMCG': 'bg-yellow-500/15 text-yellow-400 border-yellow-500/20',
-  'Auto': 'bg-red-500/15 text-red-400 border-red-500/20',
-  'Consumer': 'bg-pink-500/15 text-pink-400 border-pink-500/20',
-};
+const TRENDING_PICKS = [
+  { symbol: 'RELIANCE.NS', name: 'Reliance Industries Limited', sector: 'Energy', type: 'Equity' },
+  { symbol: 'TCS.NS', name: 'Tata Consultancy Services', sector: 'IT', type: 'Equity' },
+  { symbol: 'HDFCBANK.NS', name: 'HDFC Bank Limited', sector: 'Banking', type: 'Equity' },
+  { symbol: '^NSEI', name: 'NIFTY 50 (Benchmark Index)', sector: 'Indices', type: 'Index' },
+  { symbol: 'NIFTYBEES.NS', name: 'Nippon India Nifty 50 ETF', sector: 'ETF', type: 'ETF' },
+  { symbol: 'GOLDBEES.NS', name: 'Nippon India Gold ETF', sector: 'ETF', type: 'ETF' },
+  { symbol: 'MON100.NS', name: 'Motilal Oswal Nasdaq 100 ETF', sector: 'ETF', type: 'ETF' },
+  { symbol: 'SWIGGY.NS', name: 'Swiggy Limited', sector: 'Consumer Tech', type: 'Equity' },
+  { symbol: 'WAAREEENER.NS', name: 'Waaree Energies Limited', sector: 'Renewables', type: 'Equity' },
+  { symbol: 'ETERNAL.NS', name: 'Eternal Limited (Zomato)', sector: 'Consumer Tech', type: 'Equity' },
+];
 
-function getSectorStyle(sector) {
-  return SECTOR_COLORS[sector] || 'bg-slate-700/40 text-slate-400 border-slate-600/20';
-}
+const SECTOR_STYLES = {
+  'Banking': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  'IT': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  'Energy': 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+  'Auto': 'bg-red-500/10 text-red-400 border-red-500/20',
+  'FMCG': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  'Pharma': 'bg-teal-500/10 text-teal-400 border-teal-500/20',
+  'ETF': 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+  'Indices': 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+  'Global': 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+};
 
 export default function StockSearchModal({ isOpen, onClose, onSelect, currentTicker }) {
   const [query, setQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [activeIdx, setActiveIdx] = useState(-1);
+  const [activeIdx, setActiveIdx] = useState(0);
   const [recentSearches, setRecentSearches] = useState([]);
+  const [localUniverse, setLocalUniverse] = useState([]);
+
   const inputRef = useRef(null);
   const debounceRef = useRef(null);
   const listRef = useRef(null);
   const abortControllerRef = useRef(null);
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
+  // Load local universe cache eagerly once
+  useEffect(() => {
+    fetch('/tickers.json')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) setLocalUniverse(data);
+      })
+      .catch(() => {});
+  }, []);
 
   // Load recent searches from localStorage
   useEffect(() => {
     try {
-      const stored = JSON.parse(localStorage.getItem('recentStocks') || '[]');
+      const stored = JSON.parse(localStorage.getItem('stockiq_recent_searches') || '[]');
       setRecentSearches(stored);
-    } catch { /* ignore */ }
-  }, []);
+    } catch (_) {}
+  }, [isOpen]);
 
-  // Focus input when modal opens
+  // Global Keyboard Shortcuts (⌘K, Ctrl+K, /)
+  useEffect(() => {
+    const handleGlobalKey = (e) => {
+      // Don't trigger if already in another input/textarea
+      const tag = document.activeElement?.tagName;
+      const isInputFocused = tag === 'INPUT' || tag === 'TEXTAREA';
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if (isOpen) onClose();
+        else window.dispatchEvent(new CustomEvent('open-stock-search'));
+      } else if (e.key === '/' && !isInputFocused && !isOpen) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('open-stock-search'));
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, [isOpen, onClose]);
+
+  // Reset & focus on open
   useEffect(() => {
     if (isOpen) {
       setQuery('');
+      setSelectedCategory('all');
       setResults([]);
-      setActiveIdx(-1);
-      setTimeout(() => inputRef.current?.focus(), 60);
+      setActiveIdx(0);
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen]);
 
-  // Close on Escape & cleanup
-  useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
-    if (isOpen) document.addEventListener('keydown', handler);
-    return () => {
-      document.removeEventListener('keydown', handler);
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      if (abortControllerRef.current) abortControllerRef.current.abort();
-    };
-  }, [isOpen, onClose]);
+  // Filter items by category
+  const filterByCategory = useCallback((items, cat) => {
+    if (!cat || cat === 'all') return items;
+    return items.filter(item => {
+      const type = (item.type || '').toLowerCase();
+      const sector = (item.sector || '').toLowerCase();
+      const sym = item.symbol || '';
 
-  // Fetch results with debounce
-  const fetchResults = useCallback((q) => {
+      if (cat === 'etf') {
+        return type.includes('etf') || sector.includes('etf') || sym.includes('BEES');
+      }
+      if (cat === 'index') {
+        return sym.startsWith('^') || type.includes('index') || sector.includes('indices');
+      }
+      if (cat === 'global') {
+        return type.includes('global') || !sym.includes('.');
+      }
+      if (cat === 'equity') {
+        return !sym.startsWith('^') && !type.includes('etf') && !type.includes('index') && !sector.includes('etf');
+      }
+      return true;
+    });
+  }, []);
+
+  // Client-side instant fallback search
+  const searchLocalUniverse = useCallback((q) => {
+    if (!localUniverse.length || !q) return [];
+    const qLower = q.toLowerCase().trim();
+    const qClean = qLower.replace('.ns', '').replace('.bo', '').replace('^', '');
+
+    const matches = [];
+    for (const t of localUniverse) {
+      const sym = (t.symbol || '').toLowerCase();
+      const name = (t.name || '').toLowerCase();
+      const bse = t.bse_code || '';
+
+      if (sym.includes(qClean) || name.includes(qLower) || bse === qLower) {
+        matches.push(t);
+        if (matches.length >= 30) break;
+      }
+    }
+    return matches;
+  }, [localUniverse]);
+
+  // Fetch with debounced API & instant local preview
+  const performSearch = useCallback((rawQuery, cat) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (abortControllerRef.current) abortControllerRef.current.abort();
 
-    if (!q || q.length < 1) {
+    let cleanQuery = rawQuery.trim();
+    let effectiveCat = cat;
+
+    // Smart slash command detection (e.g. /etf gold, /bank hdfc)
+    if (cleanQuery.startsWith('/etf')) {
+      effectiveCat = 'etf';
+      cleanQuery = cleanQuery.replace('/etf', '').trim();
+      setSelectedCategory('etf');
+    } else if (cleanQuery.startsWith('/index')) {
+      effectiveCat = 'index';
+      cleanQuery = cleanQuery.replace('/index', '').trim();
+      setSelectedCategory('index');
+    }
+
+    if (!cleanQuery) {
       setResults([]);
       setLoading(false);
+      setActiveIdx(0);
       return;
     }
+
+    // Instant local preview
+    const instantLocal = filterByCategory(searchLocalUniverse(cleanQuery), effectiveCat);
+    if (instantLocal.length > 0) {
+      setResults(instantLocal);
+    }
+
     setLoading(true);
     abortControllerRef.current = new AbortController();
 
     debounceRef.current = setTimeout(async () => {
       try {
         const res = await fetch(
-          `${API_BASE_URL}/api/tickers?q=${encodeURIComponent(q)}`,
+          `${API_BASE_URL}/api/tickers?q=${encodeURIComponent(cleanQuery)}&limit=40`,
           { signal: abortControllerRef.current.signal }
         );
-        const json = await res.json();
-        if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
-          setResults(json.tickers || []);
-          setActiveIdx(-1);
+        if (res.ok) {
+          const data = await res.json();
+          const apiList = data.tickers || [];
+          const filtered = filterByCategory(apiList, effectiveCat);
+          setResults(filtered.length > 0 ? filtered : instantLocal);
+          setActiveIdx(0);
         }
       } catch (err) {
         if (err.name !== 'AbortError') {
-          setResults([]);
+          setResults(instantLocal);
         }
       } finally {
-        if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
-    }, 200);
-  }, [API_BASE_URL]);
+    }, 150);
+  }, [API_BASE_URL, filterByCategory, searchLocalUniverse]);
 
   const handleQueryChange = (e) => {
     const val = e.target.value;
     setQuery(val);
-    fetchResults(val);
+    performSearch(val, selectedCategory);
+  };
+
+  const handleCategoryChange = (catId) => {
+    setSelectedCategory(catId);
+    if (query) {
+      performSearch(query, catId);
+    }
   };
 
   const saveRecent = (item) => {
     try {
-      const prev = JSON.parse(localStorage.getItem('recentStocks') || '[]');
-      const filtered = prev.filter((r) => r.symbol !== item.symbol);
-      const updated = [item, ...filtered].slice(0, 6);
-      localStorage.setItem('recentStocks', JSON.stringify(updated));
+      const prev = JSON.parse(localStorage.getItem('stockiq_recent_searches') || '[]');
+      const filtered = prev.filter(r => r.symbol !== item.symbol);
+      const updated = [item, ...filtered].slice(0, 8);
+      localStorage.setItem('stockiq_recent_searches', JSON.stringify(updated));
       setRecentSearches(updated);
-    } catch { /* ignore */ }
+    } catch (_) {}
+  };
+
+  const removeRecent = (e, sym) => {
+    e.stopPropagation();
+    try {
+      const updated = recentSearches.filter(r => r.symbol !== sym);
+      localStorage.setItem('stockiq_recent_searches', JSON.stringify(updated));
+      setRecentSearches(updated);
+    } catch (_) {}
+  };
+
+  const clearAllRecent = (e) => {
+    e.stopPropagation();
+    localStorage.removeItem('stockiq_recent_searches');
+    setRecentSearches([]);
   };
 
   const handleSelect = (item) => {
     saveRecent(item);
-    onSelect(item);
+    if (onSelect) onSelect(item.symbol);
     onClose();
   };
 
+  const displayedList = query ? results : (recentSearches.length > 0 ? recentSearches : TRENDING_PICKS);
+
+  // Keyboard Navigation: ArrowUp, ArrowDown, Enter, Escape
   const handleKeyDown = (e) => {
-    const list = query ? results : POPULAR_STOCKS;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setActiveIdx((prev) => Math.min(prev + 1, list.length - 1));
+      setActiveIdx(prev => Math.min(prev + 1, displayedList.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setActiveIdx((prev) => Math.max(prev - 1, -1));
+      setActiveIdx(prev => Math.max(prev - 1, 0));
     } else if (e.key === 'Enter') {
-      if (activeIdx >= 0 && activeIdx < list.length) {
-        handleSelect(list[activeIdx]);
+      e.preventDefault();
+      if (displayedList[activeIdx]) {
+        handleSelect(displayedList[activeIdx]);
       } else if (query.trim()) {
-        // Direct symbol entry
-        const sym = query.trim().toUpperCase();
-        const direct = { symbol: sym.includes('.') ? sym : sym + '.NS', name: sym };
-        handleSelect(direct);
+        const raw = query.trim().toUpperCase();
+        handleSelect({ symbol: raw.includes('.') || raw.startsWith('^') ? raw : `${raw}.NS`, name: raw });
       }
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      const currIdx = CATEGORIES.findIndex(c => c.id === selectedCategory);
+      const nextIdx = (currIdx + 1) % CATEGORIES.length;
+      handleCategoryChange(CATEGORIES[nextIdx].id);
     }
   };
 
   // Scroll active item into view
   useEffect(() => {
-    if (activeIdx >= 0 && listRef.current) {
-      const el = listRef.current.children[activeIdx];
-      el?.scrollIntoView({ block: 'nearest' });
+    if (listRef.current && listRef.current.children[activeIdx]) {
+      listRef.current.children[activeIdx].scrollIntoView({ block: 'nearest' });
     }
   }, [activeIdx]);
 
   if (!isOpen) return null;
 
-  const showPopular = !query;
-  const displayList = query ? results : [];
-
   return (
-    /* Backdrop - Mobile Responsive */
-    <div
-      className="fixed inset-0 z-[100] flex items-start justify-center pt-[5vh] sm:pt-[8vh] px-3 sm:px-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <div 
+      className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150"
+      onClick={onClose}
     >
-      {/* Blurred dark overlay */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-
-      {/* Modal card - Mobile Responsive */}
-      <div className="relative w-full max-w-xl glass-card rounded-xl sm:rounded-2xl overflow-hidden">
-
-        {/* Search Input - Mobile Responsive */}
-        <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 sm:py-3.5 border-b border-slate-800">
-          <Search className="h-4 sm:h-5 w-4 sm:w-5 text-indigo-400 shrink-0" />
+      <div 
+        className="w-full max-w-2xl bg-[#0c0c10] border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden text-slate-200 flex flex-col max-h-[82vh]"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Search Bar Header */}
+        <div className="flex items-center px-4 py-3.5 border-b border-white/[0.08] bg-white/[0.02]">
+          <Search className={`w-5 h-5 mr-3 transition-colors ${loading ? 'text-blue-400 animate-pulse' : 'text-slate-400'}`} />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={handleQueryChange}
             onKeyDown={handleKeyDown}
-            placeholder="Search by company name or symbol…"
-            className="flex-1 bg-transparent text-white text-sm placeholder-slate-500 focus:outline-none font-medium"
-            autoComplete="off"
-            spellCheck={false}
+            placeholder="Search 7,950+ stocks, ETFs, indices, or BSE code (e.g. Reliance, Nifty, 500325)…"
+            className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none tracking-wide"
           />
-          {loading && <RefreshCw className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-slate-500 animate-spin shrink-0" />}
-          <button
-            onClick={onClose}
-            className="ml-1 p-1 rounded-lg active:bg-slate-800 text-slate-500 active:text-slate-300 transition"
-          >
-            <X className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
-          </button>
-        </div>
-
-        {/* Body - Mobile Responsive */}
-        <div className="max-h-[50vh] sm:max-h-[60vh] overflow-y-auto" ref={listRef}>
-
-          {/* Search results */}
           {query && (
-            <>
-              {results.length > 0 ? (
-                <div>
-                  <p className="px-3 sm:px-4 pt-3 pb-1 text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    Search Results
-                  </p>
-                  {results.map((item, idx) => (
-                    <StockRow
-                      key={item.symbol}
-                      item={item}
-                      isActive={idx === activeIdx}
-                      isCurrent={item.symbol === currentTicker}
-                      query={query}
-                      onSelect={() => handleSelect(item)}
-                    />
-                  ))}
-                </div>
-              ) : !loading && (
-                <div className="flex flex-col items-center justify-center py-8 sm:py-12 gap-2 text-slate-500">
-                  <Search className="h-6 sm:h-8 w-6 sm:w-8 opacity-30" />
-                  <p className="text-xs sm:text-sm text-center px-4">No stocks found for &quot;{query}&quot;</p>
-                  <p className="text-[10px] sm:text-xs opacity-60 text-center px-4">Try a company name like &quot;Infosys&quot; or symbol like &quot;INFY&quot;</p>
-                </div>
-              )}
-            </>
+            <button 
+              onClick={() => { setQuery(''); setResults([]); inputRef.current?.focus(); }}
+              className="p-1 text-slate-400 hover:text-white rounded-md hover:bg-white/[0.06] mr-2"
+            >
+              <X className="w-4 h-4" />
+            </button>
           )}
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 bg-white/[0.04] border border-white/[0.06] px-2 py-1 rounded-md">
+            <Command className="w-3 h-3" />
+            <span>K</span>
+          </div>
+        </div>
 
-          {/* Default: Recent + Popular */}
-          {showPopular && (
-            <>
-              {/* Recent searches */}
-              {recentSearches.length > 0 && (
-                <div>
-                  <p className="px-3 sm:px-4 pt-3 pb-1 text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    Recent
-                  </p>
-                  {recentSearches.map((item) => (
-                    <StockRow
-                      key={item.symbol}
-                      item={item}
-                      isCurrent={item.symbol === currentTicker}
-                      onSelect={() => handleSelect(item)}
-                    />
-                  ))}
-                  <div className="border-t border-slate-800/70 my-1" />
-                </div>
-              )}
+        {/* Category Filters Pill Strip */}
+        <div className="flex items-center gap-1.5 px-4 py-2 border-b border-white/[0.06] bg-black/30 overflow-x-auto no-scrollbar">
+          {CATEGORIES.map(cat => {
+            const Icon = cat.icon;
+            const isSelected = selectedCategory === cat.id;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => handleCategoryChange(cat.id)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                  isSelected 
+                    ? 'bg-blue-600 text-white shadow-sm' 
+                    : 'bg-white/[0.03] text-slate-400 hover:text-slate-200 hover:bg-white/[0.06]'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{cat.label}</span>
+              </button>
+            );
+          })}
+        </div>
 
-              {/* Popular picks */}
-              <div>
-                <p className="px-3 sm:px-4 pt-3 pb-1 text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                  <TrendingUp className="h-2.5 sm:h-3 w-2.5 sm:w-3" /> Popular on NSE
-                </p>
-                {POPULAR_STOCKS.map((item, idx) => (
-                  <StockRow
-                    key={item.symbol}
-                    item={item}
-                    isActive={idx === activeIdx}
-                    isCurrent={item.symbol === currentTicker}
-                    onSelect={() => handleSelect(item)}
-                  />
-                ))}
-              </div>
-            </>
+        {/* Section Label */}
+        <div className="px-4 py-2 flex items-center justify-between text-[11px] font-semibold tracking-wider text-slate-400 uppercase bg-white/[0.01]">
+          <span>{query ? `Results (${displayedList.length})` : (recentSearches.length > 0 ? 'Recent Searches' : 'Trending Benchmarks')}</span>
+          {!query && recentSearches.length > 0 && (
+            <button 
+              onClick={clearAllRecent}
+              className="text-slate-500 hover:text-red-400 transition-colors flex items-center gap-1 text-[10px]"
+            >
+              <Trash2 className="w-3 h-3" /> Clear history
+            </button>
           )}
         </div>
 
-        {/* Footer hint - Mobile Responsive */}
-        <div className="border-t border-slate-800 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center gap-2 sm:gap-4 text-[9px] sm:text-[10px] text-slate-600 overflow-x-auto">
-          <span className="shrink-0"><kbd className="font-mono bg-slate-800 px-1 rounded text-[8px] sm:text-[9px]">↑↓</kbd> navigate</span>
-          <span className="shrink-0"><kbd className="font-mono bg-slate-800 px-1 rounded text-[8px] sm:text-[9px]">↵</kbd> select</span>
-          <span className="shrink-0 hidden sm:inline"><kbd className="font-mono bg-slate-800 px-1 rounded">Esc</kbd> close</span>
-          <span className="ml-auto shrink-0">NSE &amp; BSE</span>
+        {/* Results List */}
+        <div ref={listRef} className="flex-1 overflow-y-auto divide-y divide-white/[0.04] p-1.5">
+          {displayedList.length === 0 ? (
+            <div className="py-16 text-center text-slate-400">
+              <Zap className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-slate-300">No instruments found</p>
+              <p className="text-xs text-slate-500 mt-1">Try searching by company name, symbol, or 6-digit BSE scrip code.</p>
+            </div>
+          ) : (
+            displayedList.map((item, idx) => {
+              const isSelected = idx === activeIdx;
+              const isCurrent = item.symbol === currentTicker;
+              const sector = item.sector || (item.symbol?.startsWith('^') ? 'Indices' : 'Other');
+              const badgeStyle = SECTOR_STYLES[sector] || 'bg-slate-800 text-slate-400 border-slate-700';
+
+              return (
+                <div
+                  key={item.symbol || idx}
+                  onClick={() => handleSelect(item)}
+                  onMouseEnter={() => setActiveIdx(idx)}
+                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition-all ${
+                    isSelected 
+                      ? 'bg-blue-600/15 border border-blue-500/30' 
+                      : 'hover:bg-white/[0.03] border border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[11px] shrink-0 ${
+                      item.symbol.startsWith('^') 
+                        ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20' 
+                        : item.symbol.includes('BEES') || sector === 'ETF'
+                          ? 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/20'
+                          : item.symbol.endsWith('.BO')
+                            ? 'bg-orange-500/15 text-orange-400 border border-orange-500/20'
+                            : 'bg-blue-500/15 text-blue-400 border border-blue-500/20'
+                    }`}>
+                      {item.symbol.startsWith('^') ? 'IDX' : item.symbol.includes('BEES') ? 'ETF' : item.symbol.endsWith('.BO') ? 'BSE' : 'NSE'}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-white tracking-wide truncate">
+                          {item.symbol.replace('.NS', '').replace('.BO', '')}
+                        </span>
+                        {item.bse_code && (
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            #{item.bse_code}
+                          </span>
+                        )}
+                        {isCurrent && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-400">
+                            ACTIVE
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400 truncate mt-0.5">
+                        {item.name || item.symbol}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 ml-3">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${badgeStyle}`}>
+                      {sector}
+                    </span>
+                    {!query && recentSearches.length > 0 && (
+                      <button
+                        onClick={(e) => removeRecent(e, item.symbol)}
+                        className="p-1 text-slate-600 hover:text-slate-300 transition-colors"
+                        title="Remove from history"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-slate-600" />
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
-      </div>
-    </div>
-  );
-}
 
-// Highlights matching text in the name/symbol
-function Highlight({ text, query }) {
-  if (!query || !text) return <span>{text}</span>;
-  const idx = text.toLowerCase().indexOf(query.toLowerCase());
-  if (idx === -1) return <span>{text}</span>;
-  return (
-    <span>
-      {text.slice(0, idx)}
-      <span className="text-white font-bold">{text.slice(idx, idx + query.length)}</span>
-      {text.slice(idx + query.length)}
-    </span>
-  );
-}
-
-function StockRow({ item, isActive, isCurrent, query, onSelect }) {
-  // Derive a 2-letter monogram from the symbol
-  const mono = item.symbol.replace('.NS', '').replace('.BO', '').slice(0, 2);
-  const exchange = item.symbol.endsWith('.BO') ? 'BSE' : 'NSE';
-
-  return (
-    <div
-      onClick={onSelect}
-      className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 cursor-pointer transition group ${
-        isActive
-          ? 'bg-indigo-600/20'
-          : 'active:bg-slate-800/60'
-      } ${isCurrent ? 'opacity-60' : ''}`}
-    >
-      {/* Avatar - Mobile Responsive */}
-      <div className="h-7 sm:h-8 w-7 sm:w-8 rounded-lg bg-gradient-to-br from-indigo-600/40 to-slate-700 flex items-center justify-center shrink-0 text-[10px] sm:text-[11px] font-black text-indigo-200 border border-indigo-500/20">
-        {mono}
-      </div>
-
-      {/* Info - Mobile Responsive */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
-          <span className="text-xs sm:text-sm font-bold text-white font-mono tracking-wide">
-            <Highlight text={item.symbol.replace('.NS', '').replace('.BO', '')} query={query} />
-          </span>
-          <span className={`text-[8px] sm:text-[9px] font-bold px-1 sm:px-1.5 py-0.5 rounded border ${exchange === 'NSE' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
-            {exchange}
-          </span>
-          {item.sector && (
-            <span className={`text-[8px] sm:text-[9px] font-semibold px-1 sm:px-1.5 py-0.5 rounded border hidden sm:inline ${getSectorStyle(item.sector)}`}>
-              {item.sector}
+        {/* Modal Footer Key Hints */}
+        <div className="px-4 py-2.5 border-t border-white/[0.06] bg-black/40 flex items-center justify-between text-[11px] text-slate-500">
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-slate-400 font-mono text-[10px]">↑↓</kbd> Navigate
             </span>
-          )}
-          {isCurrent && (
-            <span className="text-[8px] sm:text-[9px] text-indigo-400 font-semibold">Currently viewing</span>
-          )}
+            <span className="flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-slate-400 font-mono text-[10px]">↵</kbd> Select
+            </span>
+            <span className="flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-slate-400 font-mono text-[10px]">Tab</kbd> Switch Tab
+            </span>
+            <span className="flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-slate-400 font-mono text-[10px]">Esc</kbd> Close
+            </span>
+          </div>
+          <span className="hidden sm:inline text-slate-500 text-[10px]">
+            StockIQ Smart Search v2.0
+          </span>
         </div>
-        <p className="text-[11px] sm:text-xs text-slate-400 truncate mt-0.5">
-          <Highlight text={item.name} query={query} />
-        </p>
       </div>
-
-      <ChevronRight className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-slate-700 group-hover:text-slate-400 transition shrink-0" />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
   Star,
 } from 'lucide-react';
 import WatchlistDrawer from './WatchlistDrawer';
+import StockSearchModal from './StockSearchModal';
 
 const Header = ({ onTickerSelect, currentTicker }) => {
   const pathname = usePathname();
@@ -31,6 +32,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [watchlistOpen, setWatchlistOpen] = useState(false);
   const [watchlistCount, setWatchlistCount] = useState(0);
+  const [spotlightOpen, setSpotlightOpen] = useState(false);
 
   // Sync watchlist count from localStorage
   useEffect(() => {
@@ -82,27 +84,22 @@ const Header = ({ onTickerSelect, currentTicker }) => {
   // Handle global search focus events & hotkeys
   useEffect(() => {
     const handleTriggerFocus = () => {
-      const isMobile = window.innerWidth < 768;
-      if (isMobile) {
-        setMobileMenuOpen(true);
-      } else {
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }
-      }
+      setSpotlightOpen(true);
     };
 
     const handleKeyDown = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        handleTriggerFocus();
+        setSpotlightOpen(prev => !prev);
       }
     };
 
     window.addEventListener('trigger-search-focus', handleTriggerFocus);
+    window.addEventListener('open-stock-search', handleTriggerFocus);
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('trigger-search-focus', handleTriggerFocus);
+      window.removeEventListener('open-stock-search', handleTriggerFocus);
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
@@ -242,9 +239,13 @@ const Header = ({ onTickerSelect, currentTicker }) => {
                   ref={inputRef}
                   type="text"
                   value={searchQuery}
-                  onChange={handleSearch}
-                  onFocus={() => searchResults.length > 0 && setDropdownOpen(true)}
-                  placeholder="Search 7,900+ stocks, ETFs, indices (NSE/BSE)…"
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setSpotlightOpen(true);
+                  }}
+                  onClick={() => setSpotlightOpen(true)}
+                  onFocus={() => setSpotlightOpen(true)}
+                  placeholder="Search 7,950+ stocks, ETFs, indices (NSE/BSE)…"
                   className="v-input"
                   style={{
                     width: '100%',
@@ -253,6 +254,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
                     paddingTop: '8px',
                     paddingBottom: '8px',
                     fontSize: '13px',
+                    cursor: 'pointer',
                   }}
                 />
 
@@ -606,6 +608,16 @@ const Header = ({ onTickerSelect, currentTicker }) => {
         isOpen={watchlistOpen}
         onClose={() => setWatchlistOpen(false)}
         onSelectTicker={(sym) => {
+          if (onTickerSelect) onTickerSelect(sym);
+        }}
+        currentTicker={currentTicker}
+      />
+
+      {/* ── Spotlight Search Command Palette (⌘K) ─────────────────── */}
+      <StockSearchModal
+        isOpen={spotlightOpen}
+        onClose={() => setSpotlightOpen(false)}
+        onSelect={(sym) => {
           if (onTickerSelect) onTickerSelect(sym);
         }}
         currentTicker={currentTicker}
