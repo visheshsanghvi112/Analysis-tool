@@ -322,20 +322,34 @@ class IntelligentNewsReader:
             self.cache[cache_key] = (result, datetime.now())
             return result
 
-        # ── 3. Deep Article Reading via Scrapling for Top 3 Stories ─────
-        # For the top 3 most relevant articles, extract the real article body
-        deep_read_count = 0
+        # ── 3. Parallel Deep Article Reading via Scrapling ───────────────
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        deep_candidates = [
+            art for art in collected_articles
+            if art['link'] and not art['link'].startswith('https://news.google.com/rss/articles/')
+        ][:4]
+
+        if deep_candidates:
+            try:
+                with ThreadPoolExecutor(max_workers=min(len(deep_candidates), 4)) as executor:
+                    future_to_art = {
+                        executor.submit(self._deep_read_article_body, art['link']): art
+                        for art in deep_candidates
+                    }
+                    for future in as_completed(future_to_art, timeout=3.5):
+                        art = future_to_art[future]
+                        try:
+                            body = future.result()
+                            if body:
+                                art['deep_body'] = body
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
         all_text_corpus = []
-
         for art in collected_articles:
-            body = ""
-            if deep_read_count < 3 and art['link'] and not art['link'].startswith('https://news.google.com/rss/articles/'):
-                body = self._deep_read_article_body(art['link'])
-                if body:
-                    art['deep_body'] = body
-                    deep_read_count += 1
-
-            # Use deep body if available, otherwise title + summary
             corpus = (art['title'] + " " + art['summary'] + " " + (art['deep_body'] or "")).strip()
             all_text_corpus.append(corpus)
 
@@ -397,6 +411,7 @@ class IntelligentNewsReader:
                 'overall_sentiment': sentiment_res['score'],
                 'sentiment_label': sentiment_res['label'],
                 'confidence': sentiment_res['confidence'],
+                'market_impact_score': market_impact,
                 'positive_count': sum(1 for a in formatted_articles if a['sentiment'] > 0.1),
                 'negative_count': sum(1 for a in formatted_articles if a['sentiment'] < -0.1),
                 'neutral_count': sum(1 for a in formatted_articles if abs(a['sentiment']) <= 0.1)
@@ -408,6 +423,11 @@ class IntelligentNewsReader:
             'summary': " ".join(summary_bullets),
             'last_updated': datetime.now().isoformat()
         }
+
+        # Bound cache to max 120 entries
+        if len(self.cache) > 120:
+            for k in list(self.cache.keys())[:25]:
+                self.cache.pop(k, None)
 
         # Cache result
         self.cache[cache_key] = (final_response, datetime.now())
