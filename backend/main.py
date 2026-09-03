@@ -1,7 +1,10 @@
 import os
+import logging
 import threading
 from datetime import datetime
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -12,10 +15,20 @@ from services.ticker_manager import ensure_ticker_list
 # Import all routers from our routers package
 from routers import tickers, ml, news, portfolio, analysis
 
+logger = logging.getLogger("stockiq")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: ensure 7,954 master ticker universe is pre-warmed
+    threading.Thread(target=ensure_ticker_list, daemon=True).start()
+    yield
+    # Shutdown logic (if any cleanup is needed in the future)
+
 app = FastAPI(
     title="StockIQ Pro API",
     description="Professional Stock Analysis Platform API by Vishesh Sanghvi",
-    version="2.0.0"
+    version="2.4.0",
+    lifespan=lifespan
 )
 
 # Rate Limiting configuration
@@ -35,10 +48,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Preload NSE tickers on startup to avoid delays on initial client queries
-@app.on_event("startup")
-def startup_event():
-    threading.Thread(target=ensure_ticker_list, daemon=True).start()
+# Global defensive error handler for unexpected server errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception on {request.method} {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": True,
+            "message": "An internal error occurred while processing the request.",
+            "detail": str(exc),
+            "path": request.url.path
+        }
+    )
 
 # Root and health checks
 @app.get("/")

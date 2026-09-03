@@ -165,4 +165,31 @@ def test_smart_search_concept_gold_etf():
     assert len(tickers) >= 1
     assert tickers[0]["symbol"] == "GOLDBEES.NS"
 
+def test_empty_ticker_validation():
+    """Verify empty ticker query returns 400 Bad Request."""
+    response = client.get("/api/advanced-news?ticker=")
+    assert response.status_code == 400
+    assert "cannot be empty" in response.json()["detail"].lower()
+
+def test_portfolio_optimize_single_holding_validation():
+    """Verify optimization requires at least 2 holdings."""
+    response = client.post("/api/portfolio-optimize", json={
+        "holdings": [{"ticker": "RELIANCE.NS", "qty": 10, "buy_price": 2500}]
+    })
+    assert response.status_code == 400
+    assert "at least 2" in response.json()["detail"].lower()
+
+def test_advanced_news_endpoint_schema():
+    """Verify live news reader endpoint returns clean schema."""
+    response = client.get("/api/advanced-news?ticker=TCS.NS&company_name=Tata%20Consultancy%20Services")
+    assert response.status_code == 200
+    data = response.json()
+    assert "news_intelligence" in data
+    intel = data["news_intelligence"]
+    assert intel["status"] in ["live", "active"]
+    assert "sentiment" in intel
+    assert "total_articles" in intel
+    assert "articles" in intel
+
+
 

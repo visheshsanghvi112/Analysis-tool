@@ -18,14 +18,20 @@ def get_ml_prediction_endpoint(
     try:
         ticker_clean = ticker.strip().upper()
         
-        # Resolve sentiment score for fusion (default to neutral 0.0 if fetch fails or no news)
+        # Resolve sentiment score for fusion via live intelligent news reader
         news_sentiment = 0.0
         try:
-            news_res = get_advanced_news_analysis(ticker_clean)
+            from services.intelligent_news_reader import intelligent_news_reader
+            news_res = intelligent_news_reader.fetch_live_stock_news(ticker_clean)
             if news_res and "sentiment" in news_res and "overall_sentiment" in news_res["sentiment"]:
                 news_sentiment = float(news_res["sentiment"]["overall_sentiment"])
         except Exception:
-            pass
+            try:
+                news_res = get_advanced_news_analysis(ticker_clean)
+                if news_res and "sentiment" in news_res and "overall_sentiment" in news_res["sentiment"]:
+                    news_sentiment = float(news_res["sentiment"]["overall_sentiment"])
+            except Exception:
+                pass
 
         prediction, error = get_ml_prediction(
             ticker_clean, 

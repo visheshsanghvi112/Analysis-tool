@@ -16,6 +16,8 @@ def get_advanced_news_endpoint(
     """
     try:
         ticker_clean = ticker.strip().upper()
+        if not ticker_clean:
+            raise HTTPException(status_code=400, detail="Ticker symbol cannot be empty")
         # 1. Primary: Use Scrapling-powered live deep reader
         try:
             news_analysis = intelligent_news_reader.fetch_live_stock_news(ticker_clean, company_name)

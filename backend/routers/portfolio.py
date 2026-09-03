@@ -634,9 +634,10 @@ def optimize_portfolio(req: PortfolioRequest):
         weights_current = np.array(weights_current) / total_val
 
     def portfolio_performance(w):
-        ret = np.sum(ann_returns * w)
-        vol = np.sqrt(np.dot(w.T, np.dot(ann_cov, w)))
-        sharpe = (ret - rf) / vol if vol > 0 else 0.0
+        ret = float(np.sum(ann_returns * w))
+        variance = float(np.dot(w.T, np.dot(ann_cov, w)))
+        vol = float(np.sqrt(max(variance, 1e-8)))
+        sharpe = (ret - rf) / vol if vol > 1e-6 else 0.0
         return ret, vol, sharpe
 
     curr_ret, curr_vol, curr_sharpe = portfolio_performance(weights_current)
