@@ -29,25 +29,73 @@ def search_tickers(
     if not q:
         return {"tickers": ticker_list[:limit], "total": len(ticker_list)}
 
-    q_lower = q.lower()
-    symbol_matches = []
-    name_matches = []
+    q_lower = q.lower().strip()
+    q_clean = q_lower.replace(".ns", "").replace(".bo", "").replace("^", "")
+
+    exact_matches = []
+    prefix_sym_matches = []
+    substr_sym_matches = []
+    prefix_name_matches = []
+    substr_name_matches = []
+
+    seen_in_search = set()
 
     for t in ticker_list:
-        # Optional sector pre-filter
         if sector and t.get("sector", "").lower() != sector.lower():
             continue
-        sym_lower = t["symbol"].lower().replace(".ns", "")
-        name_lower = t["name"].lower()
-        if q_lower in sym_lower:
-            symbol_matches.append(t)
+
+        sym = t.get("symbol", "")
+        name = t.get("name", "")
+        bse_code = t.get("bse_code", "")
+
+        sym_clean = sym.lower().replace(".ns", "").replace(".bo", "").replace("^", "")
+        name_lower = name.lower()
+
+        # Match by BSE code
+        if bse_code and q_clean == bse_code:
+            exact_matches.append(t)
+            seen_in_search.add(sym)
+            continue
+
+        if sym_clean == q_clean:
+            exact_matches.append(t)
+            seen_in_search.add(sym)
+        elif sym_clean.startswith(q_clean):
+            prefix_sym_matches.append(t)
+            seen_in_search.add(sym)
+        elif q_clean in sym_clean:
+            substr_sym_matches.append(t)
+            seen_in_search.add(sym)
+        elif name_lower.startswith(q_lower):
+            prefix_name_matches.append(t)
+            seen_in_search.add(sym)
         elif q_lower in name_lower:
-            name_matches.append(t)
-        if len(symbol_matches) + len(name_matches) >= 120:
+            substr_name_matches.append(t)
+            seen_in_search.add(sym)
+
+        if len(seen_in_search) >= 200:
             break
 
-    combined = symbol_matches[:limit//2] + name_matches[:limit//2]
-    return {"tickers": combined[:limit], "total": len(combined)}
+    # Combine with strict relevance priority
+    ordered = (
+        exact_matches +
+        prefix_sym_matches +
+        substr_sym_matches +
+        prefix_name_matches +
+        substr_name_matches
+    )
+    
+    # Ensure distinct symbols while preserving order
+    deduped = []
+    seen = set()
+    for item in ordered:
+        s = item["symbol"]
+        if s not in seen:
+            seen.add(s)
+            deduped.append(item)
+
+    return {"tickers": deduped[:limit], "total": len(deduped)}
+
 
 
 @router.get("/sectors")
@@ -175,7 +223,7 @@ def get_live_price(
     try:
         ticker_clean = ticker.strip().upper()
         
-        if not re.match(r'^[A-Z0-9&.-]{1,15}(\.NS|\.BO)?$', ticker_clean):
+        if not re.match(r'^\^?[A-Z0-9&.=-]{1,20}(\.NS|\.BO)?$', ticker_clean):
             raise HTTPException(status_code=400, detail="Invalid ticker format")
 
         q = get_quote(ticker_clean)

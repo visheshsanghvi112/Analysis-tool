@@ -86,42 +86,13 @@ SECTOR_MAP = {
     "BATAINDIA": "Consumer Tech", "RELAXO": "Consumer Tech", "METROBRAND": "Consumer Tech",
 }
 
-def main():
-    print("Downloading NSE EQUITY_L.csv...")
-    url = 'https://archives.nseindia.com/content/equities/EQUITY_L.csv'
-    res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
-    if not res.ok:
-        print("Failed to download CSV.")
-        return
+import sys
+import os
 
-    tickers = []
-    f = io.StringIO(res.text)
-    reader = csv.DictReader(f)
-    
-    # Strip headers
-    reader.fieldnames = [name.strip() for name in reader.fieldnames]
-    
-    for row in reader:
-        raw_symbol = row['SYMBOL'].strip()
-        symbol = raw_symbol + ".NS"
-        name = row['NAME OF COMPANY'].strip()
-        
-        # Sector matching
-        sector = SECTOR_MAP.get(raw_symbol, "Others")
-        tickers.append({
-            "symbol": symbol,
-            "name": name,
-            "sector": sector
-        })
-
-    # Sort alphabetically by symbol
-    tickers.sort(key=lambda x: x["symbol"])
-
-    output_path = "frontend/public/tickers.json"
-    with open(output_path, "w", encoding="utf-8") as out:
-        json.dump(tickers, out, indent=2, ensure_ascii=False)
-
-    print(f"Successfully generated {len(tickers)} tickers in {output_path}")
+# Delegate directly to the master ticker builder
+sys.path.insert(0, os.path.dirname(__file__))
+from scripts.build_master_tickers import main
 
 if __name__ == "__main__":
     main()
+

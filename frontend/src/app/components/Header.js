@@ -150,10 +150,12 @@ const Header = ({ onTickerSelect, currentTicker }) => {
   const popularStocks = [
     { symbol: 'HDFCBANK.NS',  name: 'HDFC Bank' },
     { symbol: 'RELIANCE.NS',  name: 'Reliance Industries' },
+    { symbol: 'NIFTYBEES.NS',  name: 'NIFTY 50 ETF' },
+    { symbol: 'GOLDBEES.NS',   name: 'Gold ETF' },
     { symbol: 'TCS.NS',       name: 'TCS' },
     { symbol: 'INFY.NS',      name: 'Infosys' },
-    { symbol: 'WIPRO.NS',     name: 'Wipro' },
-    { symbol: 'ICICIBANK.NS', name: 'ICICI Bank' },
+    { symbol: 'MON100.NS',    name: 'Nasdaq 100 ETF' },
+    { symbol: '^NSEI',        name: 'NIFTY 50' },
   ];
 
   return (
@@ -222,7 +224,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
                   value={searchQuery}
                   onChange={handleSearch}
                   onFocus={() => searchResults.length > 0 && setDropdownOpen(true)}
-                  placeholder="Search NSE / BSE stocks…"
+                  placeholder="Search 7,900+ stocks, ETFs, indices (NSE/BSE)…"
                   className="v-input"
                   style={{
                     width: '100%',
@@ -265,7 +267,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
                     <div>
                       <div style={{ padding: '8px 12px 6px', borderBottom: '1px solid #1a1a1a' }}>
                         <span style={{ fontSize: '11px', color: '#555', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                          Results — {searchResults.length} stocks
+                          Results — {searchResults.length} instruments
                         </span>
                       </div>
                       {searchResults.map((ticker, i) => (
@@ -301,8 +303,11 @@ const Header = ({ onTickerSelect, currentTicker }) => {
                             {ticker.sector && (
                               <span style={{
                                 fontSize: '11px', padding: '2px 7px',
-                                background: 'rgba(0,112,243,0.1)', border: '1px solid rgba(0,112,243,0.2)',
-                                borderRadius: '4px', color: '#4fa3ff', whiteSpace: 'nowrap',
+                                background: ticker.sector === 'ETF' ? 'rgba(234,179,8,0.12)' : ticker.sector === 'Indices' ? 'rgba(56,189,248,0.12)' : ticker.sector === 'Global' ? 'rgba(168,85,247,0.12)' : 'rgba(0,112,243,0.1)',
+                                border: ticker.sector === 'ETF' ? '1px solid rgba(234,179,8,0.3)' : ticker.sector === 'Indices' ? '1px solid rgba(56,189,248,0.3)' : ticker.sector === 'Global' ? '1px solid rgba(168,85,247,0.3)' : '1px solid rgba(0,112,243,0.2)',
+                                borderRadius: '4px',
+                                color: ticker.sector === 'ETF' ? '#facc15' : ticker.sector === 'Indices' ? '#38bdf8' : ticker.sector === 'Global' ? '#c084fc' : '#4fa3ff',
+                                whiteSpace: 'nowrap',
                               }}>
                                 {ticker.sector}
                               </span>
@@ -453,8 +458,11 @@ const Header = ({ onTickerSelect, currentTicker }) => {
                     </div>
                     {ticker.sector && (
                       <span style={{
-                        fontSize: '11px', padding: '2px 7px', background: 'rgba(0,112,243,0.1)',
-                        border: '1px solid rgba(0,112,243,0.2)', borderRadius: '4px', color: '#4fa3ff',
+                        fontSize: '11px', padding: '2px 7px',
+                        background: ticker.sector === 'ETF' ? 'rgba(234,179,8,0.12)' : ticker.sector === 'Indices' ? 'rgba(56,189,248,0.12)' : ticker.sector === 'Global' ? 'rgba(168,85,247,0.12)' : 'rgba(0,112,243,0.1)',
+                        border: ticker.sector === 'ETF' ? '1px solid rgba(234,179,8,0.3)' : ticker.sector === 'Indices' ? '1px solid rgba(56,189,248,0.3)' : ticker.sector === 'Global' ? '1px solid rgba(168,85,247,0.3)' : '1px solid rgba(0,112,243,0.2)',
+                        borderRadius: '4px',
+                        color: ticker.sector === 'ETF' ? '#facc15' : ticker.sector === 'Indices' ? '#38bdf8' : ticker.sector === 'Global' ? '#c084fc' : '#4fa3ff',
                       }}>
                         {ticker.sector}
                       </span>

@@ -154,6 +154,7 @@ const WelcomeScreen = () => (
           @media (min-width: 1024px) { .teaser-grid { grid-template-columns: repeat(8, 1fr) !important; } }
         `}</style>
         {[
+          { emoji: '🪙', label: 'ETFs',     color: '#eab308' },
           { emoji: '🏦', label: 'Banking',  color: '#00c48c' },
           { emoji: '💻', label: 'IT',        color: '#3b82f6' },
           { emoji: '⚡', label: 'Energy',    color: '#f59e0b' },
@@ -161,7 +162,6 @@ const WelcomeScreen = () => (
           { emoji: '🚗', label: 'Auto',      color: '#ef4444' },
           { emoji: '🛒', label: 'FMCG',      color: '#10b981' },
           { emoji: '📈', label: 'Finance',   color: '#06b6d4' },
-          { emoji: '🏗️', label: 'Infra',    color: '#f97316' },
         ].map(s => (
           <Link key={s.label} href="/browse" className="browse-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '16px 8px', background: '#060606', border: '1px solid #141414', borderRadius: '10px', textDecoration: 'none', transition: 'border-color 0.15s, background 0.15s', cursor: 'pointer' }}>
             <span style={{ fontSize: '22px' }}>{s.emoji}</span>
@@ -174,7 +174,7 @@ const WelcomeScreen = () => (
           onMouseEnter={e => e.currentTarget.style.color = '#fff'}
           onMouseLeave={e => e.currentTarget.style.color = '#555'}
         >
-          View all 48 stocks across 8 sectors <ArrowRight style={{ width: '13px', height: '13px' }} />
+          View all 7,900+ stocks, ETFs &amp; indices across NSE &amp; BSE <ArrowRight style={{ width: '13px', height: '13px' }} />
         </Link>
       </div>
     </div>

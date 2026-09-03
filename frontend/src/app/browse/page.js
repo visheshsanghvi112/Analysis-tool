@@ -22,11 +22,14 @@ const SECTOR_META = {
   'Metals':        { emoji: '🏭', color: '#94a3b8' }, // steel
   'Telecom':       { emoji: '📡', color: '#22d3ee' }, // sky blue
   'Consumer Tech': { emoji: '📱', color: '#f472b6' }, // pink
+  'ETF':           { emoji: '🪙', color: '#eab308' }, // gold
+  'Indices':       { emoji: '📊', color: '#38bdf8' }, // sky blue
+  'Global':        { emoji: '🌐', color: '#a855f7' }, // purple
   'Others':        { emoji: '📊', color: '#888888' }, // gray
   'All':           { emoji: '🌍', color: '#ffffff' }, // white
 };
 
-const TRENDING_SEARCHES = ['HDFC', 'Reliance', 'TCS', 'Infosys', 'Zomato', 'Tata Motors'];
+const TRENDING_SEARCHES = ['HDFC', 'Reliance', 'TCS', 'NIFTYBEES', 'GOLDBEES', 'Zomato', 'Tata Motors', 'MON100', 'SILVERBEES'];
 
 function getMeta(sector) {
   return SECTOR_META[sector] || { emoji: '📊', color: '#888888' };
