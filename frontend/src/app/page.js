@@ -324,18 +324,28 @@ export default function Dashboard() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }} className="dash-main-grid">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <LivePrice ticker={selectedTicker} />
-                  <StockChart ticker={selectedTicker} />
+                  <div id="stock-chart-section">
+                    <StockChart ticker={selectedTicker} />
+                  </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <MLPrediction ticker={selectedTicker} />
-                  <AdvancedNews ticker={selectedTicker} />
+                  <div id="ml-prediction-section">
+                    <MLPrediction ticker={selectedTicker} />
+                  </div>
+                  <div id="news-section">
+                    <AdvancedNews ticker={selectedTicker} />
+                  </div>
                 </div>
               </div>
               <PortfolioMetrics ticker={selectedTicker} />
               <Backtesting ticker={selectedTicker} />
-              <MonteCarloSimulation ticker={selectedTicker} />
+              <div id="monte-carlo-section">
+                <MonteCarloSimulation ticker={selectedTicker} />
+              </div>
               <LongTermAnalysis ticker={selectedTicker} />
-              <FundamentalsAnalysis ticker={selectedTicker} />
+              <div id="valuation-section">
+                <FundamentalsAnalysis ticker={selectedTicker} />
+              </div>
               <SIPCalculator ticker={selectedTicker} />
 
               {/* ── Peer & Sector Intelligence Tabs ───────────────────── */}
