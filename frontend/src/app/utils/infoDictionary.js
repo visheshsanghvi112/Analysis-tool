@@ -291,5 +291,47 @@ export const INFO_DICTIONARY = {
     what: 'A multi-factor algorithmic index fusing VWAP alignment (±25 pts), Supertrend state (±25 pts), EMA ribbon momentum (±20 pts), ORB breakout status (±20 pts), and RSI velocity (±10 pts).',
     why: 'Synthesizes disparate price, volume, and volatility signals into an objective mathematical directional bias, eliminating subjective trader hesitation.',
     interpretation: 'Score ≥ +50 triggers Strong Buy bias; Score ≤ -50 triggers Strong Sell bias; Scores between -20 and +20 recommend waiting for clearer setup confirmation.'
+  },
+  session_phase_clock: {
+    title: 'Market Session Phase Clock & MIS Auto-Square-Off',
+    what: 'Divides the trading session into 5 distinct psychological and liquidity regimes (Opening Auction, Morning Drive, Midday Chop, Afternoon Breakout, and MIS Auto-Square-Off Panic at 3:15 PM IST).',
+    why: 'Trading setups have drastically varying win rates across phases. Breakouts during the 11:30 AM – 1:30 PM lunch slump fail over 70% of the time due to institutional absence.',
+    interpretation: 'Concentrate primary aggressive trend scalps in Phase 2 (9:45 – 11:30 AM); reduce risk by 50% during Phase 3 chop; and close all MIS intraday positions prior to 3:15 PM broker auto-square-off.'
+  },
+  brokerage_friction_breakeven: {
+    title: 'Brokerage, STT & Friction Breakeven Spread',
+    what: 'Calculates the exact total statutory deductions (flat ₹20 brokerage, 0.025% STT, 0.00297% NSE charges, 18% GST, SEBI fee, Stamp duty) and computes the exact price move required to reach net breakeven.',
+    why: 'SEBI studies reveal that transaction friction consumes >30% of gross intraday retail profits. Entering setups where the breakeven move exceeds 0.15% guarantees structural losses.',
+    interpretation: 'Ensure your target distance is at least 3× to 5× your breakeven spread: Never scalp micro-ticks where transaction costs exceed your net expected profit.'
+  },
+  pre_market_gap: {
+    title: 'Pre-Market Gap Intelligence & Fill Probability',
+    what: 'Classifies session opening gaps into Full Gap Up/Down, Partial Gap Up/Down, or Flat, tracking live whether the price has retested and filled the gap back to previous close.',
+    why: 'Opening gaps represent overnight order imbalances. Full gap-ups that hold above VWAP exhibit Gap-and-Go continuation; gap-ups failing below VWAP trigger high-probability Gap-Fade reversals.',
+    interpretation: 'Look for Gap-and-Go momentum when a full gap-up trades above VWAP with RVOL > 1.5x; initiate Gap-Fade short scalps targeting previous close when price slips below VWAP.'
+  },
+  institutional_trap_detector: {
+    title: 'Institutional Trap & Liquidity Sweep Detector',
+    what: 'Monitors the session high and low for false breakouts (Bull Traps and Bear Traps) caused by institutional liquidity sweeps into retail stop-loss clusters.',
+    why: 'Market makers routinely push price slightly above Day High to trigger retail buy-stops, absorb the liquidity with passive sell orders, and aggressively reverse price downward.',
+    interpretation: 'When a new Day High is printed on decaying volume or negative delta (divergence), avoid chasing the breakout and prepare for mean-reversion toward VWAP.'
+  },
+  triple_screen_confluence: {
+    title: 'Triple-Screen Multi-Timeframe Confluence Matrix',
+    what: 'Dr. Alexander Elder\'s institutional multi-timeframe methodology evaluating 5m (Setup), 15m (Wave), and 1h (Tide) trend, EMA alignment, and RSI simultaneously.',
+    why: 'Trading exclusively in the direction of higher timeframes filters out misleading lower-timeframe noise and dramatically elevates trade win-rate.',
+    interpretation: 'Confluence Score ≥ 75% indicates full multi-timeframe alignment; trade aggressively in the trend direction. When confluence is < 40%, market is in choppy counter-trend conflict.'
+  },
+  benchmark_relative_strength: {
+    title: 'Benchmark Relative Strength & Alpha (vs. NIFTY / S&P)',
+    what: 'Measures the intraday percentage outperformance or underperformance of a security relative to its benchmark index (^NSEI for India, ^GSPC for US).',
+    why: 'Leading institutional stocks refuse to fall even when the broad market is tumbling. Buying high relative strength leaders ensures you have structural market sponsorship.',
+    interpretation: 'Alpha > +1.0% identifies institutional leadership; avoid longing stocks with negative alpha (< -1.0%) even if their individual chart looks attractive.'
+  },
+  intraday_battle_plan: {
+    title: 'Actionable Intraday Battle Plan & Execution Card',
+    what: 'A structured, pre-calculated algorithmic trade card specifying the exact Entry Trigger, Hard Stop Loss, Target 1 (1.5R), Target 2 (2.5R), and net profit after all charges.',
+    why: 'Eliminates emotional hesitation and panic. Real-world prop trading mandates having a fully written, quantified trade plan before transmitting any live order.',
+    interpretation: 'Execute only when price meets the exact trigger rule; trail stop-loss to breakeven once Target 1 is achieved to guarantee a risk-free runner.'
   }
 };
