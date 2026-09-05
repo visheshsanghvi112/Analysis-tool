@@ -429,12 +429,28 @@ def get_fundamentals_data(ticker: str) -> dict:
 
         # ── 7. Key ratios ─────────────────────────────────────────────────────
         fd = r.get("financialData", {})
+        total_cash = raw(fd, "totalCash")
+        total_debt = raw(fd, "totalDebt")
+        net_debt = (total_debt - total_cash) if (total_debt is not None and total_cash is not None) else None
+        ebitda = raw(fd, "ebitda")
+        net_debt_to_ebitda = None
+        if net_debt is not None and ebitda and ebitda > 0:
+            net_debt_to_ebitda = round(net_debt / ebitda, 2)
+
         ratios = {
-            "pe_ratio": raw(ks, "trailingPE"),
-            "pb_ratio": raw(ks, "priceToBook"),
+            "pe_ratio": raw(sd, "trailingPE") or raw(ks, "trailingPE"),
+            "forward_pe": raw(sd, "forwardPE") or raw(ks, "forwardPE"),
+            "peg_ratio": raw(ks, "pegRatio"),
+            "pb_ratio": raw(ks, "priceToBook") or raw(sd, "priceToBook"),
+            "enterprise_to_ebitda": raw(ks, "enterpriseToEbitda"),
             "roe": raw(fd, "returnOnEquity"),
             "roa": raw(fd, "returnOnAssets"),
             "debt_to_equity": raw(fd, "debtToEquity"),
+            "total_cash": total_cash,
+            "total_debt": total_debt,
+            "net_debt": net_debt,
+            "ebitda": ebitda,
+            "net_debt_to_ebitda": net_debt_to_ebitda,
             "current_ratio": raw(fd, "currentRatio"),
             "revenue_growth": raw(fd, "revenueGrowth"),
             "earnings_growth": raw(fd, "earningsGrowth"),
@@ -443,10 +459,109 @@ def get_fundamentals_data(ticker: str) -> dict:
             "operating_margins": raw(fd, "operatingMargins"),
         }
 
+        # ── 8. 3-Year Compounded Growth (Screener.in style) ───────────────────
+        sales_cagr_3y = None
+        profit_cagr_3y = None
+        if len(income_annual) >= 4:
+            r_start = income_annual[0].get("revenue")
+            r_end = income_annual[-1].get("revenue")
+            if r_start and r_end and r_start > 0 and r_end > 0:
+                sales_cagr_3y = round(((r_end / r_start) ** (1.0 / 3.0) - 1.0) * 100.0, 1)
+
+            p_start = income_annual[0].get("net_income")
+            p_end = income_annual[-1].get("net_income")
+            if p_start and p_end and p_start > 0 and p_end > 0:
+                profit_cagr_3y = round(((p_end / p_start) ** (1.0 / 3.0) - 1.0) * 100.0, 1)
+        elif len(income_annual) >= 2:
+            yrs = max(1, len(income_annual) - 1)
+            r_start = income_annual[0].get("revenue")
+            r_end = income_annual[-1].get("revenue")
+            if r_start and r_end and r_start > 0 and r_end > 0:
+                sales_cagr_3y = round(((r_end / r_start) ** (1.0 / yrs) - 1.0) * 100.0, 1)
+
+            p_start = income_annual[0].get("net_income")
+            p_end = income_annual[-1].get("net_income")
+            if p_start and p_end and p_start > 0 and p_end > 0:
+                profit_cagr_3y = round(((p_end / p_start) ** (1.0 / yrs) - 1.0) * 100.0, 1)
+
+        # ── 9. Automated Pros & Cons Digest (Screener.in style) ──────────────
+        pros = []
+        cons = []
+
+        de_val = ratios.get("debt_to_equity")
+        de = (de_val / 100.0) if (de_val is not None and de_val > 2.0) else de_val
+        peg = ratios.get("peg_ratio")
+        opm = ratios.get("operating_margins")
+        promoter = round(insiders_pct * 100, 1) if insiders_pct is not None else None
+        div_y = round(div_yield * 100, 2) if div_yield else None
+        earn_growth = ratios.get("earnings_growth")
+        pe = ratios.get("pe_ratio")
+
+        # Pros Evaluation
+        if net_debt is not None and net_debt <= 0:
+            pros.append("Company is virtually debt-free with net cash reserves.")
+        elif de is not None and de <= 0.6:
+            pros.append(f"Prudent balance sheet with low financial leverage (D/E: {de:.2f}x).")
+
+        if peg is not None and 0 < peg < 1.0:
+            pros.append(f"PEG ratio of {peg:.2f} indicates earnings growth is trading at an attractive multiple.")
+
+        if opm is not None and opm >= 0.12:
+            pros.append(f"Strong operating profitability margin of {opm * 100:.1f}% reflecting institutional pricing power.")
+
+        if sales_cagr_3y is not None and sales_cagr_3y >= 10.0:
+            pros.append(f"Healthy medium-term revenue compounding of +{sales_cagr_3y:.1f}% p.a. over the past 3 years.")
+
+        if promoter is not None and promoter >= 50.0:
+            pros.append(f"High promoter commitment with {promoter:.1f}% equity skin-in-the-game.")
+
+        if net_debt_to_ebitda is not None and 0 < net_debt_to_ebitda <= 1.5:
+            pros.append(f"Net debt is conservative and fully repayable within {net_debt_to_ebitda:.1f} years of operating EBITDA.")
+
+        if div_y is not None and div_y >= 1.0:
+            pros.append(f"Provides tangible shareholder cash returns with a {div_y:.2f}% dividend yield.")
+
+        # Cons Evaluation
+        if earn_growth is not None and earn_growth < -0.05:
+            cons.append(f"Recent quarterly net earnings contracted by {abs(earn_growth * 100):.1f}% YoY.")
+
+        if profit_cagr_3y is not None and profit_cagr_3y <= 3.0 and (sales_cagr_3y or 0) > 8.0:
+            cons.append(f"3-year profit compounding has lagged revenue ({profit_cagr_3y:+.1f}% p.a.), signaling margin pressure.")
+
+        if pe is not None and pe >= 35.0:
+            cons.append(f"Stock trades at a rich valuation multiple of {pe:.1f}x P/E, requiring sustained high execution.")
+
+        if peg is not None and peg >= 2.2:
+            cons.append(f"Growth is priced at a premium with a PEG ratio of {peg:.2f}.")
+
+        if de is not None and de > 1.2:
+            cons.append(f"Elevated debt-to-equity ratio of {de:.2f}x increases vulnerability to rising interest rates.")
+
+        if promoter is not None and promoter < 30.0:
+            cons.append(f"Low promoter holding ({promoter:.1f}%) exposes the stock to potential ownership dilution.")
+
+        # Fallback guarantees
+        if not pros:
+            pros.append("Established market footprint and operational presence in its sector.")
+            if opm is not None and opm > 0:
+                pros.append(f"Maintains positive operating margins of {opm * 100:.1f}%.")
+
+        if not cons:
+            if div_y is None or div_y == 0:
+                cons.append("Company does not currently pay dividends, retaining cash for operations.")
+            cons.append("Subject to broader industry cyclicality and macroeconomic market conditions.")
+
         return {
             "ticker": ticker,
             "income_annual": income_annual,
             "income_quarterly": income_quarterly,
+            "sales_cagr_3y": sales_cagr_3y,
+            "profit_cagr_3y": profit_cagr_3y,
+            "net_debt_to_ebitda": net_debt_to_ebitda,
+            "pros_and_cons": {
+                "pros": pros[:4],
+                "cons": cons[:4],
+            },
             "dividend": {
                 "yield_pct": round(div_yield * 100, 2) if div_yield else None,
                 "rate": div_rate,

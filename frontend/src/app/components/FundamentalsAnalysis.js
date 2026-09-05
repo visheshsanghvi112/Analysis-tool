@@ -9,6 +9,7 @@ import {
   TrendingUp, TrendingDown, DollarSign, Users, PieChart,
   Calendar, AlertTriangle, RefreshCw, ChevronDown, ChevronUp,
   Award, Landmark, ArrowUpRight, ArrowDownRight, Minus,
+  CheckCircle2, ShieldCheck,
 } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 
@@ -110,8 +111,81 @@ function SectionHeader({ icon: Icon, title, badge, color = '#6366f1', infoProps 
   );
 }
 
+// ── Automated Pros & Cons Card (Screener.in Style) ────────────────────────────
+function ProsAndConsCard({ prosAndCons }) {
+  const pros = prosAndCons?.pros || [];
+  const cons = prosAndCons?.cons || [];
+
+  if (!pros.length && !cons.length) return null;
+
+  return (
+    <div className="glass-card p-5 space-y-4">
+      <SectionHeader
+        icon={ShieldCheck}
+        title="Investment Thesis: Strengths &amp; Risks"
+        badge="Screener.in Intelligence"
+        color="#10b981"
+        infoProps={{
+          title: "Automated Fundamental Pros & Cons",
+          what: "Rule-based fundamental audit analyzing balance sheet solvency, valuation multiples, margin resilience, historical sales/profit compounding, and promoter ownership.",
+          why: "Eliminates emotional bias by systematically highlighting both the structural moats and potential red flags before committing capital.",
+          interpretation: "A high-quality investment typically shows robust pros across solvency and margins, with manageable or cyclical cons rather than structural balance sheet issues."
+        }}
+      />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Pros (Strengths) */}
+        <div className="p-4 rounded-xl bg-emerald-500/[0.03] border border-emerald-500/15 space-y-3">
+          <div className="flex items-center gap-2 text-emerald-400">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span className="text-xs font-bold uppercase tracking-wider">Company Strengths (Pros)</span>
+            <span className="text-[10px] ml-auto px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 font-mono">
+              {pros.length} {pros.length === 1 ? 'Strength' : 'Strengths'}
+            </span>
+          </div>
+          {pros.length > 0 ? (
+            <ul className="space-y-2">
+              {pros.map((p, idx) => (
+                <li key={idx} className="flex items-start gap-2.5 text-xs text-slate-300 leading-relaxed">
+                  <span className="text-emerald-400 font-bold mt-0.5">•</span>
+                  <span>{p}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-slate-500 italic">No distinctive structural advantages flagged.</p>
+          )}
+        </div>
+
+        {/* Cons (Risks) */}
+        <div className="p-4 rounded-xl bg-rose-500/[0.03] border border-rose-500/15 space-y-3">
+          <div className="flex items-center gap-2 text-rose-400">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span className="text-xs font-bold uppercase tracking-wider">Key Risks &amp; Red Flags (Cons)</span>
+            <span className="text-[10px] ml-auto px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-300 font-mono">
+              {cons.length} {cons.length === 1 ? 'Warning' : 'Warnings'}
+            </span>
+          </div>
+          {cons.length > 0 ? (
+            <ul className="space-y-2">
+              {cons.map((c, idx) => (
+                <li key={idx} className="flex items-start gap-2.5 text-xs text-slate-300 leading-relaxed">
+                  <span className="text-rose-400 font-bold mt-0.5">•</span>
+                  <span>{c}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-emerald-400/80 italic">✓ No major solvency or margin red flags detected.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Earnings & Revenue Panel ──────────────────────────────────────────────────
-function EarningsPanel({ annual, quarterly, ratios, price_cagr, currSym = '₹', isUS = false }) {
+function EarningsPanel({ annual, quarterly, ratios, price_cagr, sales_cagr_3y, profit_cagr_3y, currSym = '₹', isUS = false }) {
   const [view, setView] = useState('annual'); // 'annual' | 'quarterly'
   const data = view === 'annual' ? annual : quarterly;
   const xKey = view === 'annual' ? 'year' : 'quarter';
@@ -153,9 +227,28 @@ function EarningsPanel({ annual, quarterly, ratios, price_cagr, currSym = '₹',
         ))}
       </div>
 
-      {/* CAGR Pills */}
+      {/* Compounding & Return Scorecard */}
       {view === 'annual' && (
         <div className="flex flex-wrap gap-2">
+          {sales_cagr_3y != null && (
+            <div className="flex flex-col items-center gap-1 px-4 py-3 rounded-xl border bg-white/[0.02] border-white/[0.07]">
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">3Y Sales CAGR</span>
+                <InfoBadge infoKey="sales_cagr" />
+              </div>
+              <span className={`text-lg font-black ${sales_cagr_3y >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {fmtPct(sales_cagr_3y)}
+              </span>
+            </div>
+          )}
+          {profit_cagr_3y != null && (
+            <div className="flex flex-col items-center gap-1 px-4 py-3 rounded-xl border bg-white/[0.02] border-white/[0.07]">
+              <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">3Y Profit CAGR</span>
+              <span className={`text-lg font-black ${profit_cagr_3y >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {fmtPct(profit_cagr_3y)}
+              </span>
+            </div>
+          )}
           <CagrPill label="1Y Price" value={price_cagr?.['1y']} />
           <CagrPill label="3Y Price" value={price_cagr?.['3y']} />
           <CagrPill label="5Y Price" value={price_cagr?.['5y']} />
@@ -206,19 +299,140 @@ function EarningsPanel({ annual, quarterly, ratios, price_cagr, currSym = '₹',
         </div>
       )}
 
-      {/* Ratio row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-        {[
-          { label: 'P/E Ratio',  val: fmtNum(ratios?.pe_ratio, 1), color: 'text-indigo-400' },
-          { label: 'P/B Ratio',  val: fmtNum(ratios?.pb_ratio, 2), color: 'text-violet-400' },
-          { label: 'D/E Ratio',  val: fmtNum(ratios?.debt_to_equity, 2), color: 'text-amber-400' },
-          { label: 'Cur. Ratio', val: fmtNum(ratios?.current_ratio, 2), color: 'text-emerald-400' },
-        ].map(({ label, val, color }) => (
-          <div key={label} className="text-center p-2 rounded-lg bg-white/[0.02] border border-white/[0.05]">
-            <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">{label}</p>
-            <p className={`text-sm font-bold ${color}`}>{val}</p>
+      {/* Comprehensive Valuation & Solvency Health Grid */}
+      <div className="pt-2 border-t border-slate-800/80 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            Key Valuation Multiples &amp; Balance Sheet Health
+          </span>
+          <span className="text-[10px] text-slate-500 font-mono">
+            {ratios?.peg_ratio && ratios.peg_ratio < 1.0 ? '✓ PEG < 1.0 (Undervalued Growth)' : 'Fundamental Diagnostics'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {/* 1. Trailing P/E */}
+          <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-0.5">
+            <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">P/E (TTM)</p>
+            <p className="text-sm font-black font-mono text-indigo-400">
+              {ratios?.pe_ratio ? `${fmtNum(ratios.pe_ratio, 1)}x` : 'N/A'}
+            </p>
+            <p className="text-[9px] text-slate-500 truncate">Trailing Multiple</p>
           </div>
-        ))}
+
+          {/* 2. Forward P/E */}
+          <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-0.5">
+            <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Forward P/E</p>
+            <p className={`text-sm font-black font-mono ${
+              ratios?.forward_pe && ratios?.pe_ratio && ratios.forward_pe < ratios.pe_ratio
+                ? 'text-emerald-400'
+                : 'text-indigo-300'
+            }`}>
+              {ratios?.forward_pe ? `${fmtNum(ratios.forward_pe, 1)}x` : 'N/A'}
+            </p>
+            <p className="text-[9px] text-slate-500 truncate">
+              {ratios?.forward_pe && ratios?.pe_ratio && ratios.forward_pe < ratios.pe_ratio
+                ? '✓ Earnings Expanding'
+                : 'Next 12M Estimate'}
+            </p>
+          </div>
+
+          {/* 3. PEG Ratio */}
+          <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-0.5">
+            <div className="flex items-center justify-between">
+              <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">PEG Ratio</p>
+              <InfoBadge infoKey="peg_ratio" />
+            </div>
+            <p className={`text-sm font-black font-mono ${
+              ratios?.peg_ratio && ratios.peg_ratio < 1.0
+                ? 'text-emerald-400'
+                : ratios?.peg_ratio && ratios.peg_ratio <= 2.0
+                ? 'text-amber-400'
+                : 'text-rose-400'
+            }`}>
+              {ratios?.peg_ratio ? fmtNum(ratios.peg_ratio, 2) : 'N/A'}
+            </p>
+            <p className="text-[9px] text-slate-500 truncate">
+              {ratios?.peg_ratio && ratios.peg_ratio < 1.0
+                ? 'Undervalued Growth'
+                : ratios?.peg_ratio && ratios.peg_ratio <= 2.0
+                ? 'Fair Value'
+                : 'Premium Priced'}
+            </p>
+          </div>
+
+          {/* 4. EV / EBITDA */}
+          <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-0.5">
+            <div className="flex items-center justify-between">
+              <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">EV / EBITDA</p>
+              <InfoBadge infoKey="ev_ebitda" />
+            </div>
+            <p className="text-sm font-black font-mono text-violet-400">
+              {ratios?.enterprise_to_ebitda ? `${fmtNum(ratios.enterprise_to_ebitda, 1)}x` : 'N/A'}
+            </p>
+            <p className="text-[9px] text-slate-500 truncate">Enterprise Multiple</p>
+          </div>
+
+          {/* 5. Price to Book */}
+          <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-0.5">
+            <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">P/B Ratio</p>
+            <p className="text-sm font-black font-mono text-purple-400">
+              {ratios?.pb_ratio ? `${fmtNum(ratios.pb_ratio, 2)}x` : 'N/A'}
+            </p>
+            <p className="text-[9px] text-slate-500 truncate">Book Multiplier</p>
+          </div>
+
+          {/* 6. Debt to Equity */}
+          <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-0.5">
+            <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Debt / Equity</p>
+            {(() => {
+              const deRaw = ratios?.debt_to_equity;
+              const deVal = deRaw != null ? (deRaw > 2.0 ? deRaw / 100.0 : deRaw) : null;
+              const isSafe = deVal != null && deVal <= 1.0;
+              return (
+                <>
+                  <p className={`text-sm font-black font-mono ${isSafe ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {deVal != null ? `${deVal.toFixed(2)}x` : 'N/A'}
+                  </p>
+                  <p className="text-[9px] text-slate-500 truncate">
+                    {deVal != null ? (deVal <= 0.5 ? '✓ Low Debt' : deVal <= 1.0 ? 'Moderate' : '⚠️ High Leverage') : 'Solvency'}
+                  </p>
+                </>
+              );
+            })()}
+          </div>
+
+          {/* 7. Net Debt Position */}
+          <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-0.5">
+            <div className="flex items-center justify-between">
+              <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Net Debt</p>
+              <InfoBadge infoKey="net_debt" />
+            </div>
+            <p className={`text-sm font-black font-mono ${
+              ratios?.net_debt != null && ratios.net_debt <= 0 ? 'text-emerald-400' : 'text-slate-200'
+            }`}>
+              {ratios?.net_debt != null
+                ? (ratios.net_debt <= 0 ? '✓ Net Cash' : fmtCr(ratios.net_debt, currSym, isUS))
+                : 'N/A'}
+            </p>
+            <p className="text-[9px] text-slate-500 truncate">
+              {ratios?.net_debt != null && ratios.net_debt <= 0
+                ? 'Cash > Total Debt'
+                : ratios?.net_debt_to_ebitda != null
+                ? `${ratios.net_debt_to_ebitda}x EBITDA Payoff`
+                : 'Total Debt - Cash'}
+            </p>
+          </div>
+
+          {/* 8. Operating Margin */}
+          <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-0.5">
+            <p className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Operating Margin</p>
+            <p className="text-sm font-black font-mono text-emerald-400">
+              {ratios?.operating_margins != null ? fmtPct(ratios.operating_margins * 100) : 'N/A'}
+            </p>
+            <p className="text-[9px] text-slate-500 truncate">Pricing Moat</p>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -497,9 +711,12 @@ export default function FundamentalsAnalysis({ ticker }) {
         </div>
         <div>
           <h2 className="text-base font-black text-white">Fundamental Intelligence</h2>
-          <p className="text-[11px] text-slate-500">Revenue trend · Dividends · Ownership pattern</p>
+          <p className="text-[11px] text-slate-500">Business Quality · Balance Sheet Solvency · Screener.in Intelligence</p>
         </div>
       </div>
+
+      {/* Automated Screener.in-Style Strengths & Risks */}
+      <ProsAndConsCard prosAndCons={data.pros_and_cons} />
 
       {/* Earnings Panel (full width) */}
       <EarningsPanel
@@ -507,6 +724,8 @@ export default function FundamentalsAnalysis({ ticker }) {
         quarterly={data.income_quarterly}
         ratios={data.ratios}
         price_cagr={data.price_cagr}
+        sales_cagr_3y={data.sales_cagr_3y}
+        profit_cagr_3y={data.profit_cagr_3y}
         currSym={currSym}
         isUS={isUS}
       />

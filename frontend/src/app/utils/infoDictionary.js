@@ -198,6 +198,24 @@ export const INFO_DICTIONARY = {
     why: 'Dollar-cost averaging systematically buys more units during market drawdowns, removing emotional market timing and unleashing geometric compounding.',
     interpretation: 'Wealth creation is heavily back-loaded: over a 15–20 year horizon, compound returns typically generate 2× to 4× the cumulative principal invested.'
   },
+  step_up_sip: {
+    title: 'Step-Up (Top-Up) Annual Increment Engine',
+    what: 'Models annual percentage increases (e.g. +10%/yr) in your monthly SIP installments, synchronizing investment contributions with annual salary increments.',
+    why: 'Fixed SIP contributions lose real purchasing power to inflation over time. Stepping up contributions by just 10% annually can more than double your terminal wealth over 15–20 years.',
+    interpretation: 'A 10% annual step-up drastically accelerates the compounding curve, cutting the time to achieve target wealth milestones by 3 to 6 years.'
+  },
+  target_goal_planner: {
+    title: 'Target Goal Planner & Cost of Delay Suite',
+    what: 'Reverse-calculates the exact monthly SIP installment required to accumulate a predetermined financial corpus (e.g. ₹1 Crore or $1 Million) across target time horizons.',
+    why: 'Helps investors anchor financial planning around tangible life goals (retirement, child education, financial independence) rather than arbitrary monthly guesses.',
+    interpretation: 'Calculates the exponential "Cost of Delay": delaying your investment journey by even 5 years often requires more than double the monthly capital to reach the identical corpus.'
+  },
+  inflation_adjusted_corpus: {
+    title: 'Real Purchasing Power vs. Nominal Corpus',
+    what: 'Discounts nominal future wealth using compound annual inflation (default 6% p.a.) to reveal the actual purchasing power of your future corpus in today\'s money.',
+    why: 'Nominal future crores or millions can be misleading due to purchasing power decay; evaluating real purchasing power ensures long-term lifestyle goals are genuinely met.',
+    interpretation: 'At 6% inflation, prices double roughly every 12 years. ₹1 Crore 20 years from now will possess approximately ₹31 Lakh of today\'s purchasing power.'
+  },
   mpt_efficient_frontier: {
     title: 'Markowitz Efficient Frontier & SLSQP Portfolio Optimizer',
     what: 'Solves constrained quadratic optimization problems (using SLSQP) across your holdings\' historical covariance matrix to locate the mathematical Maximum Sharpe (tangency) and Minimum Volatility portfolios.',
@@ -220,9 +238,45 @@ export const INFO_DICTIONARY = {
   },
   graham_number: {
     title: 'Benjamin Graham Intrinsic Valuation Number',
-    what: 'Classical defensive valuation metric: √(22.5 × Trailing Twelve Month EPS × Book Value Per Share), establishing the maximum conservative purchase price.',
-    why: 'Prevents overpaying for cyclical assets by enforcing simultaneous Price-to-Earnings (P/E ≤ 15) and Price-to-Book (P/B ≤ 1.5) constraints.',
-    interpretation: 'Current Price ≤ Graham Number indicates a deeply undervalued defensive security trading with a strong margin of safety.'
+    what: 'Computes conservative upper-bound acquisition price using Ben Graham\'s classic formula: √(22.5 × Trailing EPS × Book Value per Share).',
+    why: 'Graham established that a defensive investor should never pay a price where P/E × P/B exceeds 22.5.',
+    interpretation: 'Current Price < Graham Number represents deep value with an automatic margin of safety.'
+  },
+  peg_ratio: {
+    title: 'PEG Ratio (Price/Earnings-to-Growth)',
+    what: 'Normalized valuation multiple calculating Price-to-Earnings divided by expected annual EPS growth rate percentage.',
+    why: 'Invented by legendary investor Peter Lynch. A P/E of 30x is cheap if earnings grow at 40%/yr (PEG = 0.75), whereas a P/E of 15x is expensive if growth is 5%/yr (PEG = 3.0).',
+    interpretation: 'PEG < 1.0 indicates undervalued growth; 1.0–2.0 indicates fair value; > 2.0 indicates market is pricing in aggressive speculative growth.'
+  },
+  ev_ebitda: {
+    title: 'EV / EBITDA (Enterprise Valuation Multiple)',
+    what: 'Enterprise Value (Market Cap + Total Debt - Cash) divided by Earnings Before Interest, Taxes, Depreciation, and Amortization.',
+    why: 'Unlike standard P/E, EV/EBITDA is capital-structure neutral: it accounts for debt burdens and allows clean comparisons between companies with different leverage.',
+    interpretation: 'Lower values (< 10x–12x depending on sector) signal attractive valuation; > 20x indicates high growth expectations.'
+  },
+  net_debt: {
+    title: 'Net Debt Position & Solvency Health',
+    what: 'Total debt liabilities minus total cash and cash equivalents on the corporate balance sheet.',
+    why: 'Companies with negative net debt (Net Cash) are virtually immune to bankruptcy, interest rate hikes, and credit crunches.',
+    interpretation: 'Net Cash provides dry powder for buybacks, acquisitions, or dividends; high Net Debt (> 3x annual EBITDA) raises debt distress risk.'
+  },
+  pros_and_cons: {
+    title: 'Automated Investment Strengths & Risks Digest',
+    what: 'Algorithmic balance sheet, margin, valuation, and governance synthesis inspired by Screener.in, classifying raw corporate filings into clear strengths and vulnerabilities.',
+    why: 'Prevents emotional bias and analysis paralysis: gives retail investors an instant, objective reality check before deploying hard-earned capital.',
+    interpretation: 'A robust compounder exhibits 3+ structural pros (low leverage, pricing power, PEG < 1.0) with zero critical solvency or promoter dilution flags.'
+  },
+  sales_cagr: {
+    title: 'Compounded Sales & Profit Growth (3Y CAGR)',
+    what: 'Compound Annual Growth Rate (CAGR) measuring top-line revenue and bottom-line net profit expansion over a multi-year economic cycle.',
+    why: 'Stock prices ultimately mirror corporate cash flow generation over 3–5 year horizons. Revenue growth validates customer demand and market share gains.',
+    interpretation: 'Look for Profit CAGR matching or exceeding Sales CAGR, which indicates expanding operational efficiency and operating leverage.'
+  },
+  net_debt_to_ebitda: {
+    title: 'Net Debt / EBITDA Payoff Horizon',
+    what: 'Calculates the number of years of current annual operating profit (EBITDA) required to completely extinguish all outstanding net borrowings.',
+    why: 'The gold standard solvency metric used by credit rating agencies and banks to evaluate real debt serviceability.',
+    interpretation: '< 1.5x indicates debt is easily serviceable and low risk; 1.5x–3.0x is moderate; > 3.5x indicates heavy debt burden vulnerable to rate shocks.'
   },
 
   // ── 9. Intraday Trading Desk & Microstructure ────────────────────────────
@@ -345,5 +399,23 @@ export const INFO_DICTIONARY = {
     what: 'A private, real-time tactical journal stored locally in browser storage for logging trade hypotheses, entry rules, stops, and psychological discipline.',
     why: 'Proprietary trading desk studies show that traders who document their setups prior to order submission maintain 40% tighter drawdown control and avoid revenge trades.',
     interpretation: 'Log your reason for entry, execution trigger price, and stop discipline prior to placing trades; add timestamps to track price action evolution.'
+  },
+  options_pcr: {
+    title: 'Options Put-Call Ratio (PCR Open Interest)',
+    what: 'The ratio of total Open Interest (OI) in Put options divided by total Open Interest in Call options across all strikes of the active derivatives series.',
+    why: 'Acts as a contrarian intraday sentiment barometer. Heavy put writing (PCR > 1.2) creates an options support floor, while heavy call writing (PCR < 0.8) forms an overhead ceiling.',
+    interpretation: 'PCR > 1.3 indicates oversold conditions ripe for a short-covering rally; PCR < 0.7 signals extreme bullish complacency and warns of an impending intraday long squeeze.'
+  },
+  block_deals: {
+    title: 'Institutional Block & Bulk Deals Feed',
+    what: 'Exchange-reported high-value transactions involving a minimum of 5 lakh shares or ₹5 crore executed through a single dedicated institutional window.',
+    why: 'Reveals where sovereign wealth funds, domestic mutual funds (DIIs), and foreign portfolio investors (FIIs) are committing large-scale institutional liquidity.',
+    interpretation: 'Clusters of large block buys near key support confirm institutional accumulation; large block sells below VWAP warn of institutional portfolio liquidation.'
+  },
+  trade_log: {
+    title: 'Intraday Execution Log & Trade Journal',
+    what: 'Real-time trade ledger tracking active and closed positions, entry/exit fills, gross P&L, statutory friction, and session win/loss distribution.',
+    why: 'Professional trading firms enforce strict execution logging to prevent emotional revenge trading, enforce daily drawdown limits, and maintain risk symmetry.',
+    interpretation: 'Review your gross vs net P&L after friction to ensure your average winning trade adequately covers brokerage, exchange turnover, and STT charges.'
   }
 };

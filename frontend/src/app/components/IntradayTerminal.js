@@ -9,9 +9,10 @@ import {
   Search, TrendingUp, TrendingDown, Target, Zap, Clock, ShieldCheck,
   BarChart2, Flame, Eye, ArrowRight, CheckCircle2, XCircle, AlertCircle,
   Copy, Check, Scale, AlertTriangle, Play, HelpCircle,
-  Volume2, VolumeX, Edit3, Trash2
+  Volume2, VolumeX, Edit3, Trash2, Maximize2, Minimize2, Bell, BellOff
 } from 'lucide-react';
 import InfoBadge from './InfoBadge';
+import Header from './Header';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (
   typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -93,6 +94,24 @@ export default function IntradayTerminal() {
   const [scratchpadOpen, setScratchpadOpen] = useState(false);
   const [notes, setNotes] = useState('');
   const [notesSaved, setNotesSaved] = useState(false);
+  const [notesCopied, setNotesCopied] = useState(false);
+  const [clearNotesConfirm, setClearNotesConfirm] = useState(false);
+
+  // Chart crosshair
+  const [hoveredX, setHoveredX] = useState(null);
+  const [hoveredY, setHoveredY] = useState(null); // for Y-axis price label
+
+  // Fullscreen chart mode
+  const [fullscreenChart, setFullscreenChart] = useState(false);
+
+  // Price flash animation (green/red on tick update)
+  const [priceFlash, setPriceFlash] = useState(null); // 'up' | 'down' | null
+  const prevPriceRef = useRef(null);
+
+  // Price alert system
+  const [alertPrice, setAlertPrice] = useState('');
+  const [alertTriggered, setAlertTriggered] = useState(false);
+  const [alertAbove, setAlertAbove] = useState(true); // alert when price goes above/below
 
   // Scanner state
   const [scannerMarket, setScannerMarket] = useState('IN');
@@ -286,6 +305,30 @@ export default function IntradayTerminal() {
       }
     }
   }, [data, soundAlerts, playChime]);
+
+  // Price flash animation on tick update
+  useEffect(() => {
+    if (!data?.current_price) return;
+    const prev = prevPriceRef.current;
+    if (prev !== null && prev !== data.current_price) {
+      setPriceFlash(data.current_price > prev ? 'up' : 'down');
+      const t = setTimeout(() => setPriceFlash(null), 800);
+      return () => clearTimeout(t);
+    }
+    prevPriceRef.current = data.current_price;
+  }, [data?.current_price]);
+
+  // Price alert trigger check
+  useEffect(() => {
+    if (!data?.current_price || !alertPrice) return;
+    const ap = parseFloat(alertPrice);
+    if (!ap) return;
+    const triggered = alertAbove
+      ? data.current_price >= ap
+      : data.current_price <= ap;
+    setAlertTriggered(triggered);
+    if (triggered && soundAlerts) playChime('breakout');
+  }, [data?.current_price, alertPrice, alertAbove, soundAlerts, playChime]);
 
   // Auto-refresh countdown timer
   useEffect(() => {
@@ -541,7 +584,7 @@ export default function IntradayTerminal() {
 
   const chartHeight = 360;
   const chartWidth = 720;
-  const padding = { top: 20, right: 65, bottom: 30, left: 10 };
+  const padding = { top: 20, right: 65, bottom: 40, left: 10 };
 
   const { priceMin, priceMax, xScale, yScale, candleWidth } = useMemo(() => {
     if (!candles.length) {
@@ -584,8 +627,21 @@ export default function IntradayTerminal() {
   }, [candles, showVWAPBands, showSupertrend, showPDH, data]);
 
   return (
-    <div className="w-full min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-6 lg:p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col justify-between">
+      <div>
+        <Header
+          currentTicker={ticker}
+          onTickerSelect={(sym) => {
+            if (!sym) return;
+            const clean = sym.trim().toUpperCase();
+            setTicker(clean);
+            try {
+              window.history.replaceState({}, '', `/intraday?ticker=${encodeURIComponent(clean)}`);
+            } catch (_) {}
+          }}
+        />
+
+        <main className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
 
         {/* ── REAL-TIME MARKET SESSION CLOCK & PHASE BANNER ─────────────────── */}
         {marketPulse && (
@@ -599,7 +655,7 @@ export default function IntradayTerminal() {
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                     {marketPulse.market === 'IN' ? 'Dalal Street Session' : 'Wall Street Session'} ({marketPulse.local_time})
                   </span>
-                  <span className={`px-2 py-0.2 text-[10px] font-bold rounded-full uppercase ${marketPulse.is_open ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'}`}>
+                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase ${marketPulse.is_open ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'}`}>
                     {marketPulse.is_open ? 'LIVE SESSION' : 'CLOSED'}
                   </span>
                   <InfoBadge infoKey="session_phase_clock" />
@@ -627,7 +683,7 @@ export default function IntradayTerminal() {
               {marketPulse.mins_to_mis_squareoff > 0 && (
                 <div className="px-3 py-1 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-mono shrink-0 flex items-center gap-1.5 font-bold">
                   <AlertTriangle className="w-3.5 h-3.5" />
-                  Auto-Square-Off in: {marketPulse.mins_to_mis_squareoff}m
+                  {scannerMarket === 'IN' ? 'Auto-Square-Off' : 'Market Close'} in: {marketPulse.mins_to_mis_squareoff}m
                 </div>
               )}
             </div>
@@ -815,30 +871,73 @@ export default function IntradayTerminal() {
           </div>
         )}
 
+        {/* Loading skeleton for headline cards */}
+        {loading && !data && (
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="bg-slate-900/60 border border-slate-800/40 rounded-2xl p-4 animate-pulse">
+                <div className="h-2.5 w-20 bg-slate-800 rounded mb-3" />
+                <div className="h-8 w-28 bg-slate-800 rounded mb-2" />
+                <div className="h-2 w-16 bg-slate-800/60 rounded" />
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* ── ACTIVE TICKER HEADLINE BAR ──────────────────────────────────── */}
         {data && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {/* Price & Change */}
-            <div className="col-span-2 bg-gradient-to-br from-slate-900/90 to-slate-900/50 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-semibold text-slate-400">{data.company_name}</span>
-                  <div className="flex items-baseline gap-2">
-                    <h2 className="text-2xl sm:text-3xl font-black font-mono tracking-tight text-white">
-                      {currSym}{data.current_price?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </h2>
-                    <span className={`text-xs sm:text-sm font-bold font-mono flex items-center ${data.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {data.change >= 0 ? <ArrowUpRight className="w-4 h-4 mr-0.5" /> : <ArrowDownRight className="w-4 h-4 mr-0.5" />}
-                      {data.change >= 0 ? '+' : ''}{data.change} ({data.change >= 0 ? '+' : ''}{data.change_pct}%)
-                    </span>
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            {/* Price & Change — with flash animation on tick update */}
+            <div className={`bg-gradient-to-br from-slate-900/90 to-slate-900/50 rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 ${
+              priceFlash === 'up'
+                ? 'border border-emerald-400/60 shadow-md shadow-emerald-500/20'
+                : priceFlash === 'down'
+                ? 'border border-rose-400/60 shadow-md shadow-rose-500/20'
+                : 'border border-slate-800/80'
+            }`}>
+              <div>
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-xs font-semibold text-slate-400 truncate max-w-[110px]" title={data.company_name}>{data.company_name}</span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <InfoBadge infoKey="live_prices" />
                   </div>
                 </div>
-                <InfoBadge infoKey="live_prices" />
+                <div className="mt-1">
+                  <h2 className={`text-xl sm:text-2xl font-black font-mono tracking-tight transition-colors duration-300 ${
+                    priceFlash === 'up' ? 'text-emerald-300' : priceFlash === 'down' ? 'text-rose-300' : 'text-white'
+                  }`}>
+                    {currSym}{data.current_price?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </h2>
+                  <div className="flex items-center justify-between gap-1 mt-0.5">
+                    <span className={`text-xs font-bold font-mono flex items-center ${data.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {data.change >= 0 ? <ArrowUpRight className="w-3.5 h-3.5 mr-0.5 shrink-0" /> : <ArrowDownRight className="w-3.5 h-3.5 mr-0.5 shrink-0" />}
+                      {data.change >= 0 ? '+' : ''}{data.change} ({data.change >= 0 ? '+' : ''}{data.change_pct}%)
+                    </span>
+                    {/* Live open P&L badge */}
+                    {(() => {
+                      const open = tradeLog.filter(t => t.status === 'OPEN' && t.ticker === ticker.split('.')[0]);
+                      if (!open.length || !data.current_price) return null;
+                      const unrealized = open.reduce((sum, t) => {
+                        const pnl = t.direction === 'LONG'
+                          ? (data.current_price - t.entry) * t.qty
+                          : (t.entry - data.current_price) * t.qty;
+                        return sum + pnl;
+                      }, 0);
+                      return (
+                        <span className={`text-[9px] font-bold font-mono px-1 py-0.5 rounded border ${
+                          unrealized >= 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                        }`}>
+                          {unrealized >= 0 ? '+' : ''}{currSym}{Math.round(unrealized)}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-2 font-mono">
-                <span>Open: <strong className="text-slate-200">{currSym}{data.open}</strong></span>
-                <span>High: <strong className="text-emerald-400">{currSym}{data.high}</strong></span>
-                <span>Low: <strong className="text-rose-400">{currSym}{data.low}</strong></span>
+              <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60 font-mono">
+                <span>O: <strong className="text-slate-200">{currSym}{data.open}</strong></span>
+                <span>H: <strong className="text-emerald-400">{currSym}{data.high}</strong></span>
+                <span>L: <strong className="text-rose-400">{currSym}{data.low}</strong></span>
               </div>
             </div>
 
@@ -944,13 +1043,43 @@ export default function IntradayTerminal() {
                 </div>
               </div>
             </div>
+
+            {/* Supertrend Signal — 6th headline card */}
+            <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-400 flex items-center gap-1">
+                  Supertrend
+                  <InfoBadge infoKey="supertrend" />
+                </span>
+                <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                  data.supertrend_dir === 1 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                }`}>
+                  {data.supertrend_dir === 1 ? '▲ BULL' : '▼ BEAR'}
+                </span>
+              </div>
+              <div className="mt-1">
+                <p className={`text-xl font-bold font-mono ${data.supertrend_dir === 1 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {currSym}{data.supertrend?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5 font-mono">
+                  RSI{' '}
+                  <span className={`font-bold ${data.rsi >= 70 ? 'text-rose-400' : data.rsi <= 30 ? 'text-emerald-400' : 'text-slate-200'}`}>
+                    {data.rsi?.toFixed(1)}
+                  </span>
+                  {data.rsi >= 70 && <span className="text-rose-400 ml-1 text-[9px]">OB</span>}
+                  {data.rsi <= 30 && <span className="text-emerald-400 ml-1 text-[9px]">OS</span>}
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
         {/* ── MAIN CHART & SIDEBAR SECTION ─────────────────────────────────── */}
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
           {/* Main Chart Column (3 spans) */}
-          <div className="xl:col-span-3 space-y-4">
+          <div className={`xl:col-span-3 space-y-4 ${
+            fullscreenChart ? 'fixed inset-0 z-[150] bg-slate-950 p-4 overflow-y-auto' : ''
+          }`}>
             <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-4 sm:p-6 backdrop-blur-md">
               <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
                 <div className="flex flex-wrap items-center gap-2">
@@ -993,8 +1122,46 @@ export default function IntradayTerminal() {
                   </div>
                 </div>
 
-                {/* Overlay Toggles */}
+                {/* Fullscreen + Alert button row */}
+                <div className="flex items-center gap-2">
+                  {/* Price Alert mini widget */}
+                  {data && (
+                    <div className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs ${
+                      alertTriggered
+                        ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                        : 'bg-slate-950 border-slate-800 text-slate-500'
+                    }`}>
+                      {alertTriggered
+                        ? <Bell className="w-3 h-3 text-amber-400 animate-bounce" />
+                        : <BellOff className="w-3 h-3" />}
+                      <select
+                        value={alertAbove ? 'above' : 'below'}
+                        onChange={e => { setAlertAbove(e.target.value === 'above'); setAlertTriggered(false); }}
+                        className="bg-transparent text-[10px] font-mono focus:outline-none cursor-pointer"
+                      >
+                        <option value="above" className="bg-slate-900">Alert ≥</option>
+                        <option value="below" className="bg-slate-900">Alert ≤</option>
+                      </select>
+                      <input
+                        type="number"
+                        placeholder={data.current_price?.toFixed(0)}
+                        value={alertPrice}
+                        onChange={e => { setAlertPrice(e.target.value); setAlertTriggered(false); }}
+                        className="w-16 bg-transparent font-mono text-[10px] text-white placeholder-slate-600 focus:outline-none"
+                      />
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setFullscreenChart(!fullscreenChart)}
+                    className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 hover:text-white transition"
+                    title={fullscreenChart ? 'Exit Fullscreen' : 'Fullscreen Chart'}
+                  >
+                    {fullscreenChart ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
                 <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  {/* ── Price Overlays ── */}
                   <button
                     onClick={() => setShowVWAP(!showVWAP)}
                     className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 ${
@@ -1035,6 +1202,10 @@ export default function IntradayTerminal() {
                     EMA 9/21
                   </button>
 
+                  {/* Divider between Price Overlays and Key Levels */}
+                  <div className="w-px h-4 bg-slate-700/60 mx-0.5 self-center" />
+                  <span className="text-[9px] text-slate-600 uppercase tracking-wider font-mono">Levels</span>
+
                   <button
                     onClick={() => setShowORB(!showORB)}
                     className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 ${
@@ -1065,10 +1236,9 @@ export default function IntradayTerminal() {
                     PDH / PDL
                   </button>
                 </div>
-              </div>
 
               {/* Hover Inspection Bar */}
-              <div className="h-6 flex items-center justify-between text-[11px] font-mono text-slate-400 mt-2 px-1">
+              <div className="min-h-6 flex items-center justify-between text-[11px] font-mono text-slate-400 mt-2 px-1 overflow-x-auto">
                 {hoveredCandle ? (
                   <div className="flex flex-wrap items-center gap-3">
                     <span>Time: <strong className="text-white">{hoveredCandle.time}</strong></span>
@@ -1106,7 +1276,12 @@ export default function IntradayTerminal() {
                   <svg
                     viewBox={`0 0 ${chartWidth} ${chartHeight}`}
                     className="w-full h-auto cursor-crosshair select-none"
-                    onMouseLeave={() => setHoveredCandle(null)}
+                    onMouseLeave={() => { setHoveredCandle(null); setHoveredX(null); setHoveredY(null); }}
+                    onMouseMove={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setHoveredX(((e.clientX - rect.left) / rect.width) * chartWidth);
+                      setHoveredY(((e.clientY - rect.top) / rect.height) * chartHeight);
+                    }}
                   >
                     {/* Horizontal Price Grid Lines */}
                     {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
@@ -1277,7 +1452,7 @@ export default function IntradayTerminal() {
                     {showVWAPBands && (
                       <g>
                         <path
-                          d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${yScale(c.upper_band_2)}`, '')}
+                          d={candles.reduce((acc, c, i) => !c.upper_band_2 ? acc : `${acc}${acc ? ' L' : 'M'} ${xScale(i)} ${yScale(c.upper_band_2)}`, '')}
                           fill="none"
                           stroke="#06b6d4"
                           strokeOpacity={0.35}
@@ -1285,7 +1460,7 @@ export default function IntradayTerminal() {
                           strokeDasharray="2 2"
                         />
                         <path
-                          d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${yScale(c.lower_band_2)}`, '')}
+                          d={candles.reduce((acc, c, i) => !c.lower_band_2 ? acc : `${acc}${acc ? ' L' : 'M'} ${xScale(i)} ${yScale(c.lower_band_2)}`, '')}
                           fill="none"
                           stroke="#06b6d4"
                           strokeOpacity={0.35}
@@ -1298,18 +1473,18 @@ export default function IntradayTerminal() {
                     {/* VWAP Main Line */}
                     {showVWAP && (
                       <path
-                        d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${yScale(c.vwap)}`, '')}
+                        d={candles.reduce((acc, c, i) => !c.vwap ? acc : `${acc}${acc ? ' L' : 'M'} ${xScale(i)} ${yScale(c.vwap)}`, '')}
                         fill="none"
                         stroke="#06b6d4"
                         strokeWidth="1.8"
                       />
                     )}
 
-                    {/* EMA 9 and 21 */}
+                    {/* EMA 9 and 21 — null-guarded for early candles */}
                     {showEMA && (
                       <g>
-                        <path d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${yScale(c.ema9)}`, '')} fill="none" stroke="#a855f7" strokeWidth="1.2" />
-                        <path d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${yScale(c.ema21)}`, '')} fill="none" stroke="#ec4899" strokeWidth="1.2" strokeOpacity={0.8} />
+                        <path d={candles.reduce((acc, c, i) => !c.ema9 ? acc : `${acc}${acc ? ' L' : 'M'} ${xScale(i)} ${yScale(c.ema9)}`, '')} fill="none" stroke="#a855f7" strokeWidth="1.2" />
+                        <path d={candles.reduce((acc, c, i) => !c.ema21 ? acc : `${acc}${acc ? ' L' : 'M'} ${xScale(i)} ${yScale(c.ema21)}`, '')} fill="none" stroke="#ec4899" strokeWidth="1.2" strokeOpacity={0.8} />
                       </g>
                     )}
 
@@ -1317,7 +1492,7 @@ export default function IntradayTerminal() {
                     {showSupertrend && (
                       <g>
                         {candles.map((c, i) => {
-                          if (i === 0) return null;
+                          if (i === 0 || !candles[i - 1].supertrend || !c.supertrend) return null;
                           return (
                             <line
                               key={`st-${i}`}
@@ -1353,15 +1528,65 @@ export default function IntradayTerminal() {
                       );
                     })}
 
-                    {/* X-axis Labels */}
+                    {/* X-axis Labels — max 4 to prevent overlap */}
                     {candles.map((c, i) => {
-                      if (i % Math.ceil(candles.length / 6) !== 0) return null;
+                      if (i % Math.ceil(candles.length / 4) !== 0 && i !== candles.length - 1) return null;
                       return (
-                        <text key={`x-${i}`} x={xScale(i)} y={chartHeight - 8} fill="#64748b" fontSize="9" fontFamily="monospace" textAnchor="middle">
+                        <text key={`x-${i}`} x={xScale(i)} y={chartHeight - 10} fill="#64748b" fontSize="9" fontFamily="monospace" textAnchor="middle">
                           {c.time}
                         </text>
                       );
                     })}
+
+                    {/* Crosshair vertical line */}
+                    {hoveredX !== null && (
+                      <line
+                        x1={hoveredX} y1={padding.top}
+                        x2={hoveredX} y2={chartHeight - padding.bottom}
+                        stroke="#06b6d4" strokeWidth="0.7"
+                        strokeDasharray="3 3" strokeOpacity={0.5}
+                        pointerEvents="none"
+                      />
+                    )}
+
+                    {/* Crosshair horizontal line & dynamic Y-axis price label */}
+                    {hoveredY !== null && hoveredY >= padding.top && hoveredY <= chartHeight - padding.bottom && (() => {
+                      const dynamicPrice = priceMax - ((hoveredY - padding.top) / (chartHeight - padding.top - padding.bottom)) * (priceMax - priceMin);
+                      return (
+                        <g pointerEvents="none">
+                          <line
+                            x1={padding.left}
+                            y1={hoveredY}
+                            x2={chartWidth - padding.right}
+                            y2={hoveredY}
+                            stroke="#06b6d4"
+                            strokeWidth="0.7"
+                            strokeDasharray="3 3"
+                            strokeOpacity={0.5}
+                          />
+                          <rect
+                            x={chartWidth - padding.right + 2}
+                            y={hoveredY - 8}
+                            width={padding.right - 4}
+                            height={16}
+                            rx={3}
+                            fill="#0f172a"
+                            stroke="#06b6d4"
+                            strokeWidth="1"
+                          />
+                          <text
+                            x={chartWidth - padding.right + 5}
+                            y={hoveredY + 3.5}
+                            fill="#38bdf8"
+                            fontSize="8"
+                            fontFamily="monospace"
+                            fontWeight="bold"
+                          >
+                            {currSym}{dynamicPrice.toFixed(2)}
+                          </text>
+                        </g>
+                      );
+                    })()}
                   </svg>
                 )}
               </div>
@@ -1377,25 +1602,44 @@ export default function IntradayTerminal() {
                       <button onClick={() => setActiveSubChart('macd')} className={`px-2.5 py-1 rounded-md transition ${activeSubChart === 'macd' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400'}`}>MACD (12,26,9)</button>
                       <button onClick={() => setActiveSubChart('cvd')} className={`px-2.5 py-1 rounded-md transition ${activeSubChart === 'cvd' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400'}`}>Order Flow CVD</button>
                     </div>
+                    <InfoBadge infoKey={activeSubChart === 'cvd' ? 'order_flow_delta' : activeSubChart === 'volume' ? 'order_flow_delta' : 'rsi'} />
                   </div>
                 </div>
 
-                <div className="h-28 w-full bg-slate-950/60 rounded-xl border border-slate-800/60 p-2 overflow-hidden">
+                <div className="h-36 w-full bg-slate-950/60 rounded-xl border border-slate-800/60 p-2 overflow-hidden">
                   {activeSubChart === 'volume' && (
                     <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full">
                       {(() => {
                         const maxVol = Math.max(...candles.map(c => c.volume || 1), 1);
-                        return candles.map((c, i) => {
-                          const x = xScale(i);
-                          const bH = ((c.buyer_vol || 0) / maxVol) * 85;
-                          const sH = ((c.seller_vol || 0) / maxVol) * 85;
-                          return (
-                            <g key={i}>
-                              <rect x={x - candleWidth / 2} y={95 - bH} width={candleWidth / 2} height={bH} fill="#10b981" fillOpacity={0.8} />
-                              <rect x={x} y={95 - sH} width={candleWidth / 2} height={sH} fill="#f43f5e" fillOpacity={0.8} />
-                            </g>
-                          );
-                        });
+                        const hasDelta = candles.some(c => (c.buyer_vol || 0) + (c.seller_vol || 0) > 0);
+                        const lastCandle = candles[candles.length - 1];
+                        return (
+                          <>
+                            <text x={padding.left + 4} y={14} fill="#64748b" fontSize="8" fontFamily="monospace">
+                              Vol: {lastCandle?.volume?.toLocaleString() || 0}
+                              {hasDelta && ` | Buyers: ${lastCandle?.buyer_vol?.toLocaleString() || 0} | Sellers: ${lastCandle?.seller_vol?.toLocaleString() || 0}`}
+                            </text>
+                            <text x={chartWidth - padding.right + 4} y={14} fill="#475569" fontSize="8" fontFamily="monospace">
+                              Max {(maxVol / 1000).toFixed(0)}K
+                            </text>
+                            {candles.map((c, i) => {
+                              const x = xScale(i);
+                              if (hasDelta) {
+                                const bH = ((c.buyer_vol || 0) / maxVol) * 85;
+                                const sH = ((c.seller_vol || 0) / maxVol) * 85;
+                                return (
+                                  <g key={i}>
+                                    <rect x={x - candleWidth / 2} y={95 - bH} width={candleWidth / 2} height={bH} fill="#10b981" fillOpacity={0.8} />
+                                    <rect x={x} y={95 - sH} width={candleWidth / 2} height={sH} fill="#f43f5e" fillOpacity={0.8} />
+                                  </g>
+                                );
+                              }
+                              const totalH = ((c.volume || 0) / maxVol) * 85;
+                              const isUp = c.close >= c.open;
+                              return <rect key={i} x={x - candleWidth / 2} y={95 - totalH} width={candleWidth} height={totalH} fill={isUp ? '#10b981' : '#f43f5e'} fillOpacity={0.6} />;
+                            })}
+                          </>
+                        );
                       })()}
                     </svg>
                   )}
@@ -1403,7 +1647,12 @@ export default function IntradayTerminal() {
                   {activeSubChart === 'rsi' && (
                     <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full">
                       <line x1={padding.left} y1={30} x2={chartWidth - padding.right} y2={30} stroke="#f43f5e" strokeDasharray="3 3" strokeOpacity={0.5} />
+                      <text x={padding.left + 4} y={28} fill="#f43f5e" fontSize="8" fontFamily="monospace" fillOpacity={0.8}>OB 70</text>
                       <line x1={padding.left} y1={70} x2={chartWidth - padding.right} y2={70} stroke="#10b981" strokeDasharray="3 3" strokeOpacity={0.5} />
+                      <text x={padding.left + 4} y={83} fill="#10b981" fontSize="8" fontFamily="monospace" fillOpacity={0.8}>OS 30</text>
+                      <text x={chartWidth - padding.right - 10} y={16} fill="#94a3b8" fontSize="8" fontFamily="monospace" textAnchor="end">
+                        RSI (14): <tspan fill={(candles[candles.length - 1]?.rsi || 50) >= 70 ? '#f43f5e' : (candles[candles.length - 1]?.rsi || 50) <= 30 ? '#10b981' : '#38bdf8'} fontWeight="bold">{(candles[candles.length - 1]?.rsi || 50).toFixed(1)}</tspan>
+                      </text>
                       <path
                         d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${100 - (c.rsi || 50)}`, '')}
                         fill="none"
@@ -1425,13 +1674,23 @@ export default function IntradayTerminal() {
                         const range = (maxV - minV) || 0.001;
                         const norm = (v) => 90 - ((v - minV) / range) * 80;
                         const zeroY = norm(0);
+                        const lastCandle = candles[candles.length - 1];
                         return (
                           <>
+                            {/* Top info badge */}
+                            <text x={padding.left + 4} y={14} fill="#64748b" fontSize="8" fontFamily="monospace">
+                              MACD: <tspan fill="#38bdf8">{(lastCandle?.macd || 0).toFixed(2)}</tspan> | Sig: <tspan fill="#f59e0b">{(lastCandle?.macd_signal || 0).toFixed(2)}</tspan> | Hist: <tspan fill={(lastCandle?.macd_histogram || 0) >= 0 ? '#10b981' : '#f43f5e'}>{(lastCandle?.macd_histogram || 0).toFixed(2)}</tspan>
+                            </text>
                             {/* Zero line */}
                             <line x1={padding.left} y1={zeroY} x2={chartWidth - padding.right} y2={zeroY} stroke="#475569" strokeOpacity={0.6} strokeDasharray="2 2" />
-                            {/* Histogram bars */}
+                            {/* 4-color Histogram bars */}
                             {candles.map((c, i) => {
                               const h = c.macd_histogram || 0;
+                              const prevH = i > 0 ? (candles[i-1].macd_histogram || 0) : 0;
+                              const isPos = h >= 0;
+                              const isGrowing = isPos ? h >= prevH : h <= prevH;
+                              const barColor = isPos ? (isGrowing ? '#10b981' : '#34d399') : (isGrowing ? '#f43f5e' : '#fb7185');
+                              const barOpacity = isGrowing ? 0.85 : 0.45;
                               const y1 = norm(h);
                               const y2 = zeroY;
                               return (
@@ -1441,8 +1700,8 @@ export default function IntradayTerminal() {
                                   y={Math.min(y1, y2)}
                                   width={candleWidth}
                                   height={Math.max(Math.abs(y1 - y2), 0.5)}
-                                  fill={h >= 0 ? '#10b981' : '#f43f5e'}
-                                  fillOpacity={0.7}
+                                  fill={barColor}
+                                  fillOpacity={barOpacity}
                                 />
                               );
                             })}
@@ -1469,13 +1728,21 @@ export default function IntradayTerminal() {
                         const minCvd = Math.min(...cvdVals, 0);
                         const maxCvd = Math.max(...cvdVals, 1);
                         const cvdRange = (maxCvd - minCvd) || 1;
+                        const zeroY = 90 - ((0 - minCvd) / cvdRange) * 80;
+                        const lastCandle = candles[candles.length - 1];
                         return (
-                          <path
-                            d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${90 - (((c.cum_delta || 0) - minCvd) / cvdRange) * 80}`, '')}
-                            fill="none"
-                            stroke="#eab308"
-                            strokeWidth="1.8"
-                          />
+                          <>
+                            <text x={padding.left + 4} y={14} fill="#64748b" fontSize="8" fontFamily="monospace">
+                              CVD Net Cumulative Delta: <tspan fill={(lastCandle?.cum_delta || 0) >= 0 ? '#eab308' : '#f43f5e'} fontWeight="bold">{(lastCandle?.cum_delta || 0) >= 0 ? '+' : ''}{(lastCandle?.cum_delta || 0).toLocaleString()} shares</tspan>
+                            </text>
+                            <line x1={padding.left} y1={zeroY} x2={chartWidth - padding.right} y2={zeroY} stroke="#475569" strokeOpacity={0.6} strokeDasharray="2 2" />
+                            <path
+                              d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${90 - (((c.cum_delta || 0) - minCvd) / cvdRange) * 80}`, '')}
+                              fill="none"
+                              stroke="#eab308"
+                              strokeWidth="1.8"
+                            />
+                          </>
                         );
                       })()}
                     </svg>
@@ -1673,7 +1940,7 @@ export default function IntradayTerminal() {
         </div>
 
         {/* ── REAL-WORLD INTRADAY BATTLE PLAN CARD & EXECUTION ────────────── */}
-        {data?.battle_plan && (
+        {data?.battle_plan?.entry_price && (
           <div className="bg-gradient-to-r from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800/80">
               <div className="flex items-center gap-2.5">
@@ -1768,25 +2035,35 @@ export default function IntradayTerminal() {
                 <button
                   onClick={() => {
                     navigator.clipboard?.writeText(notes || '');
-                    alert('Journal notes copied to clipboard!');
+                    setNotesCopied(true);
+                    setTimeout(() => setNotesCopied(false), 2500);
                   }}
-                  className="px-2.5 py-1 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 flex items-center gap-1 transition"
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg border flex items-center gap-1 transition ${notesCopied ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'}`}
                 >
-                  <Copy className="w-3 h-3 text-slate-400" />
-                  <span>Copy</span>
+                  {notesCopied ? <CheckCircle2 className="w-3 h-3" /> : <Copy className="w-3 h-3 text-slate-400" />}
+                  <span>{notesCopied ? 'Copied ✓' : 'Copy'}</span>
                 </button>
-                <button
-                  onClick={() => {
-                    if (confirm(`Clear execution notes for ${ticker}?`)) {
+                {clearNotesConfirm ? (
+                  <button
+                    onClick={() => {
                       setNotes('');
                       try { localStorage.removeItem('stockiq_intraday_notes_' + ticker); } catch (_) {}
-                    }
-                  }}
-                  className="p-1.5 text-slate-500 hover:text-rose-400 transition"
-                  title="Clear notes"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                      setClearNotesConfirm(false);
+                    }}
+                    className="px-2.5 py-1 text-xs font-bold bg-rose-500/15 text-rose-400 rounded-lg border border-rose-500/30 transition"
+                  >
+                    Confirm?
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setClearNotesConfirm(true)}
+                    onBlur={() => setTimeout(() => setClearNotesConfirm(false), 300)}
+                    className="p-1.5 text-slate-500 hover:text-rose-400 transition"
+                    title="Clear notes"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1944,7 +2221,7 @@ export default function IntradayTerminal() {
                       <span className="text-[10px] text-emerald-400 block font-bold font-sans">{t.label}</span>
                       <p className="text-white font-bold">{currSym}{t.price}</p>
                       <p className="text-[10px] text-slate-400 mt-0.5">Gross: +{currSym}{t.gross?.toLocaleString()}</p>
-                      <p className="text-[10px] text-emerald-300 font-bold">Net: +{currSym}{t.net?.toLocaleString()}</p>
+                      <p className={`text-[10px] font-bold ${t.net >= 0 ? 'text-emerald-300' : 'text-rose-400'}`}>Net: {t.net >= 0 ? '+' : ''}{currSym}{t.net?.toLocaleString()}</p>
                     </div>
                   ))}
                 </div>
@@ -1996,7 +2273,7 @@ export default function IntradayTerminal() {
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-xs text-white">{item.ticker.split('.')[0]}</span>
-                            <span className={`text-[10px] font-bold font-mono px-1.5 py-0.2 rounded ${
+                            <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${
                               item.orb_status === 'BREAKOUT' ? 'bg-emerald-500/20 text-emerald-400' :
                               item.orb_status === 'BREAKDOWN' ? 'bg-rose-500/20 text-rose-400' :
                               'bg-slate-800 text-slate-400'
@@ -2025,6 +2302,12 @@ export default function IntradayTerminal() {
                       </div>
                     </div>
                   ))}
+                  {scannerData.length === 0 && (
+                    <div className="h-28 flex flex-col items-center justify-center text-xs text-slate-500 gap-2">
+                      <Zap className="w-5 h-5 text-slate-700" />
+                      No high-momentum setups detected in current session.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2047,10 +2330,13 @@ export default function IntradayTerminal() {
           {/* Options Put-Call Ratio Widget */}
           <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 backdrop-blur-md">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Scale className="w-4 h-4 text-purple-400" />
-                Options Put-Call Ratio
-              </h3>
+              <div className="flex items-center gap-1.5">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Scale className="w-4 h-4 text-purple-400" />
+                  Options Put-Call Ratio
+                </h3>
+                <InfoBadge infoKey="options_pcr" />
+              </div>
               <div className="flex items-center gap-2">
                 {pcrLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />}
                 <button onClick={fetchPCR} className="text-slate-500 hover:text-slate-300 transition">
@@ -2117,10 +2403,13 @@ export default function IntradayTerminal() {
           {/* NSE Block / Bulk Deals */}
           <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 backdrop-blur-md">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Flame className="w-4 h-4 text-orange-400" />
-                NSE Block & Bulk Deals
-              </h3>
+              <div className="flex items-center gap-1.5">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Flame className="w-4 h-4 text-orange-400" />
+                  NSE Block & Bulk Deals
+                </h3>
+                <InfoBadge infoKey="block_deals" />
+              </div>
               {blockDealsLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />}
             </div>
 
@@ -2171,10 +2460,13 @@ export default function IntradayTerminal() {
           {/* Trade Log with Live P&L */}
           <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 backdrop-blur-md">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <BarChart2 className="w-4 h-4 text-cyan-400" />
-                Trade Log & P&L Tracker
-              </h3>
+              <div className="flex items-center gap-1.5">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <BarChart2 className="w-4 h-4 text-cyan-400" />
+                  Trade Log & P&L Tracker
+                </h3>
+                <InfoBadge infoKey="trade_log" />
+              </div>
               <button
                 onClick={() => setTradeLogOpen(!tradeLogOpen)}
                 className={`text-xs font-semibold px-2 py-1 rounded-lg border transition ${
@@ -2269,6 +2561,7 @@ export default function IntradayTerminal() {
                     <div>
                       <span className="font-bold text-white">{t.ticker}</span>
                       <span className="text-slate-500 ml-1 font-mono">{t.time}</span>
+                      {t.note && <p className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[110px]">{t.note}</p>}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -2284,16 +2577,55 @@ export default function IntradayTerminal() {
                   </div>
                 </div>
               ))}
-              {tradeLog.length === 0 && (
+              {tradeLog.length === 0 && !tradeLogOpen && (
                 <div className="h-24 flex items-center justify-center text-xs text-slate-500">
-                  No trades logged yet. Use the form above to track your positions.
+                  No trades logged yet. Click &quot;+ Log Trade&quot; above to start tracking positions.
                 </div>
               )}
             </div>
           </div>
         </div>
 
+        </main>
       </div>
+
+      {/* ── GLOBAL SITE FOOTER ── */}
+      <footer className="w-full border-t border-slate-900 bg-black/90 backdrop-blur-md py-6 px-4 sm:px-6 lg:px-8 mt-12 text-xs text-slate-400">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-2 text-white font-bold no-underline hover:opacity-85 transition">
+              <div className="w-6 h-6 bg-white rounded-md flex items-center justify-center">
+                <TrendingUp className="w-3.5 h-3.5 text-black" />
+              </div>
+              <span className="text-sm font-bold text-white">StockIQ Pro</span>
+            </Link>
+            <span className="text-slate-700">|</span>
+            <span className="text-slate-400 text-xs">
+              by{' '}
+              <a
+                href="https://visheshsanghvi.qzz.io/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slate-300 hover:text-white underline transition"
+              >
+                Vishesh Sanghvi
+              </a>
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs text-slate-400">
+            <Link href="/" className="hover:text-white transition no-underline">Dashboard</Link>
+            <Link href="/browse" className="hover:text-white transition no-underline">Browse</Link>
+            <Link href="/portfolio" className="hover:text-white transition no-underline">Portfolio Tracker</Link>
+            <Link href="/features" className="hover:text-white transition no-underline">Features &amp; Docs</Link>
+            <Link href="/terms" className="hover:text-white transition no-underline">Terms &amp; Disclaimer</Link>
+          </div>
+
+          <p className="text-[11px] text-slate-500 text-center sm:text-right">
+            Data via Yahoo Finance &amp; NSE/BSE proxies (~15m delay). Not financial advice.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
