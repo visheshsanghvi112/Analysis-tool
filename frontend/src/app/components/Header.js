@@ -145,7 +145,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
     setSearchQuery('');
     setSearchResults([]);
     setDropdownOpen(false);
-    setMobileMenuOpen(false);
+    setSideNavOpen(false);
   };
 
   const popularStocks = [
@@ -441,6 +441,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
         isOpen={sideNavOpen}
         onClose={() => setSideNavOpen(false)}
         onOpenSearch={() => setSpotlightOpen(true)}
+        currentTicker={currentTicker}
       />
 
       {/* ── Spotlight Search Command Palette (⌘K) ─────────────────── */}
