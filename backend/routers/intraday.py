@@ -355,6 +355,33 @@ def _calculate_rsi(series: pd.Series, period: int = 14) -> np.ndarray:
     return rsi.fillna(50.0).values
 
 
+def _calculate_macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> Dict[str, np.ndarray]:
+    """
+    Computes standard MACD (Moving Average Convergence Divergence):
+    MACD Line = EMA(fast) - EMA(slow)
+    Signal Line = EMA(signal) of MACD Line
+    Histogram = MACD Line - Signal Line
+    Returns arrays aligned to the full series length.
+    """
+    if len(series) < 2:
+        n = len(series)
+        return {
+            "macd": np.zeros(n),
+            "signal": np.zeros(n),
+            "histogram": np.zeros(n),
+        }
+    ema_fast = series.ewm(span=fast, adjust=False, min_periods=1).mean()
+    ema_slow = series.ewm(span=slow, adjust=False, min_periods=1).mean()
+    macd_line = ema_fast - ema_slow
+    signal_line = macd_line.ewm(span=signal, adjust=False, min_periods=1).mean()
+    histogram = macd_line - signal_line
+    return {
+        "macd": macd_line.fillna(0.0).values,
+        "signal": signal_line.fillna(0.0).values,
+        "histogram": histogram.fillna(0.0).values,
+    }
+
+
 def _calculate_gap_intelligence(today_df: pd.DataFrame, daily_df: pd.DataFrame, curr_price: float, curr_vwap: float) -> Dict[str, Any]:
     """
     Computes pre-market gap analysis, gap classification, fill status, and tactical playbook.
@@ -727,6 +754,12 @@ def get_intraday_analysis(
         # 7. RSI (14)
         rsi_vals = _calculate_rsi(c_series, period=14)
 
+        # 7b. MACD (12, 26, 9)
+        macd_dict = _calculate_macd(c_series, fast=12, slow=26, signal=9)
+        macd_vals = macd_dict["macd"]
+        macd_signal_vals = macd_dict["signal"]
+        macd_hist_vals = macd_dict["histogram"]
+
         # 8. Volume Profile (VPVR)
         vpvr = _calculate_volume_profile(df, n_bins=25)
 
@@ -782,6 +815,9 @@ def get_intraday_analysis(
                 "ema21": _safe_float(ema21[i]),
                 "ema50": _safe_float(ema50[i]),
                 "rsi": _safe_float(rsi_vals[i]),
+                "macd": _safe_float(macd_vals[i], decimals=4),
+                "macd_signal": _safe_float(macd_signal_vals[i], decimals=4),
+                "macd_histogram": _safe_float(macd_hist_vals[i], decimals=4),
             })
 
         # Headline metrics
@@ -1082,6 +1118,7 @@ def get_intraday_scanner(
     Scans flagship liquid securities across the selected market, calculating
     real-time Relative Volume (RVOL), ORB breakout status, distance from VWAP,
     and composite scalp momentum score.
+    RVOL = today's cumulative volume / 5-day average intraday volume at same elapsed time.
     """
     tickers_to_scan = FLAGSHIP_IN_TICKERS if market.upper() == "IN" else FLAGSHIP_US_TICKERS
     currency_symbol = "₹" if market.upper() == "IN" else "$"
@@ -1115,6 +1152,30 @@ def get_intraday_scanner(
             else:
                 orb_status = "INSIDE"
 
+            # Real RVOL: compare today's volume to 5-day historical avg at same bar count
+            rvol = 1.0
+            try:
+                hist_5d = get_history(t, period="5d", interval="5m")
+                if not hist_5d.empty and len(hist_5d) > len(df):
+                    # Get per-session volumes by grouping by date
+                    hist_5d_copy = hist_5d.copy()
+                    hist_5d_copy["date"] = hist_5d_copy.index.date
+                    unique_dates = sorted(hist_5d_copy["date"].unique())
+                    past_dates = [d for d in unique_dates if d < df.index[0].date()]
+                    if len(past_dates) >= 2:
+                        past_vol_at_same_bar = []
+                        n_bars_today = len(df)
+                        for past_date in past_dates[-4:]:  # last 4 past sessions
+                            session_df = hist_5d_copy[hist_5d_copy["date"] == past_date]
+                            session_vol = float(session_df["Volume"].iloc[:n_bars_today].sum())
+                            if session_vol > 0:
+                                past_vol_at_same_bar.append(session_vol)
+                        if past_vol_at_same_bar:
+                            avg_hist_vol = np.mean(past_vol_at_same_bar)
+                            rvol = round(float(cum_vol) / max(avg_hist_vol, 1.0), 2)
+            except Exception:
+                rvol = 1.0
+
             momentum = 0
             if chg_pct > 1.5:
                 momentum += 30
@@ -1131,6 +1192,12 @@ def get_intraday_scanner(
             elif orb_status == "BREAKDOWN":
                 momentum -= 35
 
+            # RVOL bonus: high relative volume confirms institutional activity
+            if rvol >= 2.0:
+                momentum = int(momentum * 1.2)  # 20% amplification on unusually high vol
+            elif rvol <= 0.5:
+                momentum = int(momentum * 0.8)  # dampen low-conviction moves
+
             scanner_results.append({
                 "ticker": t,
                 "price": round(curr_price, 2),
@@ -1139,6 +1206,7 @@ def get_intraday_scanner(
                 "orb_status": orb_status,
                 "momentum_score": max(-100, min(100, momentum)),
                 "volume": int(cum_vol),
+                "rvol": rvol,
                 "currency_symbol": currency_symbol,
             })
         except Exception as e:
@@ -1158,3 +1226,218 @@ def get_intraday_scanner(
         "declines": declines,
         "results": scanner_results,
     }
+
+
+@router.get("/options-pcr")
+@cache_ttl(seconds=300)
+def get_options_pcr(
+    ticker: str = Query(..., description="Stock or index ticker, e.g. NIFTY, RELIANCE.NS, NVDA"),
+    market: str = Query("IN", description="Market: IN or US")
+):
+    """
+    Fetches live Options Chain and calculates institutional-grade Put-Call Ratio (PCR)
+    and Open Interest (OI) breakdown using Yahoo Finance options chain endpoint.
+    PCR = Total Put OI / Total Call OI
+    PCR > 1.2 → Extreme Fear / Potential Contrarian Long
+    PCR < 0.7 → Extreme Greed / Potential Contrarian Short
+    0.7-1.2 → Neutral / Balanced OI structure
+    """
+    import requests as _req
+
+    clean_ticker = ticker.strip().upper()
+    is_in = market.upper() == "IN"
+    currency_symbol = "₹" if is_in else "$"
+
+    try:
+        # Yahoo Finance v7 options endpoint
+        url = f"https://query1.finance.yahoo.com/v7/finance/options/{clean_ticker}"
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json",
+            "Referer": "https://finance.yahoo.com/",
+        }
+        resp = _req.get(url, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=503, detail=f"Options data unavailable for {clean_ticker}")
+
+        data = resp.json()
+        result = data.get("optionChain", {}).get("result", [])
+        if not result:
+            raise HTTPException(status_code=404, detail=f"No options chain found for {clean_ticker}")
+
+        chain = result[0]
+        expiration_dates = chain.get("expirationDates", [])
+        options = chain.get("options", [{}])
+
+        if not options:
+            raise HTTPException(status_code=404, detail=f"Options chain empty for {clean_ticker}")
+
+        # Use nearest expiry (first element)
+        nearest = options[0]
+        calls = nearest.get("calls", [])
+        puts = nearest.get("puts", [])
+
+        expiry_ts = expiration_dates[0] if expiration_dates else None
+        expiry_date = datetime.fromtimestamp(expiry_ts).strftime("%d %b %Y") if expiry_ts else "Unknown"
+
+        # Aggregate OI and Volume
+        total_call_oi = sum(c.get("openInterest", 0) or 0 for c in calls)
+        total_put_oi = sum(p.get("openInterest", 0) or 0 for p in puts)
+        total_call_vol = sum(c.get("volume", 0) or 0 for c in calls)
+        total_put_vol = sum(p.get("volume", 0) or 0 for p in puts)
+
+        pcr_oi = round(total_put_oi / max(total_call_oi, 1), 3)
+        pcr_vol = round(total_put_vol / max(total_call_vol, 1), 3)
+
+        if pcr_oi >= 1.3:
+            sentiment = "EXTREME_FEAR"
+            sentiment_label = "Extreme Fear — Contrarian Long Signal"
+            color = "bearish"
+        elif pcr_oi >= 1.1:
+            sentiment = "BEARISH"
+            sentiment_label = "Elevated Put OI — Protective Hedging Active"
+            color = "bearish"
+        elif pcr_oi <= 0.6:
+            sentiment = "EXTREME_GREED"
+            sentiment_label = "Extreme Greed — Contrarian Short Signal"
+            color = "bullish"
+        elif pcr_oi <= 0.8:
+            sentiment = "BULLISH"
+            sentiment_label = "Elevated Call OI — Speculative Longs Active"
+            color = "bullish"
+        else:
+            sentiment = "NEUTRAL"
+            sentiment_label = "Balanced OI — No Directional Bias"
+            color = "neutral"
+
+        # Top 5 strikes by OI for call and put concentration map
+        calls_sorted = sorted(calls, key=lambda x: x.get("openInterest", 0) or 0, reverse=True)[:5]
+        puts_sorted = sorted(puts, key=lambda x: x.get("openInterest", 0) or 0, reverse=True)[:5]
+
+        max_pain_calls = [{"strike": c.get("strike"), "oi": c.get("openInterest", 0)} for c in calls_sorted]
+        max_pain_puts = [{"strike": p.get("strike"), "oi": p.get("openInterest", 0)} for p in puts_sorted]
+
+        # Implied max pain: strike where total OI pain for writers is minimized
+        all_strikes = sorted(set(
+            [c.get("strike", 0) for c in calls] + [p.get("strike", 0) for p in puts]
+        ))
+        min_pain = float("inf")
+        max_pain_strike = None
+        for strike in all_strikes:
+            call_pain = sum(max(0, strike - c.get("strike", 0)) * (c.get("openInterest", 0) or 0) for c in calls)
+            put_pain = sum(max(0, p.get("strike", 0) - strike) * (p.get("openInterest", 0) or 0) for p in puts)
+            total_pain = call_pain + put_pain
+            if total_pain < min_pain:
+                min_pain = total_pain
+                max_pain_strike = strike
+
+        return {
+            "ticker": clean_ticker,
+            "expiry_date": expiry_date,
+            "total_expiries": len(expiration_dates),
+            "currency_symbol": currency_symbol,
+            "call_oi": total_call_oi,
+            "put_oi": total_put_oi,
+            "call_volume": total_call_vol,
+            "put_volume": total_put_vol,
+            "pcr_oi": pcr_oi,
+            "pcr_volume": pcr_vol,
+            "sentiment": sentiment,
+            "sentiment_label": sentiment_label,
+            "color": color,
+            "max_pain_strike": max_pain_strike,
+            "top_call_strikes": max_pain_calls,
+            "top_put_strikes": max_pain_puts,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Options PCR error for {clean_ticker}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Options chain computation failed: {str(e)}")
+
+
+@router.get("/block-deals")
+@cache_ttl(seconds=300)
+def get_block_deals():
+    """
+    Fetches today's Block Deals and Bulk Deals from NSE India's public JSON API.
+    Block Deals: Large negotiated trades ≥ 500,000 shares or ≥ ₹5 Crore on a dedicated block window.
+    Bulk Deals: Any single client's trade > 0.5% of total listed shares in a session.
+    This endpoint uses NSE's official public REST endpoint (no auth required).
+    """
+    import requests as _req
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.nseindia.com/",
+        "Origin": "https://www.nseindia.com",
+        "Connection": "keep-alive",
+    }
+
+    # NSE requires a session cookie — establish it with the homepage first
+    session = _req.Session()
+    session.headers.update(headers)
+
+    block_deals = []
+    bulk_deals = []
+
+    try:
+        # Warm up session cookie
+        session.get("https://www.nseindia.com", timeout=8)
+
+        # Block deals
+        bd_url = "https://www.nseindia.com/api/block-deal"
+        bd_resp = session.get(bd_url, timeout=8)
+        if bd_resp.status_code == 200:
+            bd_data = bd_resp.json()
+            for item in (bd_data.get("data") or bd_data if isinstance(bd_data, list) else []):
+                block_deals.append({
+                    "symbol": item.get("symbol", ""),
+                    "client": item.get("clientName", item.get("BuyQuan", "")),
+                    "trade_type": item.get("buySellIndicator", item.get("BD_TP_FLGS", "BLOCK")),
+                    "quantity": item.get("blockDealQuantity", item.get("BD_QTY", 0)),
+                    "price": item.get("blockDealPrice", item.get("BD_TP", 0)),
+                    "trade_date": item.get("tradeDate", item.get("BD_DT_DATE", "")),
+                })
+    except Exception as e:
+        logger.debug(f"Block deals fetch error: {e}")
+
+    try:
+        # Bulk deals
+        bulk_url = "https://www.nseindia.com/api/bulk-deal-data"
+        bk_resp = session.get(bulk_url, timeout=8)
+        if bk_resp.status_code == 200:
+            bk_data = bk_resp.json()
+            for item in (bk_data.get("data") or bk_data if isinstance(bk_data, list) else []):
+                bulk_deals.append({
+                    "symbol": item.get("symbol", ""),
+                    "client": item.get("clientName", ""),
+                    "trade_type": item.get("buySellIndicator", ""),
+                    "quantity": item.get("totalTradedQuantity", item.get("quantity", 0)),
+                    "avg_price": item.get("wgtAvgPrice", item.get("price", 0)),
+                    "trade_date": item.get("tradeDate", ""),
+                })
+    except Exception as e:
+        logger.debug(f"Bulk deals fetch error: {e}")
+
+    return {
+        "as_of": datetime.now(timezone.utc).isoformat(),
+        "source": "NSE India Public API",
+        "note": "Block Deals: ≥500K shares or ≥₹5Cr negotiated off-market. Bulk Deals: >0.5% listed equity in single session.",
+        "block_deals": block_deals[:50],
+        "bulk_deals": bulk_deals[:50],
+        "block_count": len(block_deals),
+        "bulk_count": len(bulk_deals),
+    }
+

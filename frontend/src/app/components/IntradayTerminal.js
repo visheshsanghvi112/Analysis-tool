@@ -77,7 +77,7 @@ export default function IntradayTerminal() {
   const [candleSlice, setCandleSlice] = useState('all');
 
   // Sub-chart selector
-  const [activeSubChart, setActiveSubChart] = useState('volume'); // 'volume' | 'rsi' | 'cvd'
+  const [activeSubChart, setActiveSubChart] = useState('volume'); // 'volume' | 'rsi' | 'cvd' | 'macd'
 
   // Hovered candle for inspection
   const [hoveredCandle, setHoveredCandle] = useState(null);
@@ -101,6 +101,26 @@ export default function IntradayTerminal() {
 
   // Copy plan state
   const [planCopied, setPlanCopied] = useState(false);
+
+  // Options PCR state
+  const [pcrData, setPcrData] = useState(null);
+  const [pcrLoading, setPcrLoading] = useState(false);
+
+  // Block / Bulk Deals state
+  const [blockDeals, setBlockDeals] = useState(null);
+  const [blockDealsLoading, setBlockDealsLoading] = useState(false);
+
+  // Trade Log state (persisted in localStorage)
+  const [tradeLog, setTradeLog] = useState([]);
+  const [tradeLogOpen, setTradeLogOpen] = useState(false);
+  const [newTrade, setNewTrade] = useState({
+    ticker: '',
+    direction: 'LONG',
+    entry: '',
+    exit: '',
+    qty: '',
+    note: '',
+  });
 
   const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
   const currSym = data?.currency_symbol || (isUS ? '$' : '₹');
@@ -317,6 +337,93 @@ export default function IntradayTerminal() {
   useEffect(() => {
     fetchScanner();
   }, [fetchScanner]);
+
+  // Fetch Options PCR (on ticker change, refreshed every 5min)
+  const fetchPCR = useCallback(async () => {
+    if (!ticker) return;
+    setPcrLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/intraday/options-pcr?ticker=${encodeURIComponent(ticker)}&market=${scannerMarket === 'IN' ? 'IN' : 'US'}`);
+      if (res.ok) {
+        const json = await res.json();
+        setPcrData(json);
+      } else {
+        setPcrData(null);
+      }
+    } catch (_) { setPcrData(null); }
+    finally { setPcrLoading(false); }
+  }, [ticker, scannerMarket]);
+
+  useEffect(() => {
+    fetchPCR();
+    const id = setInterval(fetchPCR, 300000); // refresh every 5 min
+    return () => clearInterval(id);
+  }, [fetchPCR]);
+
+  // Fetch NSE Block / Bulk Deals (IN market only, refreshed every 5min)
+  const fetchBlockDeals = useCallback(async () => {
+    if (scannerMarket !== 'IN') { setBlockDeals(null); return; }
+    setBlockDealsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/intraday/block-deals`);
+      if (res.ok) {
+        const json = await res.json();
+        setBlockDeals(json);
+      }
+    } catch (_) {}
+    finally { setBlockDealsLoading(false); }
+  }, [scannerMarket]);
+
+  useEffect(() => {
+    fetchBlockDeals();
+    const id = setInterval(fetchBlockDeals, 300000);
+    return () => clearInterval(id);
+  }, [fetchBlockDeals]);
+
+  // Load Trade Log from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('stockiq_trade_log');
+        if (saved) setTradeLog(JSON.parse(saved));
+      } catch (_) {}
+    }
+  }, []);
+
+  const addTradeEntry = () => {
+    const entry = parseFloat(newTrade.entry) || 0;
+    const exit = parseFloat(newTrade.exit) || 0;
+    const qty = parseInt(newTrade.qty) || 0;
+    if (!newTrade.ticker || entry <= 0 || qty <= 0) return;
+
+    const pnlPerShare = newTrade.direction === 'LONG' ? (exit - entry) : (entry - exit);
+    const grossPnl = exit > 0 ? Math.round(pnlPerShare * qty * 100) / 100 : null;
+    const status = exit > 0 ? (grossPnl >= 0 ? 'WIN' : 'LOSS') : 'OPEN';
+
+    const trade = {
+      id: Date.now(),
+      ticker: newTrade.ticker.toUpperCase(),
+      direction: newTrade.direction,
+      entry,
+      exit: exit || null,
+      qty,
+      note: newTrade.note,
+      grossPnl,
+      status,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      date: new Date().toLocaleDateString(),
+    };
+    const updated = [trade, ...tradeLog].slice(0, 50); // keep last 50
+    setTradeLog(updated);
+    try { localStorage.setItem('stockiq_trade_log', JSON.stringify(updated)); } catch (_) {}
+    setNewTrade({ ticker: ticker.split('.')[0], direction: 'LONG', entry: '', exit: '', qty: '', note: '' });
+  };
+
+  const removeTrade = (id) => {
+    const updated = tradeLog.filter(t => t.id !== id);
+    setTradeLog(updated);
+    try { localStorage.setItem('stockiq_trade_log', JSON.stringify(updated)); } catch (_) {}
+  };
 
   // Position Sizing & Friction Breakeven Calculations
   const sizingResults = useMemo(() => {
@@ -1267,6 +1374,7 @@ export default function IntradayTerminal() {
                     <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-xs">
                       <button onClick={() => setActiveSubChart('volume')} className={`px-2.5 py-1 rounded-md transition ${activeSubChart === 'volume' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400'}`}>Volume & Delta</button>
                       <button onClick={() => setActiveSubChart('rsi')} className={`px-2.5 py-1 rounded-md transition ${activeSubChart === 'rsi' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400'}`}>RSI (14)</button>
+                      <button onClick={() => setActiveSubChart('macd')} className={`px-2.5 py-1 rounded-md transition ${activeSubChart === 'macd' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400'}`}>MACD (12,26,9)</button>
                       <button onClick={() => setActiveSubChart('cvd')} className={`px-2.5 py-1 rounded-md transition ${activeSubChart === 'cvd' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400'}`}>Order Flow CVD</button>
                     </div>
                   </div>
@@ -1305,6 +1413,55 @@ export default function IntradayTerminal() {
                     </svg>
                   )}
 
+                  {activeSubChart === 'macd' && (
+                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full">
+                      {(() => {
+                        const histVals = candles.map(c => c.macd_histogram || 0);
+                        const macdLine = candles.map(c => c.macd || 0);
+                        const signalLine = candles.map(c => c.macd_signal || 0);
+                        const allVals = [...histVals, ...macdLine, ...signalLine];
+                        const minV = Math.min(...allVals);
+                        const maxV = Math.max(...allVals);
+                        const range = (maxV - minV) || 0.001;
+                        const norm = (v) => 90 - ((v - minV) / range) * 80;
+                        const zeroY = norm(0);
+                        return (
+                          <>
+                            {/* Zero line */}
+                            <line x1={padding.left} y1={zeroY} x2={chartWidth - padding.right} y2={zeroY} stroke="#475569" strokeOpacity={0.6} strokeDasharray="2 2" />
+                            {/* Histogram bars */}
+                            {candles.map((c, i) => {
+                              const h = c.macd_histogram || 0;
+                              const y1 = norm(h);
+                              const y2 = zeroY;
+                              return (
+                                <rect
+                                  key={i}
+                                  x={xScale(i) - candleWidth / 2}
+                                  y={Math.min(y1, y2)}
+                                  width={candleWidth}
+                                  height={Math.max(Math.abs(y1 - y2), 0.5)}
+                                  fill={h >= 0 ? '#10b981' : '#f43f5e'}
+                                  fillOpacity={0.7}
+                                />
+                              );
+                            })}
+                            {/* MACD Line */}
+                            <path
+                              d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${norm(c.macd || 0)}`, '')}
+                              fill="none" stroke="#38bdf8" strokeWidth="1.5"
+                            />
+                            {/* Signal Line */}
+                            <path
+                              d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${norm(c.macd_signal || 0)}`, '')}
+                              fill="none" stroke="#f59e0b" strokeWidth="1.2" strokeDasharray="3 2"
+                            />
+                          </>
+                        );
+                      })()}
+                    </svg>
+                  )}
+
                   {activeSubChart === 'cvd' && (
                     <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full">
                       {(() => {
@@ -1326,6 +1483,7 @@ export default function IntradayTerminal() {
                 </div>
               </div>
             </div>
+
 
             {/* ── MULTI-TIMEFRAME CONFLUENCE & TACTICAL SIGNALS ──────────────── */}
             {data && (
@@ -1850,6 +2008,9 @@ export default function IntradayTerminal() {
                             VWAP Dist: <strong className={item.vwap_dist_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
                               {item.vwap_dist_pct >= 0 ? '+' : ''}{item.vwap_dist_pct}%
                             </strong>
+                            {item.rvol && <span className={`ml-2 ${item.rvol >= 2 ? 'text-amber-400' : item.rvol >= 1.5 ? 'text-cyan-400' : 'text-slate-500'}`}>
+                              RVOL {item.rvol}×
+                            </span>}
                           </p>
                         </div>
                       </div>
@@ -1876,6 +2037,258 @@ export default function IntradayTerminal() {
               >
                 <RefreshCw className="w-3 h-3" /> Rescan Now
               </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── OPTIONS PCR + BLOCK DEALS + TRADE LOG ROW ──────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+          {/* Options Put-Call Ratio Widget */}
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 backdrop-blur-md">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Scale className="w-4 h-4 text-purple-400" />
+                Options Put-Call Ratio
+              </h3>
+              <div className="flex items-center gap-2">
+                {pcrLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />}
+                <button onClick={fetchPCR} className="text-slate-500 hover:text-slate-300 transition">
+                  <RefreshCw className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+
+            {pcrData ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className={`text-2xl font-black font-mono ${
+                      pcrData.color === 'bearish' ? 'text-rose-400' :
+                      pcrData.color === 'bullish' ? 'text-emerald-400' : 'text-amber-400'
+                    }`}>{pcrData.pcr_oi}</span>
+                    <span className="text-slate-500 text-xs ml-1">PCR OI</span>
+                  </div>
+                  <div className="text-right">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      pcrData.color === 'bearish' ? 'bg-rose-500/20 text-rose-400' :
+                      pcrData.color === 'bullish' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                    }`}>{pcrData.sentiment?.replace('_', ' ')}</span>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{pcrData.expiry_date}</p>
+                  </div>
+                </div>
+
+                {/* Put vs Call OI bar */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[10px] font-mono">
+                    <span className="text-emerald-400">Calls: {(pcrData.call_oi / 1000).toFixed(0)}K OI</span>
+                    <span className="text-rose-400">Puts: {(pcrData.put_oi / 1000).toFixed(0)}K OI</span>
+                  </div>
+                  <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden flex">
+                    {(() => {
+                      const total = (pcrData.call_oi || 0) + (pcrData.put_oi || 0) || 1;
+                      const callPct = Math.round((pcrData.call_oi / total) * 100);
+                      return (
+                        <>
+                          <div className="bg-emerald-500 h-full transition-all" style={{ width: `${callPct}%` }} />
+                          <div className="bg-rose-500 h-full transition-all" style={{ width: `${100 - callPct}%` }} />
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                {pcrData.max_pain_strike && (
+                  <div className="p-2 bg-slate-950/60 rounded-xl border border-slate-800 flex justify-between text-xs">
+                    <span className="text-slate-400">Max Pain Strike:</span>
+                    <span className="font-bold font-mono text-amber-400">{currSym}{pcrData.max_pain_strike}</span>
+                  </div>
+                )}
+
+                <p className="text-[10px] text-slate-500 leading-snug">{pcrData.sentiment_label}</p>
+              </div>
+            ) : (
+              <div className="h-32 flex items-center justify-center text-xs text-slate-500">
+                {pcrLoading ? 'Loading options chain...' : 'No options data available for this ticker'}
+              </div>
+            )}
+          </div>
+
+          {/* NSE Block / Bulk Deals */}
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 backdrop-blur-md">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Flame className="w-4 h-4 text-orange-400" />
+                NSE Block & Bulk Deals
+              </h3>
+              {blockDealsLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />}
+            </div>
+
+            {scannerMarket !== 'IN' ? (
+              <div className="h-32 flex items-center justify-center text-xs text-slate-500 text-center">
+                Block/Bulk deal feed is available for NSE (Indian market) only.
+              </div>
+            ) : blockDeals ? (
+              <div className="space-y-2 max-h-52 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+                {[...(blockDeals.block_deals || []).map(d => ({...d, type: 'BLOCK'})),
+                   ...(blockDeals.bulk_deals || []).map(d => ({...d, type: 'BULK'}))].slice(0, 15).map((deal, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => deal.symbol && setTicker(deal.symbol + '.NS')}
+                    className="flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800/60 hover:border-slate-700 cursor-pointer transition text-xs"
+                  >
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-white">{deal.symbol}</span>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                          deal.type === 'BLOCK' ? 'bg-purple-500/20 text-purple-400' : 'bg-orange-500/20 text-orange-400'
+                        }`}>{deal.type}</span>
+                        <span className={`text-[9px] font-semibold ${
+                          deal.trade_type === 'B' || deal.trade_type === 'BUY' ? 'text-emerald-400' : 'text-rose-400'
+                        }`}>{deal.trade_type === 'B' || deal.trade_type === 'BUY' ? 'BUY' : 'SELL'}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[120px]">{deal.client || 'Undisclosed'}</p>
+                    </div>
+                    <div className="text-right font-mono">
+                      <span className="text-slate-300 font-semibold">{deal.quantity?.toLocaleString() || '—'}</span>
+                      <p className="text-[10px] text-slate-500">@ ₹{deal.price || deal.avg_price || '—'}</p>
+                    </div>
+                  </div>
+                ))}
+                {blockDeals.block_count === 0 && blockDeals.bulk_count === 0 && (
+                  <div className="h-24 flex items-center justify-center text-xs text-slate-500">
+                    No block/bulk deals recorded today yet.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="h-32 flex items-center justify-center text-xs text-slate-500">
+                Loading NSE deal feed...
+              </div>
+            )}
+          </div>
+
+          {/* Trade Log with Live P&L */}
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 backdrop-blur-md">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-cyan-400" />
+                Trade Log & P&L Tracker
+              </h3>
+              <button
+                onClick={() => setTradeLogOpen(!tradeLogOpen)}
+                className={`text-xs font-semibold px-2 py-1 rounded-lg border transition ${
+                  tradeLogOpen ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+              >
+                {tradeLogOpen ? 'Hide Form' : '+ Log Trade'}
+              </button>
+            </div>
+
+            {tradeLogOpen && (
+              <div className="mb-3 p-3 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    value={newTrade.ticker}
+                    onChange={e => setNewTrade(p => ({...p, ticker: e.target.value}))}
+                    placeholder="Ticker (e.g. SBIN)"
+                    className="col-span-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  />
+                  <select
+                    value={newTrade.direction}
+                    onChange={e => setNewTrade(p => ({...p, direction: e.target.value}))}
+                    className="col-span-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none"
+                  >
+                    <option value="LONG">LONG</option>
+                    <option value="SHORT">SHORT</option>
+                  </select>
+                  <input
+                    type="number" step="0.05"
+                    value={newTrade.entry}
+                    onChange={e => setNewTrade(p => ({...p, entry: e.target.value}))}
+                    placeholder="Entry price"
+                    className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  />
+                  <input
+                    type="number" step="0.05"
+                    value={newTrade.exit}
+                    onChange={e => setNewTrade(p => ({...p, exit: e.target.value}))}
+                    placeholder="Exit price (optional)"
+                    className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  />
+                  <input
+                    type="number"
+                    value={newTrade.qty}
+                    onChange={e => setNewTrade(p => ({...p, qty: e.target.value}))}
+                    placeholder="Qty / Shares"
+                    className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={() => setNewTrade(p => ({...p, ticker: ticker.split('.')[0], entry: data?.current_price?.toString() || ''}))}
+                    className="bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg px-2 py-1.5 text-xs font-semibold transition"
+                  >
+                    Sync Live
+                  </button>
+                </div>
+                <button
+                  onClick={addTradeEntry}
+                  className="w-full py-2 bg-gradient-to-r from-cyan-500/20 to-emerald-500/20 hover:from-cyan-500/30 border border-cyan-500/30 text-cyan-300 font-bold rounded-xl text-xs transition"
+                >
+                  Add to Trade Log
+                </button>
+              </div>
+            )}
+
+            {/* Trade Log Summary */}
+            {tradeLog.length > 0 && (() => {
+              const closed = tradeLog.filter(t => t.status !== 'OPEN');
+              const totalPnl = closed.reduce((s, t) => s + (t.grossPnl || 0), 0);
+              const wins = closed.filter(t => t.status === 'WIN').length;
+              const winRate = closed.length ? Math.round((wins / closed.length) * 100) : 0;
+              return (
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <span className="text-[10px] text-slate-400">{closed.length} closed · {winRate}% W/R</span>
+                  <span className={`text-xs font-bold font-mono ${totalPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    Net P&L: {totalPnl >= 0 ? '+' : ''}{currSym}{totalPnl.toLocaleString()}
+                  </span>
+                </div>
+              );
+            })()}
+
+            <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+              {tradeLog.slice(0, 20).map(t => (
+                <div key={t.id} className={`flex items-center justify-between p-2 rounded-xl border text-xs ${
+                  t.status === 'WIN' ? 'bg-emerald-500/5 border-emerald-500/20' :
+                  t.status === 'LOSS' ? 'bg-rose-500/5 border-rose-500/20' :
+                  'bg-slate-950/60 border-slate-800'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${
+                      t.direction === 'LONG' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                    }`}>{t.direction}</span>
+                    <div>
+                      <span className="font-bold text-white">{t.ticker}</span>
+                      <span className="text-slate-500 ml-1 font-mono">{t.time}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`font-bold font-mono ${
+                      t.status === 'WIN' ? 'text-emerald-400' :
+                      t.status === 'LOSS' ? 'text-rose-400' : 'text-slate-400'
+                    }`}>
+                      {t.grossPnl !== null ? `${t.grossPnl >= 0 ? '+' : ''}${currSym}${t.grossPnl}` : 'OPEN'}
+                    </span>
+                    <button onClick={() => removeTrade(t.id)} className="text-slate-600 hover:text-rose-400 transition">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {tradeLog.length === 0 && (
+                <div className="h-24 flex items-center justify-center text-xs text-slate-500">
+                  No trades logged yet. Use the form above to track your positions.
+                </div>
+              )}
             </div>
           </div>
         </div>
