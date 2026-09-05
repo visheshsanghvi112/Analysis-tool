@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Header from './components/Header';
 import LivePrice from './components/LivePrice';
@@ -243,6 +243,13 @@ export default function Dashboard() {
   const [isLoading, setIsLoading]           = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
 
+  const handleTickerSelect = useCallback((ticker) => {
+    setIsLoading(true);
+    setSelectedTicker(ticker);
+    window.scrollTo({ top: 0 });
+    setTimeout(() => setIsLoading(false), 400);
+  }, []);
+
   // Read ?ticker= param on mount (set by /browse page)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -251,7 +258,7 @@ export default function Dashboard() {
       window.history.replaceState({}, '', '/');
       handleTickerSelect(t);
     }
-  }, []);
+  }, [handleTickerSelect]);
 
   // Listen to logo click event to go back to homepage welcome screen
   useEffect(() => {
@@ -261,13 +268,6 @@ export default function Dashboard() {
     window.addEventListener('reset-selected-ticker', handleReset);
     return () => window.removeEventListener('reset-selected-ticker', handleReset);
   }, []);
-
-  const handleTickerSelect = (ticker) => {
-    setIsLoading(true);
-    setSelectedTicker(ticker);
-    window.scrollTo({ top: 0 });
-    setTimeout(() => setIsLoading(false), 400);
-  };
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#000' }}>

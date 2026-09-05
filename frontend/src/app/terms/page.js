@@ -42,7 +42,7 @@ export default function TermsAndConditions() {
           <ShieldAlert className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
           <div className="text-xs sm:text-sm text-amber-200/90 leading-relaxed">
             <strong className="text-white block mb-1">CRITICAL NOTICE: READ BEFORE PROCEEDING</strong>
-            StockIQ Pro is a pure simulation, data analysis, and educational tool. The machine learning outputs, stock predictions, and other analytical modules do not represent certified financial, investment, legal, or tax advice. All data and predictions are provided "as-is" without warranty of any kind.
+            StockIQ Pro is a pure simulation, data analysis, and educational tool. The machine learning outputs, stock predictions, and other analytical modules do not represent certified financial, investment, legal, or tax advice. All data and predictions are provided &quot;as-is&quot; without warranty of any kind.
           </div>
         </div>
 
@@ -71,7 +71,7 @@ export default function TermsAndConditions() {
             </p>
             <div className="bg-[#0a0a0a] border border-[#242424] rounded-lg p-4 mb-4 text-xs text-slate-500">
               <div className="font-semibold text-slate-300 mb-2">Model Disagreement & Uncertainty Bounds</div>
-              The "Model Consensus" and "Confidence Score" are calculated by measuring the variance (disagreement) across all 100 individual decision trees inside our Random Forest ensemble:
+              The &quot;Model Consensus&quot; and &quot;Confidence Score&quot; are calculated by measuring the variance (disagreement) across all 100 individual decision trees inside our Random Forest ensemble:
               <ul className="list-disc pl-5 mt-2 space-y-1">
                 <li><span className="text-emerald-400 font-semibold">Stable Consensus:</span> Low tree variance, indicating standard technical indicators are highly aligned.</li>
                 <li><span className="text-amber-400 font-semibold">Moderate Volatility:</span> Medium tree variance, signaling conflicting indicators.</li>

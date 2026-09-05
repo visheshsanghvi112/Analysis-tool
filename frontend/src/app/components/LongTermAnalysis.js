@@ -15,6 +15,7 @@ import {
   Scale,
   Award
 } from 'lucide-react';
+import InfoBadge from './InfoBadge';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 
@@ -109,24 +110,34 @@ export default function LongTermAnalysis({ ticker }) {
 
   const dcfResults = calculateDCF();
 
+  const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
+  const currSym = data?.currency_symbol || (isUS ? '$' : '₹');
+
   // Helper to format currency values cleanly in Indian format or standard Billions/Millions
   const formatVal = (val, suffix = '') => {
     if (val === null || val === undefined) return 'N/A';
     
     const absVal = Math.abs(val);
+    if (isUS) {
+      if (absVal >= 1e12) return `${currSym}${(val / 1e12).toFixed(2)}T${suffix}`;
+      if (absVal >= 1e9) return `${currSym}${(val / 1e9).toFixed(2)}B${suffix}`;
+      if (absVal >= 1e6) return `${currSym}${(val / 1e6).toFixed(2)}M${suffix}`;
+      if (absVal >= 1e3) return `${currSym}${(val / 1e3).toFixed(2)}K${suffix}`;
+      return `${currSym}${val.toFixed(2)}${suffix}`;
+    }
     if (absVal >= 1e12) {
-      return `₹${(val / 1e12).toFixed(2)}T${suffix}`;
+      return `${currSym}${(val / 1e12).toFixed(2)}T${suffix}`;
     }
     if (absVal >= 1e9) {
-      return `₹${(val / 1e9).toFixed(2)}B${suffix}`;
+      return `${currSym}${(val / 1e9).toFixed(2)}B${suffix}`;
     }
     if (absVal >= 1e7) {
-      return `₹${(val / 1e7).toFixed(2)}Cr${suffix}`;
+      return `${currSym}${(val / 1e7).toFixed(2)}Cr${suffix}`;
     }
     if (absVal >= 1e5) {
-      return `₹${(val / 1e5).toFixed(2)}L${suffix}`;
+      return `${currSym}${(val / 1e5).toFixed(2)}L${suffix}`;
     }
-    return `₹${val.toFixed(2)}${suffix}`;
+    return `${currSym}${val.toFixed(2)}${suffix}`;
   };
 
   if (loading) {
@@ -198,6 +209,7 @@ export default function LongTermAnalysis({ ticker }) {
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-indigo-400" />
                 <h3 className="text-sm sm:text-base font-bold text-white">Interactive DCF Intrinsic Value</h3>
+                <InfoBadge infoKey="dcf_valuation" />
               </div>
               <span className="text-[10px] bg-indigo-500/10 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/20 font-bold">CAPM / WACC Model</span>
             </div>
@@ -210,7 +222,7 @@ export default function LongTermAnalysis({ ticker }) {
                 <div className="space-y-1">
                   <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Intrinsic Value</div>
                   <div className="text-lg sm:text-xl font-extrabold text-indigo-400">
-                    ₹{dcfResults.intrinsicValue.toFixed(1)}
+                    {currSym}{dcfResults.intrinsicValue.toFixed(1)}
                   </div>
                   <p className="text-[9px] text-slate-400">Fair value per share</p>
                 </div>
@@ -219,7 +231,7 @@ export default function LongTermAnalysis({ ticker }) {
                 <div className="space-y-1 border-t sm:border-t-0 sm:border-x border-slate-800/80 pt-2 sm:pt-0">
                   <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Current Price</div>
                   <div className="text-lg sm:text-xl font-extrabold text-slate-200">
-                    ₹{currentPrice.toFixed(1)}
+                    {currSym}{currentPrice.toFixed(1)}
                   </div>
                   <p className="text-[9px] text-slate-400">Market quote</p>
                 </div>
@@ -390,12 +402,15 @@ export default function LongTermAnalysis({ ticker }) {
                   <Info className="h-4 w-4 text-amber-400" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-amber-400">Graham Valuation Number</h4>
+                  <div className="flex items-center gap-1.5">
+                    <h4 className="text-xs font-bold text-amber-400">Graham Valuation Number</h4>
+                    <InfoBadge infoKey="graham_number" />
+                  </div>
                   <p className="text-[9px] text-slate-400">Max purchase threshold (√(22.5 × EPS × Book Value))</p>
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-sm font-bold text-amber-400">₹{data.graham_number}</div>
+                <div className="text-sm font-bold text-amber-400">{currSym}{data.graham_number}</div>
                 <p className="text-[9px] text-slate-400">
                   {currentPrice <= data.graham_number 
                     ? '✓ Price <= Graham (Discount)' 
@@ -414,6 +429,7 @@ export default function LongTermAnalysis({ ticker }) {
             <div className="flex items-center gap-2">
               <Activity className="h-5 w-5 text-purple-400" />
               <h3 className="text-sm sm:text-base font-bold text-white">DuPont ROE Profitability Analysis</h3>
+              <InfoBadge infoKey="dupont_analysis" />
             </div>
             <span className="text-[10px] bg-purple-500/10 text-purple-300 px-2 py-0.5 rounded-full border border-purple-500/20 font-bold">DuPont Model</span>
           </div>
@@ -477,11 +493,13 @@ export default function LongTermAnalysis({ ticker }) {
           {/* Analyst Insight */}
           <div className="p-3.5 bg-white/[0.02] border border-white/[0.05] rounded-xl text-[11px] text-slate-300 leading-relaxed">
             <span className="font-bold text-slate-300">Analyst Insight: </span>
-            {data.dupont.net_profit_margin > 15
-              ? `Strong net margins (${data.dupont.net_profit_margin}%) indicate the company has significant pricing power and cost discipline — the primary driver of ROE.`
-              : data.dupont.equity_multiplier > 2
+            {data.dupont.net_profit_margin != null && data.dupont.net_profit_margin < 0
+              ? `Negative net margin (${data.dupont.net_profit_margin}%) indicates unprofitable operations. Focus on margin recovery and cost stabilization before evaluating asset efficiency.`
+              : data.dupont.net_profit_margin != null && data.dupont.net_profit_margin > 15
+              ? `Strong net margins (${data.dupont.net_profit_margin}%) indicate significant pricing power and cost discipline — the primary driver of ROE.`
+              : data.dupont.equity_multiplier != null && data.dupont.equity_multiplier > 2
               ? `ROE is leveraged by debt (equity multiplier: ${data.dupont.equity_multiplier}x). The business relies on financial leverage to amplify returns — higher risk, but manageable if cash flows are stable.`
-              : `Moderate margins (${data.dupont.net_profit_margin}%) balanced by asset efficiency (${data.dupont.asset_turnover}x turnover). Watch for margin expansion as the primary catalyst for ROE improvement.`}
+              : `Net margins (${data.dupont.net_profit_margin ?? 'N/A'}%) balanced by asset efficiency (${data.dupont.asset_turnover ?? 'N/A'}x turnover). Watch for margin expansion as the primary catalyst for ROE improvement.`}
           </div>
 
 

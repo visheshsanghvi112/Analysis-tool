@@ -49,6 +49,13 @@ export default function SideNavDrawer({ isOpen, onClose, onOpenSearch }) {
       active: pathname === '/'
     },
     {
+      href: '/intraday',
+      label: 'Intraday Trading Desk',
+      description: 'VWAP bands, Volume Profile, Camarilla & ORB',
+      icon: Activity,
+      active: pathname === '/intraday'
+    },
+    {
       href: '/browse',
       label: 'Browse & Screener',
       description: 'Explore 7,954 stocks, ETFs & sectors',

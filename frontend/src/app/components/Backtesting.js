@@ -23,7 +23,7 @@ const pctColor = (v) =>
 const pctSign = (v) => (v > 0 ? '+' : '');
 
 // ─── Custom Tooltip ───────────────────────────────────────────────────────────
-function ChartTooltip({ active, payload, label }) {
+function ChartTooltip({ active, payload, label, currSym = '₹', loc = 'en-IN' }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg bg-[#0d0d0d] border border-white/[0.08] p-2.5 text-xs shadow-xl">
@@ -32,7 +32,7 @@ function ChartTooltip({ active, payload, label }) {
         <div key={p.dataKey} className="flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full" style={{ background: p.color }} />
           <span className="text-slate-300 w-20">{p.name}:</span>
-          <span className="font-bold text-white">₹{Number(p.value).toLocaleString('en-IN')}</span>
+          <span className="font-bold text-white">{currSym}{Number(p.value).toLocaleString(loc)}</span>
         </div>
       ))}
     </div>
@@ -51,8 +51,16 @@ function StatCard({ label, value, sub, accent }) {
 }
 
 // ─── Trade Log Row ────────────────────────────────────────────────────────────
-function TradeRow({ trade, idx }) {
+function TradeRow({ trade, idx, currSym = '₹', loc = 'en-IN' }) {
   const isWin = trade.result === 'WIN';
+  const reasonLabel = trade.exit_reason === 'TRAILING_STOP' 
+    ? 'Trailing Stop' 
+    : trade.exit_reason === 'RSI_OVERBOUGHT' 
+    ? 'RSI > 70' 
+    : trade.exit_reason === 'MACD_CROSS_DOWN' 
+    ? 'MACD Bear' 
+    : (trade.exit_reason || '');
+
   return (
     <div className={`flex items-center gap-2 py-1.5 px-2 rounded text-[10px] ${
       isWin ? 'bg-emerald-500/5' : 'bg-rose-500/5'
@@ -62,13 +70,18 @@ function TradeRow({ trade, idx }) {
       <span className="text-slate-400 w-20 shrink-0">{trade.entry_date}</span>
       <span className="text-slate-600">→</span>
       <span className="text-slate-400 w-20 shrink-0">{trade.exit_date}</span>
-      <span className="text-slate-300 w-20 shrink-0 text-right">
-        ₹{trade.entry_price.toLocaleString('en-IN')}
+      <span className="text-slate-300 w-16 shrink-0 text-right">
+        {currSym}{trade.entry_price.toLocaleString(loc)}
       </span>
       <span className="text-slate-600">→</span>
-      <span className="text-slate-300 w-20 shrink-0 text-right">
-        ₹{trade.exit_price.toLocaleString('en-IN')}
+      <span className="text-slate-300 w-16 shrink-0 text-right">
+        {currSym}{trade.exit_price.toLocaleString(loc)}
       </span>
+      {reasonLabel && (
+        <span className="hidden sm:inline-block text-[9px] px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-400 border border-white/[0.06]">
+          {reasonLabel}
+        </span>
+      )}
       <span className={`ml-auto font-bold shrink-0 ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
         {pctSign(trade.return_pct)}{trade.return_pct}%
       </span>
@@ -109,7 +122,12 @@ export default function Backtesting({ ticker }) {
     setShowTrades(false);
   }, [ticker]);
 
-  // Merge equity curves into one array keyed by date
+  // Dynamic multi-market currency & benchmark
+  const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
+  const benchName = data?.stats?.benchmark_name || (isUS ? 'S&P 500' : 'Nifty 50');
+  const currSym = data?.stats?.currency_symbol || (isUS ? '$' : '₹');
+  const loc = isUS ? 'en-US' : 'en-IN';
+
   const chartData = (() => {
     if (!data?.equity_curves) return [];
     const map = {};
@@ -121,7 +139,7 @@ export default function Backtesting({ ticker }) {
     add(data.equity_curves.strategy,     'Strategy');
     add(data.equity_curves.buy_and_hold, 'Buy & Hold');
     if (data.equity_curves.nifty?.length)
-      add(data.equity_curves.nifty, 'Nifty 50');
+      add(data.equity_curves.nifty, benchName);
     return Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
   })();
 
@@ -225,7 +243,7 @@ export default function Backtesting({ ticker }) {
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">
                   Strategy Alpha vs Buy &amp; Hold
                 </p>
-                <InfoBadge infoKey="beta_alpha" />
+                <InfoBadge infoKey="strategy_alpha" />
               </div>
               <p className={`text-2xl font-black ${s.alpha >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {pctSign(s.alpha)}{fmt(s.alpha)}%
@@ -237,10 +255,10 @@ export default function Backtesting({ ticker }) {
             <div className="text-right">
               <p className="text-[10px] text-slate-400 mb-0.5">Final Value</p>
               <p className="text-base font-bold text-white">
-                ₹{Number(s.final_value).toLocaleString('en-IN')}
+                {currSym}{Number(s.final_value).toLocaleString(loc)}
               </p>
               <p className="text-[10px] text-slate-400">
-                from ₹{Number(s.initial_capital).toLocaleString('en-IN')}
+                from {currSym}{Number(s.initial_capital).toLocaleString(loc)}
               </p>
             </div>
           </div>
@@ -266,9 +284,9 @@ export default function Backtesting({ ticker }) {
                     tick={{ fontSize: 9, fill: '#888' }}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
+                    tickFormatter={(v) => `${currSym}${(v / 1000).toFixed(0)}k`}
                   />
-                  <Tooltip content={<ChartTooltip />} />
+                  <Tooltip content={<ChartTooltip currSym={currSym} loc={loc} />} />
                   <Legend
                     wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }}
                     iconType="circle"
@@ -288,9 +306,9 @@ export default function Backtesting({ ticker }) {
                     stroke="#6366f1" strokeWidth={1.5} dot={false} strokeDasharray="4 2"
                     activeDot={{ r: 3 }}
                   />
-                  {chartData[0]?.['Nifty 50'] !== undefined && (
+                  {chartData[0]?.[benchName] !== undefined && (
                     <Line
-                      type="monotone" dataKey="Nifty 50"
+                      type="monotone" dataKey={benchName}
                       stroke="#22d3ee" strokeWidth={1.5} dot={false} strokeDasharray="2 3"
                       activeDot={{ r: 3 }}
                     />
@@ -300,34 +318,35 @@ export default function Backtesting({ ticker }) {
             </div>
           )}
 
-          {/* Stats grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+          {/* Stats grid — Institutional Risk & Return Metrics */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            <StatCard
+              label="CAGR (Annualized)"
+              value={`${s.annualized_return >= 0 ? '+' : ''}${fmt(s.annualized_return)}%`}
+              sub="Geometric annual return"
+              accent={s.annualized_return >= 12 ? 'text-emerald-400' : s.annualized_return >= 0 ? 'text-amber-400' : 'text-rose-400'}
+            />
             <StatCard
               label="Sharpe Ratio"
               value={fmt(s.sharpe_ratio, 3)}
-              sub="Risk-adjusted return"
+              sub="Excess return / Total risk"
               accent={s.sharpe_ratio >= 1 ? 'text-emerald-400' : s.sharpe_ratio >= 0 ? 'text-amber-400' : 'text-rose-400'}
+            />
+            <StatCard
+              label="Sortino Ratio"
+              value={fmt(s.sortino_ratio, 3)}
+              sub="Downside risk penalty"
+              accent={s.sortino_ratio >= 1.5 ? 'text-emerald-400' : s.sortino_ratio >= 0 ? 'text-amber-400' : 'text-rose-400'}
             />
             <StatCard
               label="Max Drawdown"
               value={`${fmt(s.max_drawdown_pct)}%`}
-              sub="Peak-to-trough"
+              sub={s.max_drawdown_days ? `${s.max_drawdown_days}d underwater` : 'Peak-to-trough'}
               accent="text-rose-400"
-            />
-            <StatCard
-              label="Calmar Ratio"
-              value={fmt(s.calmar_ratio, 3)}
-              sub="Return / Max DD"
-              accent={s.calmar_ratio >= 1 ? 'text-emerald-400' : 'text-amber-400'}
-            />
-            <StatCard
-              label="Ann. Volatility"
-              value={`${fmt(s.annualized_vol)}%`}
-              sub="Strategy vol"
             />
           </div>
 
-          {/* Trade stats */}
+          {/* Trade Execution & Expectancy Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
             <StatCard
               label="Total Trades"
@@ -337,19 +356,19 @@ export default function Backtesting({ ticker }) {
             <StatCard
               label="Win Rate"
               value={`${fmt(s.win_rate_pct, 1)}%`}
-              sub={`${data.trades.filter(t => t.result === 'WIN').length}W / ${data.trades.filter(t => t.result === 'LOSS').length}L shown`}
-              accent={s.win_rate_pct >= 55 ? 'text-emerald-400' : 'text-amber-400'}
+              sub={`${data.trades.filter(t => t.result === 'WIN').length}W / ${data.trades.filter(t => t.result === 'LOSS').length}L recorded`}
+              accent={s.win_rate_pct >= 50 ? 'text-emerald-400' : 'text-amber-400'}
             />
             <StatCard
-              label="Avg Win"
-              value={`+${fmt(s.avg_win_pct)}%`}
+              label="Avg Win / Loss"
+              value={`+${fmt(s.avg_win_pct)}% / ${fmt(s.avg_loss_pct)}%`}
               accent="text-emerald-400"
-              sub="Per winning trade"
+              sub="Risk-reward per trade"
             />
             <StatCard
               label="Profit Factor"
               value={s.profit_factor >= 99 ? '∞' : fmt(s.profit_factor, 2)}
-              sub="Gross win / gross loss"
+              sub="Gross win / Gross loss"
               accent={s.profit_factor >= 1.5 ? 'text-emerald-400' : 'text-amber-400'}
             />
           </div>
@@ -380,7 +399,7 @@ export default function Backtesting({ ticker }) {
                     <span className="w-20 text-right">Sell @</span>
                     <span className="ml-auto">P&amp;L</span>
                   </div>
-                  {data.trades.map((t, i) => <TradeRow key={i} trade={t} idx={i} />)}
+                  {data.trades.map((t, i) => <TradeRow key={i} trade={t} idx={i} currSym={currSym} loc={loc} />)}
                 </div>
               )}
             </div>
@@ -389,9 +408,9 @@ export default function Backtesting({ ticker }) {
           {/* Disclaimer */}
           <div className="mt-4 p-2.5 bg-amber-500/5 border border-amber-500/15 rounded-lg">
             <p className="text-[9px] text-amber-200/70 leading-relaxed">
-              Backtest uses historical data only. Past performance doesn't guarantee future results.
-              Strategy: RSI(14) entry above 35 oversold + MACD confirmation · Exit at RSI 65 / MACD cross / 2×ATR stop.
-              No transaction costs, slippage, or taxes applied.
+              Backtest uses historical data only. Past performance doesn&apos;t guarantee future results.
+              Strategy: Dual-Momentum (RSI + MACD) with Dynamic ATR Trailing Stop-Loss.
+              Includes 15 bps (0.15%) roundtrip brokerage, STT/tax, and execution slippage friction.
             </p>
           </div>
         </>

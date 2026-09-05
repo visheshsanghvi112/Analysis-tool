@@ -167,8 +167,9 @@ export default function PeerComparison({ ticker }) {
     } catch (_) {}
 
     // Fallback direct format
+    const isTickerUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO') && !ticker.startsWith('^');
     const sym = q.toUpperCase();
-    const full = sym.endsWith('.NS') || sym.endsWith('.BO') || sym.startsWith('^') ? sym : sym + '.NS';
+    const full = sym.endsWith('.NS') || sym.endsWith('.BO') || sym.startsWith('^') || isTickerUS ? sym : sym + '.NS';
     setCustomInput('');
     setDropdownOpen(false);
     loadComparison(full);
@@ -321,23 +322,31 @@ export default function PeerComparison({ ticker }) {
           `}</style>
 
           {/* Column Headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '8px', marginBottom: '8px' }}>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ background: '#1c2a3a', border: '1px solid #3b82f630', borderRadius: '8px', padding: '8px 12px' }}>
-                <p style={{ fontSize: '14px', fontWeight: 800, color: '#3b82f6', margin: 0 }}>{symA}</p>
-                <p style={{ fontSize: '10px', color: '#555', margin: 0 }}>₹{comparison.metrics_a.current_price?.toLocaleString()}</p>
+          {(() => {
+            const isUSA = comparison?.ticker_a && !comparison.ticker_a.endsWith('.NS') && !comparison.ticker_a.endsWith('.BO');
+            const isUSB = comparison?.ticker_b && !comparison.ticker_b.endsWith('.NS') && !comparison.ticker_b.endsWith('.BO');
+            const currSymA = isUSA ? '$' : '₹';
+            const currSymB = isUSB ? '$' : '₹';
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ background: '#1c2a3a', border: '1px solid #3b82f630', borderRadius: '8px', padding: '8px 12px' }}>
+                    <p style={{ fontSize: '14px', fontWeight: 800, color: '#3b82f6', margin: 0 }}>{symA}</p>
+                    <p style={{ fontSize: '10px', color: '#555', margin: 0 }}>{currSymA}{comparison.metrics_a.current_price?.toLocaleString()}</p>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontSize: '10px', color: '#444', fontWeight: 700 }}>VS</span>
+                </div>
+                <div>
+                  <div style={{ background: '#1c2a1c', border: '1px solid #22c55e30', borderRadius: '8px', padding: '8px 12px' }}>
+                    <p style={{ fontSize: '14px', fontWeight: 800, color: '#22c55e', margin: 0 }}>{symB}</p>
+                    <p style={{ fontSize: '10px', color: '#555', margin: 0 }}>{currSymB}{comparison.metrics_b.current_price?.toLocaleString()}</p>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: '10px', color: '#444', fontWeight: 700 }}>VS</span>
-            </div>
-            <div>
-              <div style={{ background: '#1c2a1c', border: '1px solid #22c55e30', borderRadius: '8px', padding: '8px 12px' }}>
-                <p style={{ fontSize: '14px', fontWeight: 800, color: '#22c55e', margin: 0 }}>{symB}</p>
-                <p style={{ fontSize: '10px', color: '#555', margin: 0 }}>₹{comparison.metrics_b.current_price?.toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Metrics */}
           <div style={{ background: '#111', borderRadius: '10px', padding: '0 14px' }}>

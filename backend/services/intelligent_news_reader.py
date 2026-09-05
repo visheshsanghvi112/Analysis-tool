@@ -16,11 +16,11 @@ if vendor_scrapling_path not in sys.path:
     sys.path.insert(0, vendor_scrapling_path)
 
 try:
-    from scrapling import Fetcher, Selector
-    HAS_SCRAPLING = True
+    from services.scrapling_client import scrapling_client, HAS_SCRAPLING
 except Exception as e:
     HAS_SCRAPLING = False
-    print(f"Warning: Scrapling import issue: {e}")
+    scrapling_client = None
+    print(f"Warning: ScraplingClient import issue: {e}")
 
 # Curated financial domain lexicon for realistic market sentiment scoring
 FINANCIAL_LEXICON = {
@@ -97,31 +97,16 @@ class IntelligentNewsReader:
 
     def _deep_read_article_body(self, url: str) -> str:
         """
-        Deep-reads the actual article body using Scrapling's stealth Fetcher.
-        Strips ads, boilerplate, and extracts substantive financial paragraphs.
+        Deep-reads the actual article body using Scrapling's stealth FetcherSession
+        with Chrome TLS impersonation, automatic Google News URL resolution,
+        and clean RAG Markdown parsing.
         """
-        if not HAS_SCRAPLING or not url or not url.startswith('http'):
+        if not HAS_SCRAPLING or not scrapling_client or not url or not url.startswith('http'):
             return ""
         try:
-            res = Fetcher.get(url, timeout=3.5, follow_redirects=True)
-            if res.status == 200:
-                # Target primary article containers across Moneycontrol, ET, LiveMint, Reuters
-                paras = res.css(
-                    'article p::text, .content_wrapper p::text, .story-details p::text, '
-                    '.artText p::text, .article_content p::text, .mainArea p::text, p::text'
-                )
-                clean_paras = []
-                for p in paras:
-                    clean = str(p).strip()
-                    # Filter out short disclaimers, share buttons, and ads
-                    if len(clean) > 50 and not any(w in clean.lower() for w in [
-                        'subscribe', 'click here', 'advertisement', 'cookie', 'download app', 'terms of use'
-                    ]):
-                        clean_paras.append(clean)
-                return " ".join(clean_paras[:8])
+            return scrapling_client.deep_read_markdown(url, max_chars=3500)
         except Exception:
             return ""
-        return ""
 
     def _extract_catalysts(self, text: str) -> List[Dict[str, Any]]:
         """Identify concrete corporate catalysts from text."""
@@ -246,11 +231,17 @@ class IntelligentNewsReader:
 
         from urllib.parse import quote_plus
 
+        is_us = not ticker.endswith('.NS') and not ticker.endswith('.BO') and not ticker.startswith('^')
+        query_suffix = "stock" if is_us else "stock India"
+        hl_param = "en-US" if is_us else "en-IN"
+        gl_param = "US" if is_us else "IN"
+        ceid_param = "US:en" if is_us else "IN:en"
+
         # ── 1. Google News Live Search (Primary Live Source) ───────────
         for kw in keywords[:2]:
             try:
-                query_encoded = quote_plus(f"{kw} stock India")
-                search_url = f"https://news.google.com/rss/search?q={query_encoded}&hl=en-IN&gl=IN&ceid=IN:en"
+                query_encoded = quote_plus(f"{kw} {query_suffix}")
+                search_url = f"https://news.google.com/rss/search?q={query_encoded}&hl={hl_param}&gl={gl_param}&ceid={ceid_param}"
                 feed = feedparser.parse(search_url)
 
                 for entry in feed.entries[:12]:
@@ -322,22 +313,23 @@ class IntelligentNewsReader:
             self.cache[cache_key] = (result, datetime.now())
             return result
 
-        # ── 3. Parallel Deep Article Reading via Scrapling ───────────────
+        # ── 3. Parallel Deep Article Reading via Scrapling Stealth Engine ──
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
+        # Candidates for full-text extraction (now fully unlocking Google News via automatic decode!)
         deep_candidates = [
             art for art in collected_articles
-            if art['link'] and not art['link'].startswith('https://news.google.com/rss/articles/')
-        ][:4]
+            if art.get('link') and art['link'].startswith('http')
+        ][:6]
 
-        if deep_candidates:
+        if deep_candidates and scrapling_client:
             try:
-                with ThreadPoolExecutor(max_workers=min(len(deep_candidates), 4)) as executor:
+                with ThreadPoolExecutor(max_workers=min(len(deep_candidates), 6)) as executor:
                     future_to_art = {
                         executor.submit(self._deep_read_article_body, art['link']): art
                         for art in deep_candidates
                     }
-                    for future in as_completed(future_to_art, timeout=3.5):
+                    for future in as_completed(future_to_art, timeout=6.0):
                         art = future_to_art[future]
                         try:
                             body = future.result()
@@ -369,13 +361,15 @@ class IntelligentNewsReader:
         breaking_news = []
 
         for art in collected_articles[:10]:
-            art_corpus = f"{art['title']} {art['summary']} {art['deep_body']}"
+            art_body = art.get('deep_body') or ''
+            art_corpus = f"{art.get('title', '')} {art.get('summary', '')} {art_body}".strip()
             art_sent = self._calculate_financial_sentiment(art_corpus)
             art_catalysts = self._extract_catalysts(art_corpus)
 
+            raw_summary = art.get('summary', '')
             item = {
-                'title': art['title'],
-                'summary': art['deep_body'][:280] + '...' if art['deep_body'] else (art['summary'][:200] + '...' if len(art['summary']) > 200 else art['summary']),
+                'title': art.get('title', ''),
+                'summary': (art_body[:280] + '...') if art_body else ((raw_summary[:200] + '...') if len(raw_summary) > 200 else raw_summary),
                 'source': art['source'],
                 'link': art['link'],
                 'published': art['published'],

@@ -13,7 +13,7 @@ from utils.limiter import limiter
 from services.ticker_manager import ensure_ticker_list
 
 # Import all routers from our routers package
-from routers import tickers, ml, news, portfolio, analysis
+from routers import tickers, ml, news, portfolio, analysis, intraday
 
 logger = logging.getLogger("stockiq")
 
@@ -90,6 +90,7 @@ app.include_router(ml.router)
 app.include_router(news.router)
 app.include_router(portfolio.router)
 app.include_router(analysis.router)
+app.include_router(intraday.router)
 
 if __name__ == "__main__":
     import uvicorn

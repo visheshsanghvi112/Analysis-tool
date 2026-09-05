@@ -393,6 +393,24 @@ function PriceHistoryChart({ history, holdings }) {
   );
 }
 
+// Custom scatter tooltip for Markowitz Frontier
+const CustomScatterTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-[#09090b]/95 border border-white/[0.08] p-3 rounded-xl shadow-2xl backdrop-blur-md text-[10px]">
+        <p className="font-bold text-slate-450 uppercase tracking-wider mb-1">Simulated Portfolio</p>
+        <div className="space-y-0.5 font-mono text-white">
+          <p>Ann. Return: <span className="font-bold text-indigo-400">{data.return_pct}%</span></p>
+          <p>Ann. Volatility: <span className="font-bold text-slate-300">{data.volatility_pct}%</span></p>
+          <p>Sharpe Ratio: <span className="font-bold text-emerald-405">{data.sharpe}</span></p>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 // ── Portfolio Optimizer (Markowitz Frontier) ──────────────────────────────────
 function PortfolioOptimizer({ optResult, loading, error, onRebalance }) {
   const [activeTab, setActiveTab] = useState('max_sharpe'); // 'max_sharpe' or 'min_vol'
@@ -425,24 +443,6 @@ function PortfolioOptimizer({ optResult, loading, error, onRebalance }) {
 
   const selected = activeTab === 'max_sharpe' ? optResult.max_sharpe : optResult.min_volatility;
   const current = optResult.current;
-
-  // Custom scatter tooltip
-  const CustomScatterTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className="bg-[#09090b]/95 border border-white/[0.08] p-3 rounded-xl shadow-2xl backdrop-blur-md text-[10px]">
-          <p className="font-bold text-slate-450 uppercase tracking-wider mb-1">Simulated Portfolio</p>
-          <div className="space-y-0.5 font-mono text-white">
-            <p>Ann. Return: <span className="font-bold text-indigo-400">{data.return_pct}%</span></p>
-            <p>Ann. Volatility: <span className="font-bold text-slate-300">{data.volatility_pct}%</span></p>
-            <p>Sharpe Ratio: <span className="font-bold text-emerald-405">{data.sharpe}</span></p>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-4 sm:p-5 space-y-5">

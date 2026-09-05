@@ -53,9 +53,12 @@ class NewsIntelligence:
         all_articles = []
         
         # Search Google News
+        is_us = not ticker.endswith('.NS') and not ticker.endswith('.BO') and not ticker.startswith('^')
+        query_suffix = "stock" if is_us else "stock+India"
+        hl_gl = "hl=en-US&gl=US&ceid=US:en" if is_us else "hl=en-IN&gl=IN&ceid=IN:en"
         for term in search_terms[:3]:  # Limit to avoid rate limits
             try:
-                google_url = f"https://news.google.com/rss/search?q={term}+stock+India&hl=en-IN&gl=IN&ceid=IN:en"
+                google_url = f"https://news.google.com/rss/search?q={term}+{query_suffix}&{hl_gl}"
                 feed = feedparser.parse(google_url)
                 
                 for entry in feed.entries[:10]:  # Top 10 per term

@@ -150,6 +150,10 @@ def get_quote(ticker: str) -> dict:
             tz_name = meta.get("timezone", "")
             price_date_str = dt.strftime("%Y-%m-%d %H:%M:%S") + (f" {tz_name}" if tz_name else "")
 
+        curr_code = meta.get("currency")
+        is_in = ticker.endswith(".NS") or ticker.endswith(".BO") or curr_code == "INR"
+        curr_sym = "₹" if is_in else ("$" if curr_code == "USD" else (curr_code or "$"))
+
         return {
             "price":      round(price, 2) if price else None,
             "prevClose":  round(prev_close, 2) if prev_close else None,
@@ -165,6 +169,8 @@ def get_quote(ticker: str) -> dict:
             "longName":   meta.get("longName"),
             "fiftyTwoWeekHigh": meta.get("fiftyTwoWeekHigh"),
             "fiftyTwoWeekLow":  meta.get("fiftyTwoWeekLow"),
+            "currency":   curr_code,
+            "currency_symbol": curr_sym,
         }
     except Exception:
         return {}

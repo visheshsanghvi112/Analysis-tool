@@ -139,7 +139,7 @@ export default function SectorIntelligence({ ticker }) {
         <div style={{ textAlign: 'center', padding: '32px', color: '#444' }}>
           <Trophy style={{ width: '32px', height: '32px', margin: '0 auto 10px', opacity: 0.2 }} />
           <p style={{ fontSize: '13px', marginBottom: '4px', color: '#666' }}>Sector benchmarking not loaded</p>
-          <p style={{ fontSize: '11px', color: '#444' }}>Click "Run Sector Analysis" to rank all {ticker?.replace('.NS','').replace('.BO','')} sector peers</p>
+          <p style={{ fontSize: '11px', color: '#444' }}>Click &quot;Run Sector Analysis&quot; to rank all {ticker?.replace('.NS','').replace('.BO','')} sector peers</p>
         </div>
       )}
 

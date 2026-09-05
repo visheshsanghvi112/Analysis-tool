@@ -15,6 +15,7 @@ import {
   Loader2,
   Briefcase,
   Star,
+  Activity,
 } from 'lucide-react';
 import WatchlistDrawer from './WatchlistDrawer';
 import StockSearchModal from './StockSearchModal';
@@ -139,7 +140,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
     if (onTickerSelect) {
       onTickerSelect(ticker.symbol);
     } else {
-      window.location.href = `/?ticker=${encodeURIComponent(ticker.symbol)}`;
+      window.location.assign(`/?ticker=${encodeURIComponent(ticker.symbol)}`);
     }
     setSearchQuery('');
     setSearchResults([]);
@@ -327,8 +328,26 @@ const Header = ({ onTickerSelect, currentTicker }) => {
               )}
             </div>
 
-            {/* ── Right: Watchlist + Live + Menu Button ─────────────── */}
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* ── Right: Intraday Desk + Watchlist + Live + Menu Button ─────────────── */}
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {/* Intraday Desk Link */}
+              <Link
+                href="/intraday"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '6px 11px', background: 'rgba(16, 185, 129, 0.08)',
+                  border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: '7px',
+                  color: '#34d399', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                  transition: 'all 0.15s', textDecoration: 'none',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(16, 185, 129, 0.16)'; e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.45)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(16, 185, 129, 0.08)'; e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.25)'; }}
+                title="Open Intraday Quantitative Trading Desk"
+              >
+                <Activity style={{ width: '13px', height: '13px', color: '#34d399' }} />
+                <span className="hidden md:inline">Intraday Desk</span>
+              </Link>
+
               {/* Watchlist button */}
               <button
                 onClick={() => setWatchlistOpen(true)}

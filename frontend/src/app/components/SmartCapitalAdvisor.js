@@ -10,7 +10,8 @@ import {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 
 const fmt    = (n, d = 2) => n == null ? 'N/A' : Number(n).toFixed(d);
-const fmtINR = (n) => n == null ? 'N/A' : `₹${Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+const fmtVal = (n, currSym = '₹', loc = 'en-IN') => n == null ? 'N/A' : `${currSym}${Number(n).toLocaleString(loc, { maximumFractionDigits: 0 })}`;
+const fmtINR = (n) => fmtVal(n, '₹', 'en-IN');
 
 const fmtPriceDate = (dtStr) => {
   if (!dtStr) return '';
@@ -68,7 +69,7 @@ function ConfidenceBar({ pct, label }) {
 }
 
 // ── Suggestion card ────────────────────────────────────────────────────────
-function SuggestionCard({ s, rank }) {
+function SuggestionCard({ s, rank, currSym = '₹', loc = 'en-IN' }) {
   const [expanded, setExpanded] = useState(rank === 1);
   const colorMap = {
     emerald: { border: 'border-emerald-500/25', bg: 'bg-emerald-500/8',  glow: 'shadow-emerald-500/10', badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25' },
@@ -76,8 +77,10 @@ function SuggestionCard({ s, rank }) {
     amber:   { border: 'border-amber-500/25',   bg: 'bg-amber-500/8',    glow: 'shadow-amber-500/10',   badge: 'bg-amber-500/15   text-amber-400   border-amber-500/25' },
     slate:   { border: 'border-white/[0.08]',   bg: 'bg-white/[0.02]',   glow: '',                       badge: 'bg-white/[0.06]  text-slate-400   border-white/[0.10]' },
   };
-  const c   = colorMap[s.priority_color] || colorMap.slate;
-  const sym = s.ticker.replace('.NS', '').replace('.BO', '');
+  const c        = colorMap[s.priority_color] || colorMap.slate;
+  const sym      = s.ticker.replace('.NS', '').replace('.BO', '');
+  const stockSym = s.currency_symbol || currSym;
+  const stockLoc = (stockSym === '$' || loc === 'en-US') ? 'en-US' : 'en-IN';
 
   return (
     <div className={`rounded-2xl border ${c.border} ${c.bg} shadow-lg ${c.glow} overflow-hidden transition-all duration-300`}>
@@ -112,7 +115,7 @@ function SuggestionCard({ s, rank }) {
         </div>
 
         <div className="text-right shrink-0">
-          <p className="text-base font-black text-white">{fmtINR(s.allocated_amount)}</p>
+          <p className="text-base font-black text-white">{fmtVal(s.allocated_amount, stockSym, stockLoc)}</p>
           <p className="text-[9px] text-slate-500">{s.shares_to_buy} shares · {s.allocation_weight_pct}%</p>
         </div>
 
@@ -132,7 +135,7 @@ function SuggestionCard({ s, rank }) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {s.current_pnl_pct === 0 ? (
               [
-                { label: 'Buy @ Price',     value: `₹${s.live_price.toLocaleString('en-IN')}`, sub: s.price_date ? `LTP (${fmtPriceDate(s.price_date)})` : 'current LTP' },
+                { label: 'Buy @ Price',     value: `${stockSym}${s.live_price.toLocaleString(stockLoc)}`, sub: s.price_date ? `LTP (${fmtPriceDate(s.price_date)})` : 'current LTP' },
                 { label: '1M Momentum',     value: `${s.momentum_1m > 0 ? '+' : ''}${fmt(s.momentum_1m)}%`, sub: 'price change 30d' },
                 { label: 'P/E Ratio',       value: s.pe_ratio ? `${fmt(s.pe_ratio, 1)}` : 'N/A', sub: s.sector || 'Sector benchmark' },
                 { label: 'Sentiment',       value: s.sentiment > 0 ? 'Bullish' : s.sentiment < 0 ? 'Bearish' : 'Neutral', sub: `score: ${fmt(s.sentiment, 2)}` },
@@ -145,8 +148,8 @@ function SuggestionCard({ s, rank }) {
               ))
             ) : (
               [
-                { label: 'Buy @ Price',     value: `₹${s.live_price.toLocaleString('en-IN')}`, sub: s.price_date ? `LTP (${fmtPriceDate(s.price_date)})` : 'current LTP' },
-                { label: 'New Avg Cost',    value: `₹${s.new_avg_price.toLocaleString('en-IN')}`, sub: `was ₹${s.buy_price.toLocaleString('en-IN')}` },
+                { label: 'Buy @ Price',     value: `${stockSym}${s.live_price.toLocaleString(stockLoc)}`, sub: s.price_date ? `LTP (${fmtPriceDate(s.price_date)})` : 'current LTP' },
+                { label: 'New Avg Cost',    value: `${stockSym}${s.new_avg_price.toLocaleString(stockLoc)}`, sub: `was ${stockSym}${s.buy_price.toLocaleString(stockLoc)}` },
                 { label: 'Break-Even Now',  value: `+${fmt(s.new_gain_to_be)}%`, sub: `was +${fmt(s.current_gain_to_be)}%` },
                 { label: 'Cost Reduced By', value: `${fmt(s.avg_cost_reduction_pct)}%`, sub: 'avg cost reduction' },
               ].map(m => (
@@ -205,7 +208,7 @@ function SuggestionCard({ s, rank }) {
                   <div key={t.tranche} className="flex items-center gap-2 text-[10px]">
                     <span className="h-5 w-5 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-[8px] font-black text-violet-400 shrink-0">{t.tranche}</span>
                     <span className="text-slate-400 flex-1">{t.condition}</span>
-                    <span className="text-white font-bold shrink-0">{fmtINR(t.amount)} · {t.shares}sh</span>
+                    <span className="text-white font-bold shrink-0">{fmtVal(t.amount, stockSym, stockLoc)} · {t.shares}sh</span>
                   </div>
                 ))}
               </div>
@@ -227,7 +230,7 @@ function SuggestionCard({ s, rank }) {
 }
 
 // ── Input panel (the "wizard") ─────────────────────────────────────────────
-function InputPanel({ holdings, onResult, loading, setLoading }) {
+function InputPanel({ holdings, onResult, loading, setLoading, currSym = '₹', loc = 'en-IN', isUS = false }) {
   const [mode, setMode]         = useState('recovery'); // 'recovery' or 'market_buys'
   const [capital, setCapital]   = useState('');
   const [horizon, setHorizon]   = useState(null);
@@ -278,54 +281,51 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
           className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
             mode === 'recovery'
               ? 'bg-violet-500/20 border border-violet-500/30 text-violet-300'
-              : 'text-slate-400 hover:text-slate-200 border border-transparent'
+              : 'text-slate-400 hover:text-white'
           }`}
         >
           <TrendingDown className="h-3.5 w-3.5" />
-          Recover Positions
+          Averaging Down &amp; Recovery
         </button>
         <button
           onClick={() => setMode('market_buys')}
           className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
             mode === 'market_buys'
-              ? 'bg-violet-500/20 border border-violet-500/30 text-violet-300'
-              : 'text-slate-400 hover:text-slate-200 border border-transparent'
+              ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-300'
+              : 'text-slate-400 hover:text-white'
           }`}
         >
-          <Sparkles className="h-3.5 w-3.5" />
-          Fresh Market Buys
+          <Target className="h-3.5 w-3.5" />
+          Fresh Market Buys (Leaders)
         </button>
       </div>
 
       {mode === 'recovery' && !hasHoldings && (
-        <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs">
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-bold">No holdings detected</p>
-            <p className="text-slate-400 mt-0.5">Please add stocks to your Portfolio Tracker first, or switch to <strong>Fresh Market Buys</strong> to find top market candidates.</p>
-          </div>
+        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>Add stocks to your Portfolio Tracker first to analyze recovery opportunities.</span>
         </div>
       )}
 
       {/* Capital input */}
       <div>
         <label className="block text-[10px] font-bold text-slate-200 uppercase tracking-wider mb-2">
-          <Wallet className="inline h-3 w-3 mr-1" /> Available Floating Capital (₹)
+          <Wallet className="inline h-3 w-3 mr-1" /> Available Floating Capital ({currSym})
         </label>
         <div className="flex items-center gap-2 px-3 py-2.5 bg-white/[0.04] border border-white/[0.10] rounded-xl focus-within:border-violet-500/50 transition">
-          <span className="text-slate-400 text-sm font-bold">₹</span>
+          <span className="text-slate-400 text-sm font-bold">{currSym}</span>
           <input
             type="number"
             min="1"
             value={capital}
             onChange={e => setCapital(e.target.value)}
-            placeholder="e.g. 50000"
+            placeholder={isUS ? "e.g. 5000" : "e.g. 50000"}
             className="bg-transparent text-white text-sm flex-1 outline-none placeholder-slate-500"
           />
         </div>
         {/* Quick amount chips */}
         <div className="flex flex-wrap gap-2 mt-2">
-          {[10000, 25000, 50000, 100000, 250000].map(amt => (
+          {(isUS ? [500, 1000, 2500, 5000, 10000] : [10000, 25000, 50000, 100000, 250000]).map(amt => (
             <button
               key={amt}
               onClick={() => setCapital(String(amt))}
@@ -335,7 +335,7 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
                   : 'bg-white/[0.03] border-white/[0.08] text-slate-400 hover:text-slate-200'
               }`}
             >
-              {fmtINR(amt)}
+              {fmtVal(amt, currSym, loc)}
             </button>
           ))}
         </div>
@@ -378,11 +378,11 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
               className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.10] rounded-xl text-xs text-white outline-none focus:border-violet-500/50 appearance-none cursor-pointer"
             >
               <option value="Any" className="bg-[#0a0a0f] text-white">Any Price</option>
-              <option value="100" className="bg-[#0a0a0f] text-white">Under ₹100</option>
-              <option value="200" className="bg-[#0a0a0f] text-white">Under ₹200</option>
-              <option value="500" className="bg-[#0a0a0f] text-white">Under ₹500</option>
-              <option value="1000" className="bg-[#0a0a0f] text-white">Under ₹1,000</option>
-              <option value="2000" className="bg-[#0a0a0f] text-white">Under ₹2,000</option>
+              <option value="100" className="bg-[#0a0a0f] text-white">Under {currSym}100</option>
+              <option value="200" className="bg-[#0a0a0f] text-white">Under {currSym}200</option>
+              <option value="500" className="bg-[#0a0a0f] text-white">Under {currSym}500</option>
+              <option value="1000" className="bg-[#0a0a0f] text-white">Under {currSym}1,000</option>
+              <option value="2000" className="bg-[#0a0a0f] text-white">Under {currSym}2,000</option>
             </select>
             <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
               <ChevronDown className="h-3.5 w-3.5" />
@@ -446,8 +446,10 @@ function InputPanel({ holdings, onResult, loading, setLoading }) {
 }
 
 // ── Results panel ──────────────────────────────────────────────────────────
-function ResultsPanel({ data, onReset }) {
+function ResultsPanel({ data, onReset, currSym = '₹', loc = 'en-IN' }) {
   const s = data.summary;
+  const activeCurrSym = data.currency_symbol || data.summary?.currency_symbol || currSym;
+  const activeLoc = (activeCurrSym === '$' || loc === 'en-US') ? 'en-US' : 'en-IN';
 
   const groupedSuggestions = (data.suggestions || []).reduce((acc, sug) => {
     const sector = sug.sector || 'Others';
@@ -478,7 +480,7 @@ function ResultsPanel({ data, onReset }) {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div>
             <p className="text-[10px] text-slate-300 uppercase tracking-wider font-bold">Capital Allocation Plan</p>
-            <p className="text-2xl font-black text-white mt-0.5">{fmtINR(s.total_allocated)} <span className="text-sm text-slate-300 font-normal">deployed</span></p>
+            <p className="text-2xl font-black text-white mt-0.5">{fmtVal(s.total_allocated, activeCurrSym, activeLoc)} <span className="text-sm text-slate-300 font-normal">deployed</span></p>
           </div>
           <div className="text-right">
             <p className="text-[9px] text-slate-400 uppercase">Confidence</p>
@@ -487,8 +489,8 @@ function ResultsPanel({ data, onReset }) {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
-            { label: 'Total Capital',    value: fmtINR(data.floating_capital) },
-            { label: 'Reserve Buffer',   value: fmtINR(data.reserve_buffer), sub: data.buffer_reason?.split('(')[0]?.trim() },
+            { label: 'Total Capital',    value: fmtVal(data.floating_capital, activeCurrSym, activeLoc) },
+            { label: 'Reserve Buffer',   value: fmtVal(data.reserve_buffer, activeCurrSym, activeLoc), sub: data.buffer_reason?.split('(')[0]?.trim() },
             { label: 'Positions Funded', value: `${s.positions_addressed} stocks` },
             { label: 'Horizon',          value: s.horizon_label },
           ].map(m => (
@@ -521,7 +523,7 @@ function ResultsPanel({ data, onReset }) {
             </p>
             <div className="space-y-2.5">
               {list.map((sug, i) => (
-                <SuggestionCard key={sug.ticker} s={sug} rank={i + 1} />
+                <SuggestionCard key={sug.ticker} s={sug} rank={i + 1} currSym={activeCurrSym} loc={activeLoc} />
               ))}
             </div>
           </div>
@@ -574,6 +576,9 @@ export default function SmartCapitalAdvisor({ holdings, onClose }) {
   const [loading, setLoading] = useState(false);
 
   const validHoldings = (holdings || []).filter(h => h.ticker && +h.qty > 0 && +h.buy_price > 0);
+  const isUS = validHoldings.some(h => h.ticker && !h.ticker.includes('.') && !h.ticker.endsWith('.NS') && !h.ticker.endsWith('.BO'));
+  const currSym = isUS ? '$' : '₹';
+  const loc = isUS ? 'en-US' : 'en-IN';
 
   return (
     <div className="fixed inset-0 z-[500] flex items-center justify-center p-4"
@@ -606,11 +611,16 @@ export default function SmartCapitalAdvisor({ holdings, onClose }) {
               onResult={setResult}
               loading={loading}
               setLoading={setLoading}
+              currSym={currSym}
+              loc={loc}
+              isUS={isUS}
             />
           ) : (
             <ResultsPanel
               data={result}
               onReset={() => setResult(null)}
+              currSym={currSym}
+              loc={loc}
             />
           )}
         </div>

@@ -78,6 +78,9 @@ export default function StockChart({ ticker }) {
   const [activeTimeframe, setActiveTimeframe] = useState('1Y');
   const [hoveredData, setHoveredData] = useState(null);
 
+  const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
+  const currSym = isUS ? '$' : '₹';
+
   // Default dates for custom selection
   const [customStartDate, setCustomStartDate] = useState(() => {
     const today = new Date();
@@ -216,16 +219,16 @@ export default function StockChart({ ticker }) {
             {/* O H L C Vol Row */}
             <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-2 text-xs">
               <span className="text-slate-400">
-                O <span className="font-semibold text-slate-100 ml-1">Rs.{latestDataPoint.open !== undefined ? latestDataPoint.open.toLocaleString() : '--'}</span>
+                O <span className="font-semibold text-slate-100 ml-1">{currSym}{latestDataPoint.open !== undefined ? latestDataPoint.open.toLocaleString() : '--'}</span>
               </span>
               <span className="text-slate-400">
-                H <span className="font-semibold text-slate-100 ml-1">Rs.{latestDataPoint.high !== undefined ? latestDataPoint.high.toLocaleString() : '--'}</span>
+                H <span className="font-semibold text-slate-100 ml-1">{currSym}{latestDataPoint.high !== undefined ? latestDataPoint.high.toLocaleString() : '--'}</span>
               </span>
               <span className="text-slate-400">
-                L <span className="font-semibold text-slate-100 ml-1">Rs.{latestDataPoint.low !== undefined ? latestDataPoint.low.toLocaleString() : '--'}</span>
+                L <span className="font-semibold text-slate-100 ml-1">{currSym}{latestDataPoint.low !== undefined ? latestDataPoint.low.toLocaleString() : '--'}</span>
               </span>
               <span className="text-slate-400">
-                C <span className="font-semibold text-emerald-400 ml-1">Rs.{latestDataPoint.close !== undefined ? latestDataPoint.close.toLocaleString() : '--'}</span>
+                C <span className="font-semibold text-emerald-400 ml-1">{currSym}{latestDataPoint.close !== undefined ? latestDataPoint.close.toLocaleString() : '--'}</span>
               </span>
               <span className="text-slate-400">
                 VOL <span className="font-semibold text-slate-100 ml-1">{latestDataPoint.volume !== undefined ? latestDataPoint.volume.toLocaleString() : '--'}</span>
@@ -304,7 +307,7 @@ export default function StockChart({ ticker }) {
                 <YAxis
                   domain={['auto', 'auto']}
                   {...axisProps}
-                  tickFormatter={(v) => `Rs.${v.toLocaleString()}`}
+                  tickFormatter={(v) => `${currSym}${v.toLocaleString()}`}
                   width={70}
                 />
                 <Tooltip content={<CustomTooltip />} />
@@ -434,12 +437,15 @@ export default function StockChart({ ticker }) {
 
       {/* ADX */}
       <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
-        <h3 className="text-sm font-semibold text-slate-300 mb-2">
-          ADX — Trend Strength
-          <span className="text-slate-500 font-normal ml-2 text-xs">
+        <div className="flex items-center gap-2 mb-2">
+          <h3 className="text-sm font-semibold text-slate-300">
+            ADX — Trend Strength
+          </h3>
+          <InfoBadge infoKey="adx_indicator" />
+          <span className="text-slate-500 font-normal text-xs">
             &lt;15 no trend · 15-25 developing · &gt;25 strong
           </span>
-        </h3>
+        </div>
         <ChartContainer height={128}>
           {(width, height) => (
             <ComposedChart 

@@ -44,6 +44,10 @@ def get_ml_prediction_endpoint(
         if error:
             raise HTTPException(status_code=400, detail=error)
         
+        if prediction:
+            is_indian = ticker_clean.endswith(".NS") or ticker_clean.endswith(".BO")
+            prediction["currency_symbol"] = "₹" if is_indian else "$"
+
         return {
             "ticker": ticker_clean,
             "period": period,
@@ -72,16 +76,22 @@ def retrain_ml_model(
     """
     try:
         ticker_clean = ticker.strip().upper()
-        success, result = retrain_model(ticker_clean, period=period, start_date=start_date, end_date=end_date)
+        prediction, error = retrain_model(ticker_clean, period=period, start_date=start_date, end_date=end_date)
         
-        if not success:
-            raise HTTPException(status_code=400, detail=result)
+        if error:
+            raise HTTPException(status_code=400, detail=error)
         
         return {
             "ticker": ticker_clean,
             "period": period,
             "status": "success",
-            "metrics": result,
+            "prediction": prediction,
+            "metrics": {
+                "direction_accuracy": prediction.get("direction_accuracy"),
+                "profit_factor": prediction.get("profit_factor"),
+                "hit_rate": prediction.get("hit_rate"),
+                "models_used": prediction.get("models_used"),
+            } if prediction else None,
             "message": "Model retrained successfully"
         }
         

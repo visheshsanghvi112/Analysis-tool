@@ -74,7 +74,7 @@ function ProbabilityRow({ label, value, isLoss }) {
   );
 }
 
-function CustomTooltip({ active, payload, label }) {
+function CustomTooltip({ active, payload, label, currSym = '₹' }) {
   if (!active || !payload?.length) return null;
   const isSimulated = payload[0]?.payload?.is_simulated;
 
@@ -89,14 +89,14 @@ function CustomTooltip({ active, payload, label }) {
             <span className="text-slate-400 flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Median (50%):
             </span>
-            <span className="font-bold text-emerald-400">₹{fmt(payload.find(p => p.dataKey === 'p500')?.value)}</span>
+            <span className="font-bold text-emerald-400">{currSym}{fmt(payload.find(p => p.dataKey === 'p500')?.value)}</span>
           </div>
           <div className="flex justify-between items-center gap-4 text-[10px]">
             <span className="text-slate-500 flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-[#3b82f6]/40" /> 50% Range:
             </span>
             <span className="text-slate-300">
-              ₹{fmt(payload.find(p => p.dataKey === 'p250')?.value)} - ₹{fmt(payload.find(p => p.dataKey === 'p750')?.value)}
+              {currSym}{fmt(payload.find(p => p.dataKey === 'p250')?.value)} - {currSym}{fmt(payload.find(p => p.dataKey === 'p750')?.value)}
             </span>
           </div>
           <div className="flex justify-between items-center gap-4 text-[10px]">
@@ -104,7 +104,7 @@ function CustomTooltip({ active, payload, label }) {
               <span className="h-1.5 w-1.5 rounded-full bg-[#3b82f6]/20" /> 95% Range:
             </span>
             <span className="text-slate-400">
-              ₹{fmt(payload.find(p => p.dataKey === 'p025')?.value)} - ₹{fmt(payload.find(p => p.dataKey === 'p975')?.value)}
+              {currSym}{fmt(payload.find(p => p.dataKey === 'p025')?.value)} - {currSym}{fmt(payload.find(p => p.dataKey === 'p975')?.value)}
             </span>
           </div>
         </div>
@@ -113,7 +113,7 @@ function CustomTooltip({ active, payload, label }) {
           <span className="text-slate-400 flex items-center gap-1.5">
             <span className="h-1.5 w-1.5 rounded-full bg-[#3b82f6]" /> Close Price:
           </span>
-          <span className="font-bold text-white">₹{fmt(payload.find(p => p.dataKey === 'close')?.value)}</span>
+          <span className="font-bold text-white">{currSym}{fmt(payload.find(p => p.dataKey === 'close')?.value)}</span>
         </div>
       )}
     </div>
@@ -125,13 +125,17 @@ export default function MonteCarloSimulation({ ticker }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [horizon, setHorizon] = useState(30);
+  const [mode, setMode] = useState('gbm'); // 'gbm' or 'bootstrap'
 
-  const fetchSimulation = useCallback(async (h = horizon) => {
+  const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
+  const currSym = data?.currency_symbol || (isUS ? '$' : '₹');
+
+  const fetchSimulation = useCallback(async (h = horizon, m = mode) => {
     if (!ticker) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/monte-carlo?ticker=${ticker}&horizon_days=${h}`);
+      const res = await fetch(`${API_BASE_URL}/api/monte-carlo?ticker=${ticker}&horizon_days=${h}&simulation_mode=${m}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail || 'Failed to fetch simulation');
       setData(json);
@@ -140,11 +144,11 @@ export default function MonteCarloSimulation({ ticker }) {
     } finally {
       setLoading(false);
     }
-  }, [ticker, horizon]);
+  }, [ticker, horizon, mode]);
 
   useEffect(() => {
-    fetchSimulation(horizon);
-  }, [ticker, horizon, fetchSimulation]);
+    fetchSimulation(horizon, mode);
+  }, [ticker, horizon, mode, fetchSimulation]);
 
   const chartData = (() => {
     if (!data) return [];
@@ -202,14 +206,18 @@ export default function MonteCarloSimulation({ ticker }) {
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h3 className="text-sm font-bold text-white">Monte Carlo Price Projections</h3>
+              <h3 className="text-sm font-bold text-white">Institutional Monte Carlo Projections</h3>
               <InfoBadge infoKey="monte_carlo_var" />
             </div>
-            <p className="text-[10px] text-slate-400">Probabilistic price path modeling using Geometric Brownian Motion (GBM)</p>
+            <p className="text-[10px] text-slate-400">
+              {mode === 'bootstrap' 
+                ? 'Non-parametric historical return bootstrapping (empirical fat tails & jumps)' 
+                : 'Geometric Brownian Motion with Student-t fat tails & Bayesian drift shrinkage'}
+            </p>
           </div>
         </div>
         <button
-          onClick={() => fetchSimulation(horizon)}
+          onClick={() => fetchSimulation(horizon, mode)}
           disabled={loading}
           className="p-2 rounded-lg text-slate-500 hover:text-slate-300 active:scale-95 transition disabled:opacity-40 cursor-pointer"
         >
@@ -217,41 +225,93 @@ export default function MonteCarloSimulation({ ticker }) {
         </button>
       </div>
 
-      {/* Horizon selector */}
-      <div className="flex flex-wrap gap-1 p-0.5 bg-white/[0.02] rounded-lg border border-white/[0.05] mb-5">
-        {[
-          { label: '30D', days: 30 },
-          { label: '60D', days: 60 },
-          { label: '90D', days: 90 },
-          { label: '1Y',  days: 252 },
-          { label: '3Y',  days: 756 },
-          { label: '5Y',  days: 1260 },
-        ].map(({ label, days }) => (
+      {/* Control Bar: Mode Toggle & Horizon Selector */}
+      <div className="flex flex-col sm:flex-row gap-2 mb-4 items-stretch sm:items-center justify-between">
+        {/* Simulation Mode Toggle */}
+        <div className="flex items-center gap-1 p-0.5 bg-white/[0.02] rounded-lg border border-white/[0.05]">
           <button
-            key={days}
-            onClick={() => setHorizon(days)}
+            onClick={() => setMode('gbm')}
             disabled={loading}
-            className={`flex-1 py-1.5 text-[11px] font-semibold rounded-md transition cursor-pointer ${
-              horizon === days
-                ? days >= 252 ? 'bg-emerald-600 text-white' : 'bg-indigo-600 text-white'
+            className={`px-3 py-1.5 text-[11px] font-semibold rounded-md transition flex items-center gap-1.5 cursor-pointer ${
+              mode === 'gbm'
+                ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white hover:bg-slate-900'
-            } disabled:opacity-50`}
+            }`}
           >
-            {label}
+            <span>GBM (Fat Tails)</span>
+            <InfoBadge infoKey="monte_carlo_var" />
           </button>
-        ))}
+          <button
+            onClick={() => setMode('bootstrap')}
+            disabled={loading}
+            className={`px-3 py-1.5 text-[11px] font-semibold rounded-md transition flex items-center gap-1.5 cursor-pointer ${
+              mode === 'bootstrap'
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+          >
+            <span>Historical Bootstrap</span>
+            <InfoBadge infoKey="historical_bootstrap" />
+          </button>
+        </div>
+
+        {/* Horizon selector */}
+        <div className="flex flex-1 sm:max-w-md gap-1 p-0.5 bg-white/[0.02] rounded-lg border border-white/[0.05]">
+          {[
+            { label: '30D', days: 30 },
+            { label: '60D', days: 60 },
+            { label: '90D', days: 90 },
+            { label: '1Y',  days: 252 },
+            { label: '3Y',  days: 756 },
+            { label: '5Y',  days: 1260 },
+          ].map(({ label, days }) => (
+            <button
+              key={days}
+              onClick={() => setHorizon(days)}
+              disabled={loading}
+              className={`flex-1 py-1.5 text-[11px] font-semibold rounded-md transition cursor-pointer ${
+                horizon === days
+                  ? days >= 252 ? 'bg-emerald-600 text-white' : 'bg-indigo-600 text-white'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-900'
+              } disabled:opacity-50`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
-      {horizon >= 252 && (
-        <p className="text-[10px] text-emerald-400/70 mb-3 flex items-center gap-1">
-          ⚡ Long-horizon view: using 5Y calibration data · chart thinned for readability
-        </p>
+
+      {/* Model Diagnostic Badges */}
+      {stats && (
+        <div className="flex flex-wrap items-center gap-2 mb-4 text-[10px]">
+          {mode === 'gbm' ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-300">
+              <Activity className="h-3 w-3" />
+              <span>Student-t shocks (ν=5) · Double volatility drag eliminated</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300">
+              <ArrowRightLeft className="h-3 w-3" />
+              <span>Non-parametric empirical returns resampled with replacement</span>
+            </div>
+          )}
+
+          {mode === 'gbm' && stats.shrinkage_alpha > 0.15 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
+              <span>Bayesian Drift Shrinkage (α={stats.shrinkage_alpha}): Raw {stats.raw_drift_pct}% → Calibrated {stats.ann_drift_pct}%</span>
+              <InfoBadge infoKey="drift_shrinkage" />
+            </div>
+          )}
+        </div>
       )}
 
       {/* States */}
       {loading && (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-500">
           <Compass className="h-7 w-7 animate-spin text-indigo-400" />
-          <span className="text-xs text-slate-400 font-medium">Running 1,000 simulations for {ticker}…</span>
+          <span className="text-xs text-slate-400 font-medium">
+            Running 1,000 {mode === 'bootstrap' ? 'historical bootstrap' : 'Student-t GBM'} simulations for {ticker}…
+          </span>
         </div>
       )}
 
@@ -273,7 +333,7 @@ export default function MonteCarloSimulation({ ticker }) {
             <div className="lg:col-span-2 rounded-xl bg-white/[0.01] border border-white/[0.04] p-3">
               <div className="flex justify-between items-center mb-3">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Simulation Fan Chart ({horizon}-Day Forecast Horizon)
+                  Simulation Fan Chart ({horizon}-Day Forecast Horizon · {mode.toUpperCase()})
                 </p>
                 <div className="flex gap-3 text-[9px] text-slate-400 font-medium">
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-400" /> Median</span>
@@ -299,9 +359,9 @@ export default function MonteCarloSimulation({ ticker }) {
                       tick={{ fontSize: 9, fill: '#888' }}
                       tickLine={false}
                       axisLine={false}
-                      tickFormatter={(v) => `₹${v}`}
+                      tickFormatter={(v) => `${currSym}${v}`}
                     />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={<CustomTooltip currSym={currSym} />} />
                     
                     {/* Outer 95% Confidence Interval (2.5% to 97.5%) */}
                     <Area
@@ -380,7 +440,7 @@ export default function MonteCarloSimulation({ ticker }) {
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   Horizon Price Probabilities
                 </p>
-                <InfoBadge infoKey="cvar_expected_shortfall" />
+                <InfoBadge infoKey="horizon_probabilities" />
               </div>
               <div className="space-y-1.5">
                 <ProbabilityRow label="Probability of Stock finishing UP" value={stats.prob_up} isLoss={false} />
@@ -389,15 +449,56 @@ export default function MonteCarloSimulation({ ticker }) {
                 <ProbabilityRow label="Probability of Gain ≥ 20%" value={stats.prob_gain_20} isLoss={false} />
                 <ProbabilityRow label="Probability of Loss ≥ 5%" value={stats.prob_loss_5} isLoss={true} />
                 <ProbabilityRow label="Probability of Loss ≥ 10%" value={stats.prob_loss_10} isLoss={true} />
+                <ProbabilityRow label="Probability of Loss ≥ 20%" value={stats.prob_loss_20} isLoss={true} />
               </div>
             </div>
           </div>
 
-          {/* Stats Grid */}
+          {/* Institutional Tail Risk & VaR Panel */}
+          <div className="rounded-xl bg-gradient-to-br from-white/[0.02] to-white/[0.005] border border-white/[0.06] p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Activity className="h-4 w-4 text-rose-400" />
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider">Institutional Tail Risk & VaR (FRTB / Basel III)</h4>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <InfoBadge infoKey="monte_carlo_var" />
+                <InfoBadge infoKey="expected_shortfall" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <StatCard
+                label="95% Horizon VaR"
+                value={`${stats.var_95_pct >= 0 ? '-' : '+'}${fmt(Math.abs(stats.var_95_pct))}%`}
+                accent={stats.var_95_pct > 20 ? 'text-rose-400' : 'text-amber-400'}
+                sub="Max loss with 95% confidence"
+              />
+              <StatCard
+                label="99% Stress VaR"
+                value={`${stats.var_99_pct >= 0 ? '-' : '+'}${fmt(Math.abs(stats.var_99_pct))}%`}
+                accent="text-rose-400"
+                sub="1-in-100 extreme tail loss"
+              />
+              <StatCard
+                label="Expected Shortfall (CVaR)"
+                value={`${stats.cvar_95_pct >= 0 ? '-' : '+'}${fmt(Math.abs(stats.cvar_95_pct))}%`}
+                accent="text-rose-500"
+                sub="Avg loss in worst 5% crash scenarios"
+              />
+              <StatCard
+                label="Simulated Max Drawdown"
+                value={`${fmt(stats.avg_max_drawdown_pct)}%`}
+                accent="text-rose-400"
+                sub={`Worst path drop: ${fmt(stats.worst_drawdown_pct)}%`}
+              />
+            </div>
+          </div>
+
+          {/* General Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
             <StatCard
               label="Expected Price"
-              value={`₹${fmt(stats.expected_price_horizon)}`}
+              value={`${currSym}${fmt(stats.expected_price_horizon)}`}
               accent="text-emerald-400"
               sub={`Mean path at T+${horizon}`}
             />
@@ -405,22 +506,23 @@ export default function MonteCarloSimulation({ ticker }) {
               label="Expected Return"
               value={`${stats.expected_return_pct >= 0 ? '+' : ''}${fmt(stats.expected_return_pct)}%`}
               accent={stats.expected_return_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}
-              sub="Expected Return"
+              sub="Expected Compound Return"
             />
             <StatCard
               label="Annualized Volatility"
               value={`${fmt(stats.ann_volatility_pct)}%`}
-              sub="Historical volatility"
+              sub="Historical standard deviation"
             />
             <StatCard
-              label="Expected Drift"
+              label="Calibrated Drift (μ)"
               value={`${stats.ann_drift_pct >= 0 ? '+' : ''}${fmt(stats.ann_drift_pct)}%`}
-              sub="Annualized drift (μ)"
+              accent={stats.ann_drift_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}
+              sub={stats.shrinkage_alpha > 0.15 ? `Shrunk from ${fmt(stats.raw_drift_pct)}%` : 'Annualized drift'}
             />
             <StatCard
               label="Extreme Bounds (Max / Min)"
-              value={`₹${fmt(stats.max_simulated_price)} / ₹${fmt(stats.min_simulated_price)}`}
-              sub="Simulated bounds"
+              value={`${currSym}${fmt(stats.max_simulated_price)} / ${currSym}${fmt(stats.min_simulated_price)}`}
+              sub="Simulated range"
             />
           </div>
 
@@ -428,9 +530,18 @@ export default function MonteCarloSimulation({ ticker }) {
           <div className="p-3 bg-white/[0.01] border border-white/[0.04] rounded-lg flex items-start gap-2.5">
             <Info className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
             <div className="text-[10px] text-slate-400 leading-relaxed">
-              <span className="font-bold text-white">How it works:</span> Geometric Brownian Motion (GBM) is a continuous-time stochastic process in which the logarithm of the randomly varying quantity (stock price) follows a Brownian motion with drift. 
-              The simulation runs 1,000 independent random paths based on the stock's 1-year historical drift (drift μ = {fmt(stats.ann_drift_pct)}%) and volatility (volatility σ = {fmt(stats.ann_volatility_pct)}%). 
-              The shaded areas show the distribution: 50% of the simulated paths finished within the darker blue region, and 95% finished within the lighter blue region. The purple lines show a random selection of 5 individual paths.
+              <span className="font-bold text-white">Institutional Methodology:</span> {mode === 'bootstrap' ? (
+                <span>
+                  <strong>Historical Bootstrapping (Non-Parametric)</strong> draws random daily returns directly from {ticker}&apos;s empirical trading history with replacement. 
+                  This inherently preserves real-world fat tails, flash crashes, earnings gaps, and skewness without imposing an artificial Gaussian normal distribution.
+                </span>
+              ) : (
+                <span>
+                  <strong>Geometric Brownian Motion with Student-t Fat Tails (ν=5)</strong> simulates stochastic price paths using standardized Student-t shocks. 
+                  The simulation uses direct log-space stepping to eliminate double volatility drag. To protect against Merton estimation risk, Bayesian shrinkage scales the 
+                  annualized drift (μ = {fmt(stats.ann_drift_pct)}%) toward long-term market equilibrium prior (12%) as the horizon expands.
+                </span>
+              )}
             </div>
           </div>
         </div>

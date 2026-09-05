@@ -17,16 +17,22 @@ import InfoBadge from './InfoBadge';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
 
-function fmt(v, dec = 2) {
+function fmt(v, dec = 2, loc = 'en-IN') {
   if (v === null || v === undefined) return '—';
-  return typeof v === 'number' ? v.toLocaleString('en-IN', { maximumFractionDigits: dec }) : v;
+  return typeof v === 'number' ? v.toLocaleString(loc, { maximumFractionDigits: dec }) : v;
 }
 
-function formatVolume(volume) {
+function formatVolume(volume, isUS = false) {
   if (!volume) return '—';
+  if (isUS) {
+    if (volume >= 1e9) return `${(volume / 1e9).toFixed(2)} B`;
+    if (volume >= 1e6) return `${(volume / 1e6).toFixed(2)} M`;
+    if (volume >= 1e3) return `${(volume / 1e3).toFixed(2)} K`;
+    return fmt(volume, 0, 'en-US');
+  }
   if (volume >= 1e7) return `${(volume / 1e7).toFixed(2)} Cr`;
   if (volume >= 1e5) return `${(volume / 1e5).toFixed(2)} L`;
-  return fmt(volume, 0);
+  return fmt(volume, 0, 'en-IN');
 }
 
 const StatusIndicator = ({ error, loading, priceDate }) => {
@@ -65,7 +71,7 @@ const StatusIndicator = ({ error, loading, priceDate }) => {
   );
 };
 
-const PriceChangeIndicator = ({ change, changePct }) => {
+const PriceChangeIndicator = ({ change, changePct, loc = 'en-IN' }) => {
   const isPositive = change >= 0;
   const Icon = isPositive ? TrendingUp : TrendingDown;
   
@@ -75,7 +81,7 @@ const PriceChangeIndicator = ({ change, changePct }) => {
     }`}>
       <Icon className="h-5 w-5" />
       <span>
-        {isPositive ? '+' : ''}{fmt(changePct, 2)}%
+        {isPositive ? '+' : ''}{fmt(changePct, 2, loc)}%
       </span>
     </div>
   );
@@ -103,7 +109,7 @@ const MetricCard = ({ label, value, subtitle, color = 'text-slate-200', icon: Ic
   </div>
 );
 
-const DayRangeBar = ({ dayHigh, dayLow, currentPrice }) => {
+const DayRangeBar = ({ dayHigh, dayLow, currentPrice, currSym = '₹', loc = 'en-IN' }) => {
   if (!dayHigh || !dayLow || !currentPrice) return null;
   
   const range = dayHigh - dayLow;
@@ -116,11 +122,11 @@ const DayRangeBar = ({ dayHigh, dayLow, currentPrice }) => {
           <span className="font-medium">Day Range</span>
           <InfoBadge infoKey="day_range" />
         </div>
-        <span className="font-semibold text-slate-200">₹{fmt(currentPrice)}</span>
+        <span className="font-semibold text-slate-200">{currSym}{fmt(currentPrice, 2, loc)}</span>
       </div>
       <div className="flex justify-between text-[11px] text-slate-500 mb-1.5 font-mono">
-        <span>Low: ₹{fmt(dayLow)}</span>
-        <span>High: ₹{fmt(dayHigh)}</span>
+        <span>Low: {currSym}{fmt(dayLow, 2, loc)}</span>
+        <span>High: {currSym}{fmt(dayHigh, 2, loc)}</span>
       </div>
       <div className="relative h-2 bg-slate-800 rounded-full overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-red-500/30 via-yellow-500/30 to-emerald-500/30 rounded-full" />
@@ -141,6 +147,10 @@ export default function LivePrice({ ticker }) {
   const timerRef = useRef(null);
   const abortControllerRef = useRef(null);
   const [isStarred, setIsStarred] = useState(false);
+
+  const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
+  const currSym = quote?.currency_symbol || (isUS ? '$' : '₹');
+  const loc = isUS ? 'en-US' : 'en-IN';
 
   // Sync star status from localStorage
   useEffect(() => {
@@ -279,16 +289,17 @@ export default function LivePrice({ ticker }) {
                   {quote.ticker}
                 </p>
                 <p className="text-4xl font-black text-white tracking-tight">
-                  ₹{fmt(quote.price)}
+                  {currSym}{fmt(quote.price, 2, loc)}
                 </p>
               </div>
               <div className="pb-1">
                 <PriceChangeIndicator 
                   change={quote.change} 
-                  changePct={quote.changePct} 
+                  changePct={quote.changePct}
+                  loc={loc}
                 />
                 <p className={`text-sm font-semibold ${up ? 'text-emerald-500' : 'text-red-500'}`}>
-                  {quote.change >= 0 ? '+' : ''}₹{fmt(quote.change)} today
+                  {quote.change >= 0 ? '+' : ''}{currSym}{fmt(quote.change, 2, loc)} today
                 </p>
               </div>
             </div>
@@ -297,28 +308,28 @@ export default function LivePrice({ ticker }) {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
               <MetricCard
                 label="Prev Close"
-                value={`₹${fmt(quote.prevClose)}`}
+                value={`${currSym}${fmt(quote.prevClose, 2, loc)}`}
                 subtitle="yesterday"
                 icon={Activity}
                 infoKey="prev_close"
               />
               <MetricCard
                 label="Day High"
-                value={`₹${fmt(quote.dayHigh)}`}
+                value={`${currSym}${fmt(quote.dayHigh, 2, loc)}`}
                 color="text-emerald-400"
                 icon={TrendingUp}
-                infoKey="day_range"
+                infoKey="day_high"
               />
               <MetricCard
                 label="Day Low"
-                value={`₹${fmt(quote.dayLow)}`}
+                value={`${currSym}${fmt(quote.dayLow, 2, loc)}`}
                 color="text-red-400"
                 icon={TrendingDown}
-                infoKey="day_range"
+                infoKey="day_low"
               />
               <MetricCard
                 label="Volume"
-                value={formatVolume(quote.volume)}
+                value={formatVolume(quote.volume, isUS)}
                 subtitle="today"
                 icon={BarChart3}
                 infoKey="volume"
@@ -330,6 +341,8 @@ export default function LivePrice({ ticker }) {
               dayHigh={quote.dayHigh}
               dayLow={quote.dayLow}
               currentPrice={quote.price}
+              currSym={currSym}
+              loc={loc}
             />
 
             {/* Footer */}

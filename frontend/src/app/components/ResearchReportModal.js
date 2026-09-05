@@ -34,11 +34,13 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
       fetch(`${API_BASE_URL}/api/fundamentals?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null)
     ]).then(([quote, valuation, fundamentals]) => {
       if (!isMounted) return;
+      const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
+      const loc = isUS ? 'en-US' : 'en-IN';
       setData({
         quote,
         valuation,
         fundamentals,
-        generatedAt: new Date().toLocaleString('en-IN', {
+        generatedAt: new Date().toLocaleString(loc, {
           dateStyle: 'medium',
           timeStyle: 'short'
         })
@@ -55,9 +57,12 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
     window.print();
   };
 
+  const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
   const q = data?.quote || {};
   const v = data?.valuation || {};
   const f = data?.fundamentals || {};
+  const currSym = q.currency_symbol || (isUS ? '$' : '₹');
+  const loc = isUS ? 'en-US' : 'en-IN';
 
   return (
     <div 
@@ -130,7 +135,7 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
                 <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] print:border-slate-300">
                   <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Current Price</span>
                   <span className="text-xl font-bold text-white print:text-black">
-                    ₹{q.price ? q.price.toLocaleString('en-IN') : '—'}
+                    {currSym}{q.price ? q.price.toLocaleString(loc) : '—'}
                   </span>
                   <span className={`text-xs block mt-1 font-semibold ${(q.change || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {(q.change || 0) >= 0 ? '+' : ''}{q.change ? q.change.toFixed(2) : 0} ({q.changePct ? q.changePct.toFixed(2) : 0}%)
@@ -140,7 +145,7 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
                 <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] print:border-slate-300">
                   <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">DCF Fair Value</span>
                   <span className="text-xl font-bold text-white print:text-black">
-                    {v.fair_value ? `₹${v.fair_value.toLocaleString('en-IN')}` : '—'}
+                    {v.fair_value ? `${currSym}${v.fair_value.toLocaleString(loc)}` : '—'}
                   </span>
                   <span className={`text-xs block mt-1 font-semibold ${(v.upside_downside || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {(v.upside_downside || 0) >= 0 ? '+' : ''}{v.upside_downside ? v.upside_downside.toFixed(1) : '—'}% Fair Value Gap
@@ -150,7 +155,7 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
                 <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] print:border-slate-300">
                   <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">52W Range</span>
                   <span className="text-xs font-bold text-white print:text-black block mt-1">
-                    ₹{q.fiftyTwoWeekLow ? q.fiftyTwoWeekLow.toLocaleString('en-IN') : '—'} - ₹{q.fiftyTwoWeekHigh ? q.fiftyTwoWeekHigh.toLocaleString('en-IN') : '—'}
+                    {currSym}{q.fiftyTwoWeekLow ? q.fiftyTwoWeekLow.toLocaleString(loc) : '—'} - {currSym}{q.fiftyTwoWeekHigh ? q.fiftyTwoWeekHigh.toLocaleString(loc) : '—'}
                   </span>
                   <span className="text-[10px] text-slate-400 block mt-1">Annual Volatility Corridor</span>
                 </div>
@@ -207,7 +212,7 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
                       <strong>Valuation Horizon:</strong> The DCF model projects intrinsic worth based on free cash flows discounted at a normalized Cost of Equity. The gap indicates potential medium-to-long term margin of safety.
                     </p>
                     <p>
-                      <strong>Volatility Profiling:</strong> Operating within a 52-week corridor of ₹{q.fiftyTwoWeekLow?.toFixed(0) || '—'} to ₹{q.fiftyTwoWeekHigh?.toFixed(0) || '—'}. Positioned at {
+                      <strong>Volatility Profiling:</strong> Operating within a 52-week corridor of {currSym}{q.fiftyTwoWeekLow?.toFixed(0) || '—'} to {currSym}{q.fiftyTwoWeekHigh?.toFixed(0) || '—'}. Positioned at {
                         q.price && q.fiftyTwoWeekHigh
                           ? `${(((q.fiftyTwoWeekHigh - q.price) / q.fiftyTwoWeekHigh) * 100).toFixed(1)}% below annual peak.`
                           : 'balanced distribution.'

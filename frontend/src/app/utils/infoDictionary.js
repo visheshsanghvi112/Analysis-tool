@@ -1,200 +1,295 @@
 // ==============================================================================
 // StockIQ Pro — Institutional Financial Dictionary for InfoBadges (ⓘ)
-// Concise definitions, strategic institutional rationale, and interpretation rules.
+// Fully audited and cross-verified against backend algorithms & frontend components.
+// Crisp definitions, quantitative mathematical rationale, and actionable rules of thumb.
 // ==============================================================================
 
 export const INFO_DICTIONARY = {
-  // ── Dashboard Overview & Status Badges ─────────────────────────────────────
+  // ── 1. Dashboard Status Row & Overview ───────────────────────────────────────
   live_prices: {
-    title: 'Real-Time Price & Market Feeds',
-    what: 'Live intraday market quotes reflecting current transactions on the NSE and BSE.',
-    why: 'Enables precise trade timing, slippage minimization, and accurate mark-to-market valuation.',
-    interpretation: 'Official exchange feeds operate with a standard ~15-minute delay for retail feeds.'
+    title: 'Real-Time Market Feeds & Intraday Quote',
+    what: 'Live intraday market transaction feed for NSE & BSE securities fetched via high-frequency pricing proxies with ~15-minute standard exchange latency.',
+    why: 'Precision trade timing, slippage minimization, and accurate mark-to-market portfolio valuation require current benchmark price awareness.',
+    interpretation: 'Always assess intraday quotes in context with trading volume to confirm whether price swings reflect genuine institutional flow.'
   },
   ml_predictions: {
     title: 'Machine Learning Directional Forecasting',
-    what: 'A 6-model ensemble (Random Forest, Gradient Boosting, XGBoost, LightGBM, Extra Trees, Ridge) predicting 5-day price trajectories.',
-    why: 'Captures non-linear feature interactions across price momentum, volume volatility, and sentiment.',
-    interpretation: 'Look for ensemble agreement across models and high directional probability (>65%).'
+    what: 'A 6-model diverse stacked ensemble (Random Forest, Gradient Boosting, Extra Trees, Bayesian Ridge, XGBoost, LightGBM) blended with a Ridge meta-model and news sentiment fusion to forecast 5-day directional returns.',
+    why: 'Single models suffer from individual inductive bias; stacking diverse tree architectures with Bayesian linear regularizers eliminates overfitting and captures non-linear momentum patterns.',
+    interpretation: 'High predictive reliability requires consensus (>65% directional probability) across both tree-based models and the meta-learner.'
   },
   news_intelligence: {
     title: 'Scrapling Live News & Corporate Catalyst Engine',
-    what: 'Real-time scraping and deep-reading of financial articles with corporate catalyst extraction and sentiment analysis.',
-    why: 'Fundamental price shocks originate from corporate announcements, order wins, and regulatory probes before appearing on price charts.',
-    interpretation: 'Bullish catalysts (order wins, rating upgrades) drive positive momentum; regulatory flags warrant caution.'
+    what: 'Real-time full-text article reading powered by Scrapling, classifying financial sentiment and automatically isolating high-impact corporate catalysts (order wins, earnings revisions, regulatory probes).',
+    why: 'Material fundamental price shifts originate from corporate announcements and executive actions well before appearing on quantitative price charts.',
+    interpretation: 'An Impact Score > 75 coupled with Bullish Catalysts signals institutional re-rating; regulatory or governance flags warrant immediate defensive hedging.'
   },
   risk_analytics: {
-    title: 'Quantitative Risk & Tail-Risk Analytics',
-    what: 'Stochastic risk assessment incorporating Value at Risk (VaR), Maximum Drawdown, and Beta sensitivity.',
-    why: 'Institutional capital preservation requires understanding extreme downside loss potential during market dislocations.',
-    interpretation: 'Lower VaR and beta values indicate lower vulnerability to broader market crashes.'
+    title: 'Quantitative Risk & Sensitivity Suite',
+    what: 'Multi-factor risk diagnostic suite calculating 1-Day Historical Value at Risk (95% & 99%), Maximum Peak-to-Trough Drawdown, Beta vs. NIFTY 50, Tracking Error, and Black-Scholes Options Greeks.',
+    why: 'Institutional risk management focuses on tail-risk preservation: knowing your maximum probable capital drawdowns under volatile market regimes.',
+    interpretation: 'Target a Sharpe Ratio > 1.0, 95% Daily VaR < 3.0%, and a Beta aligned with your portfolio risk tolerance (<0.8 defensive, >1.2 aggressive).'
   },
 
-  // ── Live Price & Intraday Metrics ──────────────────────────────────────────
+  // ── 2. Live Price & Intraday Metrics ──────────────────────────────────────────
   prev_close: {
-    title: 'Previous Close',
-    what: 'The final traded benchmark price of the asset at the end of the previous trading session.',
-    why: 'Serves as the zero-baseline for calculating daily price change and intraday percentage gains.',
-    interpretation: 'Opening substantially above previous close indicates overnight buying pressure (gap up).'
+    title: 'Previous Close Benchmark',
+    what: 'The final official traded price of the security recorded at the 3:30 PM IST market close of the preceding trading session.',
+    why: 'Serves as the absolute zero-reference point for calculating daily rupee gain/loss, intraday percentage change, and market gap-ups/gap-downs.',
+    interpretation: 'Opening substantially above previous close indicates overnight institutional accumulation; opening below signals overnight distribution.'
+  },
+  day_high: {
+    title: 'Day High (Session Peak Resistance)',
+    what: 'The highest traded price of the security recorded during the current market session.',
+    why: 'Marks the session\'s psychological resistance ceiling where supply temporarily overwhelmed buyer demand.',
+    interpretation: 'Consolidating within 0.5% of the day high signals aggressive institutional accumulation with high breakout probability.'
+  },
+  day_low: {
+    title: 'Day Low (Session Floor Support)',
+    what: 'The lowest traded price of the security recorded during the current market session.',
+    why: 'Marks the session\'s primary support floor where value-oriented buyers stepped in to absorb selling pressure.',
+    interpretation: 'A rapid recovery bounce off the day low confirms institutional bids defending key technical price levels.'
   },
   day_range: {
-    title: 'Day High & Day Low (Intraday Range)',
-    what: 'The maximum and minimum transaction prices recorded during the current trading session.',
-    why: 'Measures intraday price volatility and identifies local support (low) and resistance (high) levels.',
-    interpretation: 'Trading near the day high signifies persistent buyer strength throughout the session.'
+    title: 'Intraday Trading Range & Volatility Spread',
+    what: 'The full percentage spread between the day\'s lowest and highest traded prices, along with current price position inside that band.',
+    why: 'Measures intraday volatility expansion and reveals whether buyers or sellers are controlling the session close.',
+    interpretation: 'Current price holding above the 70th percentile of the day range reflects persistent buyer dominance into the close.'
   },
   volume: {
-    title: 'Trading Volume',
-    what: 'Total number of shares or units exchanged between buyers and sellers during the session.',
-    why: 'Volume validates price trends: price moves on high volume indicate institutional participation.',
-    interpretation: 'A breakout on 2x+ average volume confirms strong institutional conviction.'
+    title: 'Intraday Trading Volume & Conviction',
+    what: 'The cumulative count of shares transacted across all executed orders during the active trading day.',
+    why: 'Volume validates price discovery: breakouts on 2× or higher average daily volume confirm institutional participation and sustainability.',
+    interpretation: 'Price rallies on below-average volume often represent weak "low-liquidity drifts" vulnerable to sudden reversals.'
   },
   range_52w: {
-    title: '52-Week High & Low',
-    what: 'The highest and lowest price points reached by the security over the trailing 12 months.',
-    why: 'Represents critical long-term psychological resistance and value support zones.',
-    interpretation: 'Stocks near 52-week highs frequently demonstrate strong relative momentum (52-week high momentum anomaly).'
-  },
-  market_cap: {
-    title: 'Market Capitalization',
-    what: 'Total rupee market value of a company’s outstanding shares (Share Price × Outstanding Shares).',
-    why: 'Defines asset scale, liquidity profile, and index categorization (Large-Cap, Mid-Cap, Small-Cap).',
-    interpretation: 'Large-caps (>₹20,000 Cr) offer stability; mid/small-caps offer higher growth potential with increased volatility.'
+    title: '52-Week High & Low Range',
+    what: 'The extreme boundary prices registered by the security across the trailing 252 market trading days.',
+    why: 'Represents fundamental long-term institutional valuation boundaries and key psychological breakout levels.',
+    interpretation: 'Stocks breaking out to fresh 52-week highs frequently exhibit sustained momentum driven by structural business growth.'
   },
 
-  // ── Technical Analysis & Chart Indicators ──────────────────────────────────
+  // ── 3. Interactive Chart & Technical Indicators ──────────────────────────────
   candlestick_chart: {
-    title: 'Interactive Candlestick Terminal',
-    what: 'Visual representation displaying Open, High, Low, and Close (OHLC) prices across discrete time frames.',
-    why: 'Provides deep visual insights into market sentiment, buyer-seller battles, and chart patterns.',
-    interpretation: 'Green bars indicate net accumulation; red bars indicate net distribution or selling.'
-  },
-  sma_indicators: {
-    title: 'Simple Moving Averages (SMA 20 & 50)',
-    what: 'Arithmetic average of closing prices over trailing 20 and 50 trading days.',
-    why: 'Smooths out short-term price noise to reveal prevailing medium-term trend direction.',
-    interpretation: 'Price trading above both SMAs indicates a strong uptrend; a Golden Cross (SMA 20 > SMA 50) is a bullish buy signal.'
-  },
-  bollinger_bands: {
-    title: 'Bollinger Bands (20, 2σ)',
-    what: 'A 20-period moving average flanked by upper and lower bands set 2 standard deviations away.',
-    why: 'Dynamically adapts to market volatility, identifying statistically overbought and oversold conditions.',
-    interpretation: 'Touching the upper band signals potential overextension; a squeeze (narrowing bands) precedes high volatility breakouts.'
+    title: 'Interactive OHLC Candlestick Terminal',
+    what: 'High-resolution price chart depicting Open, High, Low, and Close (OHLC) values across configurable intraday and multi-year timeframes.',
+    why: 'Candlestick bodies and wicks reveal the real-time balance of power between institutional buyers and profit-taking sellers.',
+    interpretation: 'Long lower wicks indicate strong dip-buying; full-bodied candles closing near highs signify decisive trend continuation.'
   },
   rsi_indicator: {
     title: 'Relative Strength Index (RSI 14)',
-    what: 'A momentum oscillator measuring the speed and velocity of recent price changes on a scale of 0 to 100.',
-    why: 'Identifies overbought (>70) and oversold (<30) market conditions and bullish/bearish divergences.',
-    interpretation: 'RSI > 70 suggests extended rally and potential pullback; RSI < 30 indicates deeply discounted selling.'
+    what: 'A 14-period momentum oscillator that calculates the velocity and magnitude of recent price advances versus declines on a 0–100 scale.',
+    why: 'Identifies overextended momentum conditions and detects early trend divergences between price action and momentum.',
+    interpretation: 'RSI > 70 denotes overbought conditions (watch for mean reversion); RSI < 30 indicates oversold territory; divergence warns of trend reversal.'
   },
   macd_indicator: {
     title: 'MACD (Moving Average Convergence Divergence)',
-    what: 'Trend-following momentum indicator displaying the relationship between the 12-day and 26-day EMAs.',
-    why: 'Detects changes in the strength, direction, momentum, and duration of an emerging trend.',
-    interpretation: 'MACD line crossing above Signal line generates a bullish entry signal; histogram expansion confirms momentum.'
+    what: 'Trend-following momentum indicator displaying the divergence between the 12-day and 26-day EMAs, paired with a 9-day exponential signal line.',
+    why: 'Filters out short-term market noise to isolate accelerating medium-term momentum and structural trend shifts.',
+    interpretation: 'MACD crossing above Signal line generates a bullish entry; expanding histogram confirms accelerating momentum.'
+  },
+  adx_indicator: {
+    title: 'Average Directional Index (ADX 14)',
+    what: 'A 14-period non-directional trend strength oscillator measuring the absolute intensity of prevailing market direction from 0 to 100.',
+    why: 'Distinguishes between genuine trending market phases and choppy sideways consolidations where momentum indicators fail.',
+    interpretation: 'ADX < 15 indicates no trend; 15–25 reflects a developing trend; ADX > 25 confirms a strong trend optimal for breakout strategies.'
   },
 
-  // ── Machine Learning & Regime Forecasting ──────────────────────────────────
+  // ── 4. Machine Learning & Quantitative Regimes ─────────────────────────────
   ml_ensemble: {
-    title: '6-Model Machine Learning Ensemble',
-    what: 'Aggregates predictions from Random Forest, Gradient Boosting, XGBoost, LightGBM, Extra Trees, and Ridge regression.',
-    why: 'Ensemble models significantly outperform single models by reducing variance, eliminating bias, and preventing overfitting.',
-    interpretation: 'High model consensus (e.g. 5/6 models predicting UP) indicates high predictive reliability.'
+    title: '6-Model Stacked ML Ensemble Architecture',
+    what: 'A production machine learning pipeline combining Random Forest (200 trees), Gradient Boosting, Extra Trees, Bayesian Ridge, XGBoost, and LightGBM, fused via a Ridge meta-estimator and news sentiment weighting.',
+    why: 'Ensembling non-correlated regressors reduces generalization variance, prevents single-model hallucination, and elevates directional forecast accuracy.',
+    interpretation: 'Review the consensus breakdown: agreement across 5+ models with tight confidence bounds indicates strong statistical edge.'
   },
   markov_regime: {
-    title: 'Hidden Markov Model (HMM) Regime Detection',
-    what: 'Probabilistic framework classifying the asset into Bullish, Bearish, or Sideways/Volatile regimes.',
-    why: 'Trading strategies that work in trending bull markets fail during high-volatility sideways regimes.',
-    interpretation: 'Align your strategy with the detected regime: trend-following in Bull regimes, capital defense in Volatile regimes.'
+    title: '3-State Gaussian Hidden Markov Model (HMM)',
+    what: 'Unsupervised machine learning model fitting a 3-state Gaussian HMM to historical return variance to classify latent market states: Low Volatility, Medium Volatility, or High Volatility / Trending.',
+    why: 'Quantitative strategies perform radically differently across regimes; trend-following works in low-to-medium volatility but suffers severe whipsaws in high-volatility regimes.',
+    interpretation: 'In Low Volatility regimes, position sizing can be maximized; in High Volatility regimes, reduce capital allocation and widen trailing stops.'
   },
 
-  // ── Fundamental Valuation & Forensics ──────────────────────────────────────
+  // ── 5. Portfolio Risk & Market Sensitivity ──────────────────────────────────
+  risk_assessment: {
+    title: 'Empirical Volatility & Tail Risk Diagnostics',
+    what: 'Rigorous quantitative downside risk diagnostics: 1-Day Value at Risk at 95% & 99% confidence, Conditional Expected Shortfall, Peak-to-Trough Drawdown, Annualized Volatility, and Return Skewness.',
+    why: 'Standard volatility metrics assume normal Gaussian distributions; tail-risk metrics capture the true catastrophic impact of fat-tailed market crash events.',
+    interpretation: 'A 95% 1-Day VaR < 2.5% indicates manageable daily downside; negative skewness warns of rare but severe downside shock events.'
+  },
+  market_relationship: {
+    title: 'Benchmark Co-Movement & Sensitivity (vs. NIFTY 50)',
+    what: 'Statistical co-movement metrics calculated against the benchmark NIFTY 50 (^NSEI) index over the trailing 252 trading days: Beta, Pearson Correlation, Tracking Error, and Information Ratio.',
+    why: 'Identifies whether an asset acts as an aggressive market amplifier, a defensive diversifier, or generates genuine active alpha.',
+    interpretation: 'Beta = 1.0 mirrors the index; Beta < 0.8 is defensive; an Information Ratio > 0.5 confirms active return generation relative to tracking error.'
+  },
+  options_pricing: {
+    title: 'Black-Scholes Options Pricing & Greeks (30D ATM)',
+    what: 'Closed-form analytical European option pricing using the Black-Scholes PDE solver: computes fair call/put premiums, Delta, Gamma, Theta, Vega, and implied volatility with a 6.5% RBI benchmark risk-free rate.',
+    why: 'Essential for quantitative portfolio hedging: enables institutional investors to calculate the exact cost of protective put options and analyze delta sensitivity.',
+    interpretation: 'ATM Call/Put Delta is ~0.50; elevated option prices relative to historical volatility indicate high market-expected volatility ahead.'
+  },
+  sharpe_sortino: {
+    title: 'Risk-Adjusted Return Metrics (Sharpe & Sortino)',
+    what: 'Sharpe measures excess return per unit of total risk above a 6.5% risk-free rate; Sortino penalizes only harmful downside volatility.',
+    why: 'Distinguishes genuine portfolio alpha from lucky gains achieved by taking reckless tail risks.',
+    interpretation: 'Sharpe > 1.0 is good; Sharpe > 2.0 is elite; Sortino significantly higher than Sharpe indicates favorable upside volatility.'
+  },
+  beta_alpha: {
+    title: 'Beta & Jensen’s Alpha Benchmark',
+    what: 'Beta quantifies systematic market sensitivity against NIFTY 50; Jensen’s Alpha measures annualized excess return above the Capital Asset Pricing Model (CAPM) expectation.',
+    why: 'Active management fees and stock selection are only justified if the manager generates positive Jensen’s Alpha.',
+    interpretation: 'Positive Alpha (>0%) indicates the security is outperforming its risk-adjusted benchmark; Beta < 1.0 provides downside protection.'
+  },
+
+  // ── 6. Quantitative Backtesting & Monte Carlo ──────────────────────────────
+  strategy_backtesting: {
+    title: 'Dual-Momentum (RSI + MACD) + Dynamic ATR Trailing Stop',
+    what: 'Systematic algorithmic backtester: enters long on either trend resumption (MACD cross with healthy RSI 40–68) or oversold rebound (RSI > 35 with expanding MACD histogram). Exits on RSI > 70 overbought, MACD bearish cross, or dynamic 2.0× ATR trailing stop-loss, incorporating 15 bps roundtrip friction.',
+    why: 'Validates whether systematic trading rules produce positive net expectancy after real-world slippage, STT/taxes, and execution latency before risking capital.',
+    interpretation: 'Look for Strategy Alpha > 0%, Sortino Ratio > 1.0, and smaller peak-to-trough drawdown and underwater duration than the market benchmark.'
+  },
+  strategy_alpha: {
+    title: 'Strategy Alpha vs. Buy & Hold Benchmark',
+    what: 'The net percentage outperformance of the quantitative trading strategy relative to simply holding the underlying stock over the identical lookback window.',
+    why: 'Active trading incurs execution friction and tax events; positive alpha proves the rules systematically bypassed bear markets and preserved capital.',
+    interpretation: 'Alpha > 0% demonstrates the strategy avoided major drawdowns while capturing the core compound growth of the security.'
+  },
+  monte_carlo_var: {
+    title: 'Monte Carlo Value-at-Risk (VaR 95% & 99%)',
+    what: 'The maximum percentage loss expected over the chosen horizon at a 95% (or 99%) confidence level across 1,000 simulated stochastic price paths.',
+    why: 'Required by institutional risk standards (Basel III / FRTB): establishes the capital reserve needed to survive 19 out of 20 market scenarios.',
+    interpretation: 'A 95% Horizon VaR of 15% means there is only a 5% statistical probability of losing more than 15% over the investment horizon.'
+  },
+  expected_shortfall: {
+    title: 'Conditional VaR (CVaR) / Expected Shortfall',
+    what: 'The average percentage loss sustained specifically in the catastrophic worst 5% of simulated market outcomes (beyond the 95% VaR threshold).',
+    why: 'Standard VaR ignores the severity of losses in the tail; Expected Shortfall measures the true severity of a Black Swan market crash or tail event.',
+    interpretation: 'A large gap between VaR and Expected Shortfall indicates high fat-tail risk (kurtosis) where crashes are particularly devastating.'
+  },
+  historical_bootstrap: {
+    title: 'Non-Parametric Historical Bootstrapping',
+    what: 'Generates forward price paths by resampling actual historical daily returns with replacement, without assuming any theoretical mathematical distribution.',
+    why: 'Stock markets exhibit real-world fat tails, skewness, and sudden jumps that standard Gaussian models fail to capture; bootstrapping inherits the true empirical distribution of the security.',
+    interpretation: 'Use Historical Bootstrap alongside Geometric Brownian Motion (GBM) to contrast theoretical projections with empirical historical reality.'
+  },
+  drift_shrinkage: {
+    title: 'Bayesian Drift Shrinkage (Merton Estimation Risk Control)',
+    what: 'Intelligently regularizes the stock\'s noisy sample return toward a 12% long-term market equity equilibrium prior, scaling shrinkage intensity with horizon length.',
+    why: 'Historical sample mean return has massive standard error (Merton, 1980). Unconstrained momentum causes runaway multi-year exponential absurdity or unwarranted bankruptcy projections.',
+    interpretation: 'Higher shrinkage alpha on 3Y/5Y horizons stabilizes multi-year projections against short-term momentum overfitting.'
+  },
+  horizon_probabilities: {
+    title: 'Horizon Outcome Probabilities (Empirical Distribution)',
+    what: 'Outcome probabilities derived from 1,000 simulated forward paths, computing exact odds of the stock finishing UP, Gain ≥ 5%, 10%, 20%, or Loss ≥ 5%, 10%, 20%.',
+    why: 'Enables asymmetric risk-to-reward profiling before entering swing positions or structuring option spreads.',
+    interpretation: 'Prob(UP) > 60% with upside probabilities heavily outweighing downside loss odds confirms an attractive risk-reward profile.'
+  },
+
+  // ── 7. Peer-to-Peer Duel & Wealth Compounding ────────────────────────────────
+  peer_valuation: {
+    title: 'Head-to-Head Peer Performance & Risk Duel',
+    what: 'Direct competitive comparison benchmarking multi-timeframe returns (1M, 3M, 6M, 1Y), Sharpe ratio, annualized volatility, and RSI momentum against industry sector rivals.',
+    why: 'Isolates true sector alpha: reveals whether a stock\'s momentum is driven by internal operational excellence or simply floating on broad sector tailwinds.',
+    interpretation: 'The superior peer displays higher trailing return and Sharpe ratio (>1.0) paired with lower annualized risk volatility.'
+  },
+  sip_calculator: {
+    title: 'SIP Compounding & Newton-Raphson XIRR Engine',
+    what: 'Simulates Systematic Investment Plan (SIP) monthly wealth accumulation and calculates the exact Extended Internal Rate of Return (XIRR) using numerical Newton-Raphson iteration.',
+    why: 'Dollar-cost averaging systematically buys more units during market drawdowns, removing emotional market timing and unleashing geometric compounding.',
+    interpretation: 'Wealth creation is heavily back-loaded: over a 15–20 year horizon, compound returns typically generate 2× to 4× the cumulative principal invested.'
+  },
+  mpt_efficient_frontier: {
+    title: 'Markowitz Efficient Frontier & SLSQP Portfolio Optimizer',
+    what: 'Solves constrained quadratic optimization problems (using SLSQP) across your holdings\' historical covariance matrix to locate the mathematical Maximum Sharpe (tangency) and Minimum Volatility portfolios.',
+    why: 'Harry Markowitz proved diversification is the only "free lunch" in finance: combining non-correlated assets reduces portfolio variance without sacrificing expected return.',
+    interpretation: 'Portfolios on the upper frontier curve dominate all sub-optimal allocations; align weights with the Max Sharpe portfolio to optimize risk-adjusted growth.'
+  },
+
+  // ── 8. Fundamental Valuation & Corporate Health ─────────────────────────────
   dcf_valuation: {
-    title: 'Discounted Cash Flow (DCF) Model',
-    what: 'Estimates intrinsic fair value by projecting Free Cash Flows to Firm (FCFF) and discounting them via WACC.',
-    why: 'The gold standard of corporate finance: values a business based on its true cash generation power rather than market hype.',
-    interpretation: 'Intrinsic Value > Current Price indicates an undervalued asset offering a Margin of Safety.'
-  },
-  piotroski_f_score: {
-    title: 'Piotroski F-Score (0–9)',
-    what: 'A 9-point fundamental financial strength score evaluating profitability, leverage, liquidity, and operating efficiency.',
-    why: 'Identifies fundamentally improving value companies while filtering out value traps.',
-    interpretation: 'Scores of 8–9 indicate stellar financial health; scores 0–2 indicate critical operational distress.'
-  },
-  altman_z_score: {
-    title: 'Altman Z-Score (Credit & Solvency)',
-    what: 'A multivariate formula combining working capital, retained earnings, EBIT, market value, and sales.',
-    why: 'Predicts probability of corporate insolvency or bankruptcy within a 2-year horizon.',
-    interpretation: 'Z > 2.99 = Safe Zone; 1.81–2.99 = Grey Zone; Z < 1.81 = High Distress / Bankruptcy Risk.'
-  },
-  beneish_m_score: {
-    title: 'Beneish M-Score (Forensic Accounting)',
-    what: 'Mathematical model detecting whether a company is actively manipulating its reported financial earnings.',
-    why: 'Protects investors from accounting fraud, aggressive revenue recognition, and hidden corporate rot.',
-    interpretation: 'M-Score < -1.78 suggests clean accounting; M-Score > -1.78 signals high probability of earnings manipulation.'
+    title: 'Discounted Cash Flow (DCF) & Margin of Safety',
+    what: 'Computes intrinsic enterprise value by forecasting 5-year Free Cash Flows, discounting via the Weighted Average Cost of Capital (WACC), and adding discounted terminal value.',
+    why: 'The gold standard of institutional valuation: values a business based on its true cash generation power rather than speculative market multiples.',
+    interpretation: 'Intrinsic Value > Current Price yields a positive Margin of Safety (>15% provides a protective buffer against forecast errors).'
   },
   dupont_analysis: {
     title: 'DuPont 3-Stage ROE Decomposition',
     what: 'Decomposes Return on Equity (ROE) into Net Profit Margin × Asset Turnover × Financial Leverage.',
-    why: 'Reveals whether profitability is driven by true operating efficiency, rapid asset turnover, or dangerous debt leverage.',
-    interpretation: 'High ROE driven by margins and asset turnover is sustainable; high ROE driven purely by debt leverage is hazardous.'
+    why: 'Uncovers whether profitability is powered by genuine operating margins and asset efficiency, or masked by dangerous debt leverage.',
+    interpretation: 'High ROE driven by margins and asset turnover is resilient; high ROE driven predominantly by debt leverage (>3.0×) carries bankruptcy risk.'
+  },
+  graham_number: {
+    title: 'Benjamin Graham Intrinsic Valuation Number',
+    what: 'Classical defensive valuation metric: √(22.5 × Trailing Twelve Month EPS × Book Value Per Share), establishing the maximum conservative purchase price.',
+    why: 'Prevents overpaying for cyclical assets by enforcing simultaneous Price-to-Earnings (P/E ≤ 15) and Price-to-Book (P/B ≤ 1.5) constraints.',
+    interpretation: 'Current Price ≤ Graham Number indicates a deeply undervalued defensive security trading with a strong margin of safety.'
   },
 
-  // ── Portfolio Theory & Risk Simulation ─────────────────────────────────────
-  monte_carlo_var: {
-    title: 'Monte Carlo 10,000-Path VaR Simulation',
-    what: 'Simulates 10,000 forward price paths using Geometric Brownian Motion (GBM) stochastic calculus.',
-    why: 'Models non-linear risk outcomes and severe market shock probabilities beyond normal distributions.',
-    interpretation: '99% VaR specifies the maximum loss expected over the horizon with 99% statistical confidence.'
+  // ── 9. Intraday Trading Desk & Microstructure ────────────────────────────
+  vwap: {
+    title: 'Volume-Weighted Average Price (VWAP)',
+    what: 'The cumulative benchmark price weighted by volume transacted across the active trading session: VWAP = Σ(Typical Price × Volume) / Σ(Volume).',
+    why: 'Used by institutional execution desks and pension funds as the primary liquidity benchmark. Buying below VWAP represents an institutional discount.',
+    interpretation: 'Holding firmly above VWAP signals buyer control (bullish regime); trading below VWAP indicates active seller absorption and resistance.'
   },
-  cvar_expected_shortfall: {
-    title: 'Conditional Value at Risk (CVaR / Expected Shortfall)',
-    what: 'The average loss in the worst 1% or 5% tail of all simulated market paths.',
-    why: 'Measures catastrophic "black swan" tail risk when extreme market crashes occur.',
-    interpretation: 'CVaR reveals the true pain threshold of extreme unexpected crises (e.g. 2008 or March 2020).'
+  vwap_bands: {
+    title: 'VWAP Volatility Envelope (±1σ, ±2σ, ±3σ)',
+    what: 'Standard deviation volatility bands plotted around the session VWAP curve, measuring statistical price dispersion across active intraday volume.',
+    why: 'Institutional market makers treat ±2σ as dynamic statistical value boundaries; prices touching +2σ or -2σ without extreme volume often revert toward VWAP.',
+    interpretation: 'Price tagging the lower -2σ band with bullish reversal candles provides high-probability mean-reversion long entries; breakouts beyond +2σ on high volume indicate trend runs.'
   },
-  sharpe_sortino: {
-    title: 'Sharpe & Sortino Ratios',
-    what: 'Sharpe measures excess return per unit of total risk; Sortino penalizes only downside volatility.',
-    why: 'Distinguishes genuine alpha generation from lucky returns achieved by taking reckless risks.',
-    interpretation: 'Sharpe > 1.0 is considered good; > 2.0 is institutional quality; Sortino > 1.5 shows strong downside protection.'
+  volume_profile: {
+    title: 'Volume Profile (VPVR) & Point of Control (POC)',
+    what: 'A horizontal histogram displaying cumulative trading volume executed at specific price intervals throughout the session, identifying the Point of Control (POC) and the 70% Value Area (VAH/VAL).',
+    why: 'Reveals where institutions actually transacted capital rather than just where prices traveled. POC acts as an institutional liquidity magnet.',
+    interpretation: 'Price testing POC or Value Area Low (VAL) from above typically finds strong responsive buying; trading outside the Value Area represents price discovery.'
   },
-  beta_alpha: {
-    title: 'Beta & Jensen’s Alpha',
-    what: 'Beta measures systematic correlation to Nifty 50; Alpha measures genuine excess return generated beyond benchmark.',
-    why: 'Quantifies whether the manager/stock beats the market on a risk-adjusted basis.',
-    interpretation: 'Beta = 1.0 moves in tandem with market; Beta < 0.8 is defensive; Positive Alpha indicates true outperformance.'
+  camarilla_pivots: {
+    title: 'Camarilla Equation & Institutional Breakout Levels',
+    what: 'A mathematical price-action formula using previous session\'s High, Low, and Close to generate 8 critical inflection levels (H1–H4 and L1–L4).',
+    why: 'Designed specifically for intraday scalping and mean-reversion: L3 and H3 act as institutional reversal bounds, while L4 and H4 trigger explosive trend breakouts.',
+    interpretation: 'Look for long entries around L3 with targets at H3; if price breaks above H4 on heavy volume, trade breakout continuation toward H5.'
   },
-  max_drawdown: {
-    title: 'Maximum Historical Drawdown',
-    what: 'The largest observed peak-to-trough percentage drop in asset price before a new peak is attained.',
-    why: 'Crucial for investor psychology and stress-testing capital recovery timeframes.',
-    interpretation: 'Lower drawdowns preserve compounding; a 50% drawdown requires a 100% gain just to break even.'
+  floor_pivots: {
+    title: 'Classic Floor Pivot Points (P, R1–R3, S1–S3)',
+    what: 'Standard floor trader pivot equations calculating the central pivot (P = [H+L+C]/3) and multi-tier geometric support and resistance levels.',
+    why: 'Provides broad intraday reference points watched concurrently by algorithmic order books and human market makers globally.',
+    interpretation: 'Trading above the Central Pivot establishes an intraday bullish bias; S1 and R1 serve as primary session targets and reaction nodes.'
   },
-  mpt_efficient_frontier: {
-    title: 'Markowitz Modern Portfolio Theory (MPT)',
-    what: 'Mathematical framework calculating optimal asset allocations that maximize expected return for a target volatility.',
-    why: 'Diversification is the only "free lunch" in finance: combining uncorrelated assets reduces risk without sacrificing return.',
-    interpretation: 'Portfolios lying on the upper frontier curve are mathematically optimal.'
+  orb_strategy: {
+    title: 'Opening Range Breakout (ORB 15m / 30m)',
+    what: 'The price envelope defined by the absolute High and Low established during the initial 15 or 30 minutes of market opening.',
+    why: 'The opening auction absorbs overnight orders and establishes institutional direction for the remainder of the session.',
+    interpretation: 'A decisive candle close above the 15m High on elevated volume triggers high-probability momentum long trades; failure to break either boundary indicates choppy range-bound trading.'
   },
-
-  // ── Strategy Backtesting & Wealth Planning ─────────────────────────────────
-  strategy_backtesting: {
-    title: 'Algorithmic Strategy Backtester',
-    what: 'Simulates rule-based quantitative trading strategies across historical market data.',
-    why: 'Validates whether an edge truly exists before risking real capital in live market conditions.',
-    interpretation: 'Look for Win Rate > 55%, Profit Factor > 1.5, and low drawdown relative to benchmark buy-and-hold.'
+  supertrend: {
+    title: 'Institutional Intraday Supertrend (10, 3)',
+    what: 'A trend-following volatility indicator that combines median price with an Average True Range (ATR) multiplier (10 periods, 3× multiplier) to construct a dynamic trailing stop line.',
+    why: 'Eliminates emotional whipsaws by offering an unambiguous binary trend status (Green = Bullish Long, Red = Bearish Short) alongside exact risk stops.',
+    interpretation: 'Stay long while price closes above the green trailing band; flip to short or tighten stops immediately when price violates the band to the downside.'
   },
-  sip_calculator: {
-    title: 'SIP & Wealth Compounding Calculator',
-    what: 'Simulates periodic Systematic Investment Plan cash flows compounded across historical asset return distributions.',
-    why: 'Disciplined dollar-cost averaging removes emotional market timing and harnesses exponential compounding.',
-    interpretation: 'Adjust inflation to observe true real purchasing power of accumulated wealth over 5–20 years.'
+  order_flow_delta: {
+    title: 'Microstructure Order Flow & Cumulative Volume Delta (CVD)',
+    what: 'Approximates buyer-initiated versus seller-initiated trade volume per candle, tracking the net cumulative delta (Aggressive Buy Volume minus Aggressive Sell Volume).',
+    why: 'Reveals whether aggressive market orders are absorbing passive liquidity limit orders, uncovering hidden institutional accumulation or distribution.',
+    interpretation: 'Rising prices accompanied by expanding positive CVD confirm genuine aggressive buying; price rising while CVD is falling warns of absorption and impending exhaustion.'
   },
-  peer_valuation: {
-    title: 'Relative Valuation & Peer Matrix',
-    what: 'Comparative multiple analysis benchmarking Price-to-Earnings (P/E), Price-to-Book (P/B), and EV/EBITDA against industry peers.',
-    why: 'Prevents overpaying by establishing whether a stock trades at a justifiable premium or discount to competitors.',
-    interpretation: 'Low P/E coupled with superior ROE indicates high-conviction value investment opportunity.'
+  intraday_rvol: {
+    title: 'Relative Volume (RVOL)',
+    what: 'The ratio of current trading volume to the average historical volume expected at the identical time of the trading day.',
+    why: 'Volume is the fuel of price action. Breakouts occurring on RVOL < 1.0 lack conviction; breakouts on RVOL > 2.0x signal major institutional sponsorship.',
+    interpretation: 'Target intraday setups with RVOL > 1.5x for sustainable trend follow-through and reduced whipsaw risk.'
+  },
+  mis_leverage: {
+    title: 'Intraday Margin Intraday Square-off (MIS) & Risk Rules',
+    what: 'Exchange-regulated intraday margin offering up to 5× leverage on liquid equities, requiring positions to be squared off before the session close.',
+    why: 'Leverage magnifies both returns and capital destruction; institutional money management strictly mandates risking no more than 1% to 2% of total capital on any single scalp.',
+    interpretation: 'Calculate exact share quantities using your fixed rupee/dollar risk divided by the distance between entry and stop-loss: Never adjust stop-loss to match position size.'
+  },
+  intraday_quant_score: {
+    title: 'Composite Intraday Quant Score (-100 to +100)',
+    what: 'A multi-factor algorithmic index fusing VWAP alignment (±25 pts), Supertrend state (±25 pts), EMA ribbon momentum (±20 pts), ORB breakout status (±20 pts), and RSI velocity (±10 pts).',
+    why: 'Synthesizes disparate price, volume, and volatility signals into an objective mathematical directional bias, eliminating subjective trader hesitation.',
+    interpretation: 'Score ≥ +50 triggers Strong Buy bias; Score ≤ -50 triggers Strong Sell bias; Scores between -20 and +20 recommend waiting for clearer setup confirmation.'
   }
 };

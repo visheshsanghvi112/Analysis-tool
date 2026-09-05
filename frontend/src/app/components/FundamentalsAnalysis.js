@@ -43,14 +43,21 @@ function ChartContainer({ height = 280, children }) {
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────────
-const fmtCr = (v) => {
+const fmtCr = (v, currSym = '₹', isUS = false) => {
   if (v == null) return 'N/A';
   const abs = Math.abs(v);
-  if (abs >= 1e12) return `₹${(v / 1e12).toFixed(2)}T`;
-  if (abs >= 1e9)  return `₹${(v / 1e9).toFixed(2)}B`;
-  if (abs >= 1e7)  return `₹${(v / 1e7).toFixed(1)}Cr`;
-  if (abs >= 1e5)  return `₹${(v / 1e5).toFixed(1)}L`;
-  return `₹${v.toFixed(0)}`;
+  if (isUS) {
+    if (abs >= 1e12) return `${currSym}${(v / 1e12).toFixed(2)}T`;
+    if (abs >= 1e9)  return `${currSym}${(v / 1e9).toFixed(2)}B`;
+    if (abs >= 1e6)  return `${currSym}${(v / 1e6).toFixed(2)}M`;
+    if (abs >= 1e3)  return `${currSym}${(v / 1e3).toFixed(2)}K`;
+    return `${currSym}${v.toFixed(0)}`;
+  }
+  if (abs >= 1e12) return `${currSym}${(v / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9)  return `${currSym}${(v / 1e9).toFixed(2)}B`;
+  if (abs >= 1e7)  return `${currSym}${(v / 1e7).toFixed(1)}Cr`;
+  if (abs >= 1e5)  return `${currSym}${(v / 1e5).toFixed(1)}L`;
+  return `${currSym}${v.toFixed(0)}`;
 };
 const fmtPct = (v, d = 1) => v == null ? 'N/A' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(d)}%`;
 const fmtNum = (v, d = 2) => v == null ? 'N/A' : Number(v).toFixed(d);
@@ -104,7 +111,7 @@ function SectionHeader({ icon: Icon, title, badge, color = '#6366f1', infoProps 
 }
 
 // ── Earnings & Revenue Panel ──────────────────────────────────────────────────
-function EarningsPanel({ annual, quarterly, ratios, price_cagr }) {
+function EarningsPanel({ annual, quarterly, ratios, price_cagr, currSym = '₹', isUS = false }) {
   const [view, setView] = useState('annual'); // 'annual' | 'quarterly'
   const data = view === 'annual' ? annual : quarterly;
   const xKey = view === 'annual' ? 'year' : 'quarter';
@@ -176,8 +183,8 @@ function EarningsPanel({ annual, quarterly, ratios, price_cagr }) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" />
                 <XAxis dataKey={xKey} tick={{ fill: '#555', fontSize: 9 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#555', fontSize: 9 }} axisLine={false} tickLine={false}
-                  tickFormatter={v => fmtCr(v).replace('₹', '')} width={45} tickCount={4} />
-                <Tooltip content={<ChartTooltip formatter={fmtCr} />} />
+                  tickFormatter={v => fmtCr(v, currSym, isUS).replace(currSym, '')} width={45} tickCount={4} />
+                <Tooltip content={<ChartTooltip formatter={v => fmtCr(v, currSym, isUS)} />} />
                 <Bar dataKey="revenue" name="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]}>
                   {data.map((_, i) => <Cell key={i} fill={i === data.length - 1 ? '#818cf8' : '#6366f155'} />)}
                 </Bar>
@@ -218,7 +225,7 @@ function EarningsPanel({ annual, quarterly, ratios, price_cagr }) {
 }
 
 // ── Dividend Panel ────────────────────────────────────────────────────────────
-function DividendPanel({ dividend }) {
+function DividendPanel({ dividend, currSym = '₹' }) {
   const [showHistory, setShowHistory] = useState(false);
   const { yield_pct, rate, payout_ratio_pct, five_yr_avg_yield_pct,
           ex_dividend_date, annual_totals, history,
@@ -255,7 +262,7 @@ function DividendPanel({ dividend }) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: 'Current Yield',  val: yield_pct != null ? `${yield_pct}%` : 'N/A', color: 'text-emerald-400', icon: '💰' },
-              { label: 'Annual Dividend', val: rate != null ? `₹${rate}` : 'N/A', color: 'text-white', icon: '📅' },
+              { label: 'Annual Dividend', val: rate != null ? `${currSym}${rate}` : 'N/A', color: 'text-white', icon: '📅' },
               { label: 'Payout Ratio', val: payout_ratio_pct != null ? `${payout_ratio_pct}%` : 'N/A', color: payout_ratio_pct > 80 ? 'text-rose-400' : 'text-indigo-400', icon: '📊' },
               { label: '5Y Avg Yield', val: five_yr_avg_yield_pct != null ? `${five_yr_avg_yield_pct}%` : 'N/A', color: 'text-violet-400', icon: '📈' },
             ].map(({ label, val, color, icon }) => (
@@ -286,14 +293,14 @@ function DividendPanel({ dividend }) {
           {/* Annual dividends bar chart */}
           {annual_totals?.length > 0 && (
             <div className="bg-white/[0.01] rounded-xl p-3 border border-white/[0.04]">
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mb-2">Annual Dividend Per Share (₹)</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mb-2">Annual Dividend Per Share ({currSym})</p>
               <ChartContainer height={150}>
                 {(width, height) => (
                   <BarChart width={width} height={height} data={annual_totals} margin={{ top: 0, right: 4, left: -25, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff06" />
                     <XAxis dataKey="year" tick={{ fill: '#555', fontSize: 9 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: '#555', fontSize: 9 }} axisLine={false} tickLine={false} width={30} tickCount={4} />
-                    <Tooltip content={<ChartTooltip formatter={v => `₹${v}`} />} />
+                    <Tooltip content={<ChartTooltip formatter={v => `${currSym}${v}`} />} />
                     <Bar dataKey="dividend" name="Dividend" radius={[4, 4, 0, 0]}>
                       {annual_totals.map((_, i) => (
                         <Cell key={i} fill={i === annual_totals.length - 1 ? '#10b981' : '#10b98155'} />
@@ -320,7 +327,7 @@ function DividendPanel({ dividend }) {
                   {[...history].reverse().map((d, i) => (
                     <div key={i} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04] text-xs">
                       <span className="text-slate-400">{d.date}</span>
-                      <span className="text-emerald-400 font-bold">₹{d.amount}</span>
+                      <span className="text-emerald-400 font-bold">{currSym}{d.amount}</span>
                     </div>
                   ))}
                 </div>
@@ -334,7 +341,7 @@ function DividendPanel({ dividend }) {
 }
 
 // ── Ownership / Shareholding Panel ────────────────────────────────────────────
-function OwnershipPanel({ ownership }) {
+function OwnershipPanel({ ownership, loc = 'en-IN' }) {
   const { promoter_pct, institutions_pct, retail_pct, top_insiders } = ownership || {};
 
   const segments = [
@@ -424,7 +431,7 @@ function OwnershipPanel({ ownership }) {
                     </div>
                     <div className="text-right">
                       <p className="text-slate-400">{h.transaction || '—'}</p>
-                      {h.shares && <p className="text-slate-400 text-[10px]">{Number(h.shares).toLocaleString('en-IN')} shares</p>}
+                      {h.shares && <p className="text-slate-400 text-[10px]">{Number(h.shares).toLocaleString(loc)} shares</p>}
                     </div>
                   </div>
                 ))}
@@ -477,6 +484,10 @@ export default function FundamentalsAnalysis({ ticker }) {
 
   if (!data) return null;
 
+  const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
+  const currSym = isUS ? '$' : '₹';
+  const loc = isUS ? 'en-US' : 'en-IN';
+
   return (
     <div className="space-y-4">
       {/* Section title */}
@@ -496,12 +507,14 @@ export default function FundamentalsAnalysis({ ticker }) {
         quarterly={data.income_quarterly}
         ratios={data.ratios}
         price_cagr={data.price_cagr}
+        currSym={currSym}
+        isUS={isUS}
       />
 
       {/* Dividend + Ownership (side-by-side on large screens) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <DividendPanel dividend={data.dividend} />
-        <OwnershipPanel ownership={data.ownership} />
+        <DividendPanel dividend={data.dividend} currSym={currSym} />
+        <OwnershipPanel ownership={data.ownership} loc={loc} />
       </div>
     </div>
   );

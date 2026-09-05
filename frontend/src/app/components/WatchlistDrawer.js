@@ -284,7 +284,10 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
               const isSelected = currentTicker === item.symbol;
               const isETF = item.sector === 'ETF';
               const isIndex = item.symbol.startsWith('^') || item.sector === 'Indices';
+              const isUS = item.symbol && !item.symbol.endsWith('.NS') && !item.symbol.endsWith('.BO');
               const quote = quotes[item.symbol];
+              const currSym = quote?.currency_symbol || (isUS ? '$' : '₹');
+              const loc = isUS ? 'en-US' : 'en-IN';
 
               const price = quote?.price;
               const changePct = quote?.changePct;
@@ -331,7 +334,7 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
                       {price !== undefined && price !== null ? (
                         <>
                           <div className="text-xs font-bold text-white font-mono">
-                            ₹{typeof price === 'number' ? price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : price}
+                            {currSym}{typeof price === 'number' ? price.toLocaleString(loc, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : price}
                           </div>
                           {changePct !== undefined && changePct !== null && (
                             <div className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5 ${

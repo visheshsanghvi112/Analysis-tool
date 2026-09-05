@@ -13,20 +13,31 @@ import numpy as np
 from yf_client import get_quote, get_history, get_info
 from news_intelligence import get_advanced_news_analysis
 
-# Curated list of top Nifty 50 leaders representing general market sentiment
-CURATED_MARKET_LEADERS = [
+# Curated list of market leaders representing general market sentiment
+CURATED_MARKET_LEADERS_IN = [
     "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS",
     "SBIN.NS", "BHARTIARTL.NS", "ITC.NS", "HINDUNILVR.NS", "LT.NS",
     "TATAMOTORS.NS", "TATASTEEL.NS"
 ]
+CURATED_MARKET_LEADERS_US = [
+    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL",
+    "META", "TSLA", "JPM", "V", "BRK-B",
+    "AMD", "COST"
+]
+CURATED_MARKET_LEADERS = CURATED_MARKET_LEADERS_IN
 
-# ── Sector P/E benchmarks (India) ────────────────────────────────────────────
+# ── Sector P/E benchmarks (India & Global GICS) ──────────────────────────────
 SECTOR_PE = {
+    # India specific labels
     "Banking": 12, "NBFC": 18, "IT": 28, "Pharma": 22, "FMCG": 40,
     "Auto": 18, "Energy": 10, "Power": 14, "Metals": 10, "Cement": 20,
     "Insurance": 30, "Telecom": 25, "Consumer Tech": 50, "Fintech": 40,
     "Infrastructure": 15, "Logistics": 22, "Mining": 8, "Chemicals": 25,
     "Consumer": 35, "Diversified": 20,
+    # Standard GICS Sectors
+    "Technology": 30, "Financial Services": 15, "Healthcare": 25,
+    "Consumer Cyclical": 22, "Consumer Defensive": 25, "Industrials": 22,
+    "Utilities": 18, "Real Estate": 25, "Basic Materials": 15, "Communication Services": 20,
 }
 DEFAULT_SECTOR_PE = 22
 
@@ -99,7 +110,7 @@ def _compute_stock_profile(ticker: str, buy_price: float, qty: float) -> dict:
                 ema200 = close.ewm(span=200, min_periods=150, adjust=False).mean()
                 e200   = float(ema200.iloc[-1])
                 above_ema200    = bool(close.iloc[-1] > e200)
-                pct_from_ema200 = round((float(close.iloc[-1]) / e200 - 1) * 100, 2)
+                pct_from_ema200 = round((float(close.iloc[-1]) / e200 - 1) * 100, 2) if e200 > 0 else 0.0
 
             # ── Volume spike: today > 1.5× 20-day avg ────────────────────────
             if vol is not None and len(vol) > 20:
@@ -111,7 +122,8 @@ def _compute_stock_profile(ticker: str, buy_price: float, qty: float) -> dict:
             r3m  = close.pct_change().dropna()
             vol_3m   = round(float(r3m.std() * np.sqrt(252) * 100), 2)
             if len(close) > 22:
-                momentum = round(float((close.iloc[-1] / close.iloc[-22] - 1) * 100), 2)
+                prev_close_22 = float(close.iloc[-22])
+                momentum = round(float((close.iloc[-1] / prev_close_22 - 1) * 100), 2) if prev_close_22 > 0 else 0.0
     except Exception:
         pass
 
@@ -133,7 +145,7 @@ def _compute_stock_profile(ticker: str, buy_price: float, qty: float) -> dict:
     except Exception:
         pass
 
-    gain_to_be = round(((buy_price / live_px) - 1) * 100, 2) if in_loss else 0.0
+    gain_to_be = round(((buy_price / live_px) - 1) * 100, 2) if (in_loss and live_px > 0) else 0.0
 
     return {
         "ticker":           ticker,
@@ -236,7 +248,7 @@ def _recovery_score(p: dict, horizon_days: int) -> float:
     pe = p.get("pe_ratio")
     if pe and pe > 0:
         sec_pe = SECTOR_PE.get(p.get("sector") or "", DEFAULT_SECTOR_PE)
-        pe_ratio_vs_sector = pe / sec_pe
+        pe_ratio_vs_sector = (pe / sec_pe) if sec_pe > 0 else 1.0
         if pe_ratio_vs_sector < 0.7:
             score += 15
         elif pe_ratio_vs_sector < 1.0:
@@ -335,41 +347,63 @@ def _confidence_band(score, horizon_days):
     label = "HIGH" if conf >= 70 else "MODERATE" if conf >= 50 else "LOW"
     return round(conf), label
 
-def _tranche_plan(live_px: float, alloc_amt: float, qty: float, buy_price: float, horizon_days: int) -> list:
+def _tranche_plan(live_px: float, alloc_amt: float, shares_to_buy: int, buy_price: float, horizon_days: int, curr_sym: str = "₹") -> list:
     if horizon_days <= 90:
         splits = [0.60, 0.40]
         conditions = [
-            f"Deploy now at ₹{live_px:,.0f} (current price)",
-            f"Deploy if price falls another 4–6% to ≈₹{live_px * 0.95:,.0f}",
+            f"Deploy now at {curr_sym}{live_px:,.0f} (current price)",
+            f"Deploy if price falls another 4–6% to ≈{curr_sym}{live_px * 0.95:,.0f}",
         ]
     else:
         splits = [0.50, 0.30, 0.20]
         conditions = [
-            f"Deploy now at ₹{live_px:,.0f} (RSI/MACD signal)",
-            f"Deploy if price dips 5–8% to ≈₹{live_px * 0.93:,.0f} (better average)",
+            f"Deploy now at {curr_sym}{live_px:,.0f} (RSI/MACD signal)",
+            f"Deploy if price dips 5–8% to ≈{curr_sym}{live_px * 0.93:,.0f} (better average)",
             f"Deploy when price reclaims 200-day EMA (trend confirmation)",
         ]
 
+    if shares_to_buy <= 1:
+        return [{
+            "tranche":   1,
+            "pct":       100,
+            "amount":    round(shares_to_buy * live_px, 0),
+            "shares":    shares_to_buy,
+            "condition": conditions[0],
+        }]
+
+    allocated_shares = 0
     plan = []
+    num_tranches = len(splits)
     for i, (split, cond) in enumerate(zip(splits, conditions)):
-        t_amt = round(alloc_amt * split, 0)
-        shares = max(0, int(t_amt / live_px)) if live_px > 0 else 0
+        if i == num_tranches - 1:
+            t_shares = max(0, shares_to_buy - allocated_shares)
+        else:
+            t_shares = max(0, int(round(shares_to_buy * split)))
+            if allocated_shares + t_shares > shares_to_buy:
+                t_shares = max(0, shares_to_buy - allocated_shares)
+        allocated_shares += t_shares
+        t_amt = round(t_shares * live_px, 0)
         plan.append({
             "tranche":   i + 1,
             "pct":       int(split * 100),
             "amount":    t_amt,
-            "shares":    shares,
+            "shares":    t_shares,
             "condition": cond,
         })
+    plan = [p for p in plan if p["shares"] > 0]
     return plan
 
 def allocate_capital(holdings: list, floating_capital: float, horizon_days: int, mode: str = "recovery", max_stock_price: float = None, sector: str = None) -> dict:
     if floating_capital <= 0 or horizon_days <= 0:
         return {"error": "Invalid inputs"}
 
+    is_portfolio_us = all(not (h.get("ticker") or "").endswith(".NS") and not (h.get("ticker") or "").endswith(".BO") for h in holdings) if holdings else False
+    portfolio_curr_sym = "$" if is_portfolio_us else "₹"
+
     # If fresh market buys mode, ignore user holdings and scan curated market leaders
     if mode == "market_buys":
-        target_list = [{"ticker": ticker, "buy_price": 0.0, "qty": 0.0} for ticker in CURATED_MARKET_LEADERS]
+        leaders = CURATED_MARKET_LEADERS_US if is_portfolio_us else CURATED_MARKET_LEADERS_IN
+        target_list = [{"ticker": ticker, "buy_price": 0.0, "qty": 0.0} for ticker in leaders]
     else:
         target_list = holdings
 
@@ -377,6 +411,7 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
         return {
             "floating_capital": round(floating_capital, 2),
             "horizon_days": horizon_days,
+            "currency_symbol": portfolio_curr_sym,
             "no_loss_positions": True,
             "message": "No holdings provided for analysis.",
             "suggestions": [],
@@ -384,6 +419,7 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
                 "total_allocated": 0, "unallocated_cash": round(floating_capital, 2),
                 "positions_addressed": 0, "overall_confidence": "N/A",
                 "horizon_label": _horizon_label(horizon_days),
+                "currency_symbol": portfolio_curr_sym,
             }
         }
 
@@ -410,6 +446,7 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
         return {
             "floating_capital": round(floating_capital, 2),
             "horizon_days": horizon_days,
+            "currency_symbol": portfolio_curr_sym,
             "no_loss_positions": True,
             "message": "All your holdings are currently in profit! No averaging down needed." if mode == "recovery" else "No matching market candidates found for the specified filters.",
             "suggestions": [],
@@ -417,6 +454,7 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
                 "total_allocated": 0, "unallocated_cash": round(floating_capital, 2),
                 "positions_addressed": 0, "overall_confidence": "N/A",
                 "horizon_label": _horizon_label(horizon_days),
+                "currency_symbol": portfolio_curr_sym,
             }
         }
 
@@ -463,6 +501,7 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
         for i, (p, w) in enumerate(zip(eligible, weights)):
             alloc_amt = round(deployable * float(w), 2)
             live_px   = p["live_price"]
+            stock_curr_sym = "$" if (not p["ticker"].endswith(".NS") and not p["ticker"].endswith(".BO")) else "₹"
 
             shares = max(1 if (i == 0 and deployable >= live_px) else 0, int(alloc_amt / live_px)) if live_px > 0 else 0
             actual = round(shares * live_px, 2)
@@ -473,14 +512,14 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
                     "ticker": p["ticker"],
                     "pnl_pct": p["pnl_pct"],
                     "recovery_score": p["recovery_score"],
-                    "reason": f"Insufficient allocated capital (₹{alloc_amt:,.0f}) to buy 1 share at ₹{live_px:,.0f}. Try increasing your floating capital."
+                    "reason": f"Insufficient allocated capital ({stock_curr_sym}{alloc_amt:,.0f}) to buy 1 share at {stock_curr_sym}{live_px:,.0f}. Try increasing your floating capital."
                 })
                 continue
 
             signal              = p["signal"]
             conf_pct, conf_lbl  = _confidence_band(p["recovery_score"], horizon_days)
             rec_time            = _recovery_timeline(abs(p["pnl_pct"]), p)
-            tranches            = _tranche_plan(live_px, actual, p["qty"], p["buy_price"], horizon_days)
+            tranches            = _tranche_plan(live_px, actual, shares, p["buy_price"], horizon_days, curr_sym=stock_curr_sym)
 
             priority_map = {0: ("🔥 Top Pick", "emerald"), 1: ("⚡ Strong Opportunity", "indigo"),
                             2: ("📊 Moderate Opportunity", "amber")}
@@ -502,8 +541,8 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
                 avg_red   = round(((p["buy_price"] - new_avg) / p["buy_price"]) * 100, 2) if p["buy_price"] > 0 else 0.0
 
                 if signal == "STRONG_BUY":
-                    action_text = (f"Strong setup — {sigs}. Buying {shares} shares at ₹{live_px:,.0f} "
-                                   f"cuts your avg from ₹{p['buy_price']:,.0f} → ₹{new_avg:,.1f} (-{avg_red}%). "
+                    action_text = (f"Strong setup — {sigs}. Buying {shares} shares at {stock_curr_sym}{live_px:,.0f} "
+                                   f"cuts your avg from {stock_curr_sym}{p['buy_price']:,.0f} → {stock_curr_sym}{new_avg:,.1f} (-{avg_red}%). "
                                    f"New break-even: +{new_be}% (was +{p['gain_to_breakeven']}%).")
                 elif signal == "ACCUMULATE":
                     action_text = (f"Moderate setup — {sigs}. Partial entry of {shares} shares lowers "
@@ -518,10 +557,10 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
                 avg_red = 0.0
                 if signal == "STRONG_BUY":
                     action_text = (f"Premium fresh entry setup — {sigs}. Strong momentum and low risk path. "
-                                   f"Deploy first tranche of {shares} shares at ₹{live_px:,.0f}.")
+                                   f"Deploy first tranche of {shares} shares at {stock_curr_sym}{live_px:,.0f}.")
                 elif signal == "ACCUMULATE":
                     action_text = (f"Solid accumulation setup — {sigs}. High sector resilience. "
-                                   f"Start building position with {shares} shares at ₹{live_px:,.0f}.")
+                                   f"Start building position with {shares} shares at {stock_curr_sym}{live_px:,.0f}.")
                 else:
                     action_text = (f"Neutral setup — {sigs}. Enter with caution. Buy {shares} shares and "
                                    f"deploy rest only after MACD crossover confirms.")
@@ -533,6 +572,7 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
                 "allocation_weight_pct": round(float(w) * 100, 1),
                 "live_price": live_px, "buy_price": p["buy_price"],
                 "current_pnl_pct": p["pnl_pct"],
+                "currency_symbol": stock_curr_sym,
                 "current_gain_to_be": p["gain_to_breakeven"],
                 "new_avg_price": round(new_avg, 2),
                 "new_gain_to_be": new_be, "avg_cost_reduction_pct": avg_red,
@@ -573,6 +613,7 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
         "no_loss_positions": no_loss,
         "message": message,
         "mode": mode,
+        "currency_symbol": portfolio_curr_sym,
         "summary": {
             "total_allocated": round(total_allocated, 2),
             "unallocated_cash": round(floating_capital - total_allocated, 2),
@@ -581,6 +622,7 @@ def allocate_capital(holdings: list, floating_capital: float, horizon_days: int,
             "overall_confidence": "HIGH" if avg_conf >= 70 else "MODERATE" if avg_conf >= 50 else "LOW" if suggestions else "N/A",
             "horizon_label": _horizon_label(horizon_days),
             "risk_profile": _risk_profile_label(horizon_days),
+            "currency_symbol": portfolio_curr_sym,
         },
         "strategy_note": _strategy_note(horizon_days, len(suggestions), total_allocated, floating_capital),
     }

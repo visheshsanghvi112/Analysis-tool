@@ -40,13 +40,17 @@ function ChartContainer({ height = 280, children }) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const fmtINR = (n) =>
-  n == null ? 'N/A' : `₹${Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
-const fmtCr = (n) => {
+const fmtVal = (n, currSym = '₹', isUS = false) => {
   if (n == null) return 'N/A';
-  if (n >= 1e7) return `₹${(n / 1e7).toFixed(2)} Cr`;
-  if (n >= 1e5) return `₹${(n / 1e5).toFixed(2)} L`;
-  return fmtINR(n);
+  if (isUS) {
+    if (n >= 1e9) return `${currSym}${(n / 1e9).toFixed(2)} B`;
+    if (n >= 1e6) return `${currSym}${(n / 1e6).toFixed(2)} M`;
+    if (n >= 1e3) return `${currSym}${(n / 1e3).toFixed(2)} K`;
+    return `${currSym}${Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  }
+  if (n >= 1e7) return `${currSym}${(n / 1e7).toFixed(2)} Cr`;
+  if (n >= 1e5) return `${currSym}${(n / 1e5).toFixed(2)} L`;
+  return `${currSym}${Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 };
 const pct = (n, d = 1) => n == null ? 'N/A' : `${n >= 0 ? '+' : ''}${Number(n).toFixed(d)}%`;
 
@@ -130,7 +134,7 @@ const RETURN_PRESETS  = [
 ];
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
-function SIPTooltip({ active, payload, label }) {
+function SIPTooltip({ active, payload, label, currSym = '₹', isUS = false }) {
   if (!active || !payload?.length) return null;
   const invested = payload.find(p => p.dataKey === 'invested')?.value;
   const value    = payload.find(p => p.dataKey === 'value')?.value;
@@ -138,24 +142,30 @@ function SIPTooltip({ active, payload, label }) {
   return (
     <div className="bg-[#0d0d14] border border-white/10 rounded-xl px-3 py-2.5 text-xs shadow-xl min-w-[160px]">
       <p className="text-slate-400 font-bold mb-1.5 border-b border-white/[0.06] pb-1">{label}</p>
-      <p className="text-slate-300">Invested: <span className="font-bold text-white">{fmtCr(invested)}</span></p>
-      <p className="text-emerald-400">Value: <span className="font-bold">{fmtCr(value)}</span></p>
-      <p className="text-violet-400">Gains: <span className="font-bold">+{fmtCr(gain)}</span></p>
+      <p className="text-slate-300">Invested: <span className="font-bold text-white">{fmtVal(invested, currSym, isUS)}</span></p>
+      <p className="text-emerald-400">Value: <span className="font-bold">{fmtVal(value, currSym, isUS)}</span></p>
+      <p className="text-violet-400">Gains: <span className="font-bold">+{fmtVal(gain, currSym, isUS)}</span></p>
     </div>
   );
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function SIPCalculator({ ticker }) {
-  const [monthly, setMonthly]   = useState(10000);
+  const isUS = ticker ? (!ticker.endsWith('.NS') && !ticker.endsWith('.BO') && !ticker.startsWith('^')) : false;
+  const currSym = isUS ? '$' : '₹';
+  const benchName = isUS ? 'S&P 500' : 'Nifty 50';
+  const benchReturn = isUS ? 10 : 12;
+  const fdReturn = isUS ? 5 : 7;
+
+  const [monthly, setMonthly]   = useState(isUS ? 500 : 10000);
   const [years, setYears]       = useState(10);
   const [annualReturn, setReturn] = useState(12);
   const [showCompare, setShowCompare] = useState(false);
 
   // Current ticker CAGR passed via prop (from FundamentalsAnalysis parent)
   const result  = useMemo(() => computeSIP({ monthly, years, annualReturn }), [monthly, years, annualReturn]);
-  const fdResult = useMemo(() => computeSIP({ monthly, years, annualReturn: 7 }), [monthly, years]);   // FD comparison
-  const niftyResult = useMemo(() => computeSIP({ monthly, years, annualReturn: 12 }), [monthly, years]); // Nifty50 historical avg
+  const fdResult = useMemo(() => computeSIP({ monthly, years, annualReturn: fdReturn }), [monthly, years, fdReturn]);   // FD comparison
+  const niftyResult = useMemo(() => computeSIP({ monthly, years, annualReturn: benchReturn }), [monthly, years, benchReturn]); // Benchmark historical avg
 
   return (
     <div className="glass-card p-5 space-y-5">
@@ -181,24 +191,24 @@ export default function SIPCalculator({ ticker }) {
             Monthly Investment
           </label>
           <div className="flex items-center gap-2 px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-xl focus-within:border-emerald-500/50 transition">
-            <span className="text-slate-400 font-bold text-sm">₹</span>
+            <span className="text-slate-400 font-bold text-sm">{currSym}</span>
             <input
               type="number"
-              min={100}
+              min={10}
               value={monthly}
-              onChange={e => setMonthly(Math.max(100, parseInt(e.target.value) || 0))}
+              onChange={e => setMonthly(Math.max(10, parseInt(e.target.value) || 0))}
               className="bg-transparent text-white text-sm flex-1 outline-none font-bold"
             />
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {MONTHLY_PRESETS.map(p => (
+            {(isUS ? [100, 250, 500, 1000, 2500] : MONTHLY_PRESETS).map(p => (
               <button key={p} onClick={() => setMonthly(p)}
                 className={`text-[10px] px-2 py-0.5 rounded-lg border transition cursor-pointer ${
                   monthly === p
                     ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300'
                     : 'bg-white/[0.03] border-white/[0.06] text-slate-400 hover:text-slate-200'
                 }`}>
-                {fmtINR(p)}
+                {currSym}{p.toLocaleString(isUS ? 'en-US' : 'en-IN')}
               </button>
             ))}
           </div>
@@ -206,20 +216,20 @@ export default function SIPCalculator({ ticker }) {
 
         {/* Duration */}
         <div className="space-y-2">
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-            Duration
-          </label>
-          <div className="flex items-center gap-2 px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-xl focus-within:border-emerald-500/50 transition">
-            <input
-              type="number"
-              min={1}
-              max={40}
-              value={years}
-              onChange={e => setYears(Math.max(1, Math.min(40, parseInt(e.target.value) || 1)))}
-              className="bg-transparent text-white text-sm flex-1 outline-none font-bold"
-            />
-            <span className="text-slate-400 font-bold text-sm">years</span>
+          <div className="flex justify-between items-center">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              Time Horizon
+            </label>
+            <span className="text-lg font-black text-white">{years} <span className="text-xs font-normal text-slate-400">years</span></span>
           </div>
+          <input
+            type="range"
+            min={1}
+            max={40}
+            value={years}
+            onChange={e => setYears(Math.max(1, Math.min(40, parseInt(e.target.value) || 1)))}
+            className="w-full h-1.5 accent-emerald-500 bg-slate-800 rounded-lg cursor-pointer"
+          />
           <div className="flex flex-wrap gap-1.5">
             {YEAR_PRESETS.map(y => (
               <button key={y} onClick={() => setYears(y)}
@@ -269,9 +279,9 @@ export default function SIPCalculator({ ticker }) {
       {/* Result Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total Invested',   val: fmtCr(result.invested),    color: 'text-slate-300', icon: '💰' },
-          { label: 'Estimated Corpus', val: fmtCr(result.corpus),      color: 'text-emerald-400', icon: '🏆' },
-          { label: 'Wealth Gained',    val: fmtCr(result.wealth),      color: 'text-violet-400', icon: '📈' },
+          { label: 'Total Invested',   val: fmtVal(result.invested, currSym, isUS),    color: 'text-slate-300', icon: '💰' },
+          { label: 'Estimated Corpus', val: fmtVal(result.corpus, currSym, isUS),      color: 'text-emerald-400', icon: '🏆' },
+          { label: 'Wealth Gained',    val: fmtVal(result.wealth, currSym, isUS),      color: 'text-violet-400', icon: '📈' },
           { label: 'Returns on Investment', val: pct(result.returns_pct, 0), color: result.returns_pct >= 0 ? 'text-emerald-400' : 'text-rose-400', icon: '⚡' },
         ].map(({ label, val, color, icon }) => (
           <div key={label} className="p-3 rounded-xl border bg-white/[0.02] border-white/[0.06] text-center space-y-1">
@@ -289,8 +299,8 @@ export default function SIPCalculator({ ticker }) {
           <span className="font-bold text-slate-200">Rule of 72: </span>
           At {annualReturn}% p.a., your money doubles every{' '}
           <strong className="text-indigo-400">{(72 / annualReturn).toFixed(1)} years</strong>.
-          {' '}Over {years} years, ₹1 becomes <strong className="text-emerald-400">
-            ₹{Math.pow(1 + annualReturn / 100, years).toFixed(1)}
+          {' '}Over {years} years, {currSym}1 becomes <strong className="text-emerald-400">
+            {currSym}{Math.pow(1 + annualReturn / 100, years).toFixed(1)}
           </strong>.
           {result.xirrRate != null && (
             <> | XIRR (SIP): <strong className="text-violet-400">{result.xirrRate.toFixed(2)}%</strong></>
@@ -320,8 +330,8 @@ export default function SIPCalculator({ ticker }) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff07" />
                 <XAxis dataKey="year" tick={{ fill: '#888', fontSize: 9 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#888', fontSize: 9 }} axisLine={false} tickLine={false}
-                  tickFormatter={v => fmtCr(v).replace('₹', '')} width={45} tickCount={4} />
-                <Tooltip content={<SIPTooltip />} />
+                  tickFormatter={v => fmtVal(v, currSym, isUS).replace(currSym, '')} width={45} tickCount={4} />
+                <Tooltip content={<SIPTooltip currSym={currSym} isUS={isUS} />} />
                 <Area type="monotone" dataKey="invested" name="invested" stroke="#6366f1" strokeWidth={1.5}
                   fill="url(#invGrad)" dot={false} />
                 <Area type="monotone" dataKey="value" name="value" stroke="#10b981" strokeWidth={2}
@@ -344,21 +354,21 @@ export default function SIPCalculator({ ticker }) {
           className="flex items-center gap-1.5 text-[11px] text-indigo-400 hover:text-indigo-300 transition cursor-pointer"
         >
           {showCompare ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-          Compare with FD (7%) and Nifty 50 avg (12%)
+          Compare with FD ({fdReturn}%) and {benchName} avg ({benchReturn}%)
         </button>
 
         {showCompare && (
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               { label: `This scenario (${annualReturn}%)`, corpus: result.corpus, color: 'text-emerald-400', icon: '⭐' },
-              { label: 'Nifty 50 avg (12% p.a.)',          corpus: niftyResult.corpus, color: 'text-indigo-400', icon: '📊' },
-              { label: 'Fixed Deposit (7% p.a.)',           corpus: fdResult.corpus,    color: 'text-amber-400',  icon: '🏦' },
+              { label: `${benchName} avg (${benchReturn}% p.a.)`, corpus: niftyResult.corpus, color: 'text-indigo-400', icon: '📊' },
+              { label: `Fixed Deposit (${fdReturn}% p.a.)`,           corpus: fdResult.corpus,    color: 'text-amber-400',  icon: '🏦' },
             ].map(({ label, corpus, color, icon }) => (
               <div key={label} className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] text-center space-y-1">
                 <p className="text-base">{icon}</p>
-                <p className={`text-sm font-black ${color}`}>{fmtCr(corpus)}</p>
+                <p className={`text-sm font-black ${color}`}>{fmtVal(corpus, currSym, isUS)}</p>
                 <p className="text-[9px] text-slate-500 leading-relaxed">{label}</p>
-                <p className="text-[9px] text-slate-600">{years}Y · {fmtINR(monthly)}/mo</p>
+                <p className="text-[9px] text-slate-600">{years}Y · {fmtVal(monthly, currSym, isUS)}/mo</p>
               </div>
             ))}
           </div>

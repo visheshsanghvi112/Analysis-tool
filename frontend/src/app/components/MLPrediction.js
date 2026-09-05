@@ -140,6 +140,9 @@ export default function MLPrediction({ ticker }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
+  const currSym = prediction?.currency_symbol || (isUS ? '$' : '₹');
+
   const [selectedPeriod, setSelectedPeriod] = useState('2y');
   const [predictionCache, setPredictionCache] = useState({});
 
@@ -373,7 +376,7 @@ export default function MLPrediction({ ticker }) {
               </div>
               <div className="text-right">
                 <p className="text-[10px] sm:text-xs text-slate-400">5-Day Target</p>
-                <p className="font-bold text-lg sm:text-xl text-white">Rs.{prediction.predicted_price?.toLocaleString()}</p>
+                <p className="font-bold text-lg sm:text-xl text-white">{currSym}{prediction.predicted_price?.toLocaleString()}</p>
               </div>
             </div>
             
@@ -418,7 +421,7 @@ export default function MLPrediction({ ticker }) {
           <div className="grid grid-cols-3 gap-2 mb-4 animate-fadeIn">
             <div className="rounded-lg p-2 bg-white/[0.03] border border-white/[0.06] min-w-0">
               <p className="text-[8px] text-slate-500 uppercase tracking-wider font-bold mb-0.5 truncate">Price</p>
-              <p className="font-bold text-xs text-slate-200 truncate">₹{prediction.current_price?.toLocaleString()}</p>
+              <p className="font-bold text-xs text-slate-200 truncate">{currSym}{prediction.current_price?.toLocaleString()}</p>
             </div>
 
             <div className="rounded-lg p-2 bg-white/[0.03] border border-white/[0.06] min-w-0">
@@ -599,7 +602,7 @@ export default function MLPrediction({ ticker }) {
                       {name.replace(/_/g, ' ')}
                     </span>
                     <div className="text-right">
-                      <span className="font-bold text-white block">Rs.{val.predicted_price.toLocaleString()}</span>
+                      <span className="font-bold text-white block">{currSym}{val.predicted_price.toLocaleString()}</span>
                       <span className={`text-[10px] font-semibold ${val.predicted_return >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                         {val.predicted_return >= 0 ? '+' : ''}{val.predicted_return}%
                       </span>
@@ -617,7 +620,7 @@ export default function MLPrediction({ ticker }) {
               <div>
                 <p className="text-[11px] sm:text-xs text-amber-300 font-semibold mb-1">Investment Disclaimer</p>
                 <p className="text-[10px] sm:text-[11px] text-amber-200/80 leading-relaxed">
-                  ML predictions are educational tools based on historical patterns. Past performance doesn't guarantee future results. 
+                  ML predictions are educational tools based on historical patterns. Past performance doesn&apos;t guarantee future results. 
                   Always conduct thorough research and consider consulting financial advisors before making investment decisions.
                 </p>
               </div>

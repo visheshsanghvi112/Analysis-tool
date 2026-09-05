@@ -168,8 +168,18 @@ function ScreenerStockCard({ stock, type, onSelect }) {
   const color = isPos ? '#10b981' : '#ef4444';
   const [hov, setHov] = useState(false);
 
+  const isUS = (stock.ticker || sym) && !(stock.ticker || sym).endsWith('.NS') && !(stock.ticker || sym).endsWith('.BO');
+  const currSym = stock.currency_symbol || (isUS ? '$' : '₹');
+  const loc = isUS ? 'en-US' : 'en-IN';
+
   const formatVol = (vol) => {
     if (!vol) return 'N/A';
+    if (isUS) {
+      if (vol >= 1e9) return (vol / 1e9).toFixed(2) + ' B';
+      if (vol >= 1e6) return (vol / 1e6).toFixed(2) + ' M';
+      if (vol >= 1e3) return (vol / 1e3).toFixed(2) + ' K';
+      return vol.toLocaleString('en-US');
+    }
     if (vol >= 10000000) return (vol / 10000000).toFixed(2) + ' Cr';
     if (vol >= 100000) return (vol / 100000).toFixed(2) + ' L';
     return vol.toLocaleString('en-IN');
@@ -222,17 +232,17 @@ function ScreenerStockCard({ stock, type, onSelect }) {
 
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <p style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff', marginBottom: '2px' }}>
-          ₹{stock.price?.toLocaleString('en-IN') || 'N/A'}
+          {currSym}{stock.price?.toLocaleString(loc) || 'N/A'}
         </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
           {type === 'high52w' && (
             <span style={{ fontSize: '9px', color: '#888888' }}>
-              High: ₹{stock.fiftyTwoWeekHigh?.toLocaleString('en-IN')} ({stock.pct_from_52w_high}%)
+              High: {currSym}{stock.fiftyTwoWeekHigh?.toLocaleString(loc)} ({stock.pct_from_52w_high}%)
             </span>
           )}
           {type === 'low52w' && (
             <span style={{ fontSize: '9px', color: '#888888' }}>
-              Low: ₹{stock.fiftyTwoWeekLow?.toLocaleString('en-IN')} (+{stock.pct_from_52w_low}%)
+              Low: {currSym}{stock.fiftyTwoWeekLow?.toLocaleString(loc)} (+{stock.pct_from_52w_low}%)
             </span>
           )}
           {type === 'volume' && (

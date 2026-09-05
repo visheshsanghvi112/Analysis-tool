@@ -58,6 +58,10 @@ export default function PortfolioMetrics({ ticker }) {
     return 'text-rose-400';
   };
 
+  const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
+  const currSym = metrics?.currency_symbol || (isUS ? '$' : '₹');
+  const benchName = metrics?.benchmark_name || (isUS ? 'S&P 500' : 'Nifty');
+
   return (
     <div className="glass-card p-4 sm:p-6">
       
@@ -106,7 +110,7 @@ export default function PortfolioMetrics({ ticker }) {
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle className="h-4 w-4 text-orange-400" />
               <h4 className="font-bold text-sm text-orange-400">Risk Assessment</h4>
-              <InfoBadge infoKey="sharpe_sortino" />
+              <InfoBadge infoKey="risk_assessment" />
             </div>
             
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
@@ -165,7 +169,7 @@ export default function PortfolioMetrics({ ticker }) {
             <div className="flex items-center gap-2 mb-3">
               <BarChart3 className="h-4 w-4 text-blue-400" />
               <h4 className="font-bold text-sm text-blue-400">Market Relationship</h4>
-              <InfoBadge infoKey="beta_alpha" />
+              <InfoBadge infoKey="market_relationship" />
             </div>
             
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
@@ -174,15 +178,15 @@ export default function PortfolioMetrics({ ticker }) {
                   {metrics.market_metrics.beta || 'N/A'}
                 </div>
                 <p className="text-[10px] text-slate-500">Beta</p>
-                <p className="text-[9px] text-slate-600 mt-0.5">vs Nifty</p>
+                <p className="text-[9px] text-slate-600 mt-0.5">vs {benchName}</p>
               </div>
               
               <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center">
-                <div className={`font-bold text-sm mb-1 ${metrics.market_metrics.correlation_with_nifty !== null ? (Math.abs(metrics.market_metrics.correlation_with_nifty) > 0.7 ? 'text-yellow-400' : 'text-emerald-400') : 'text-slate-400'}`}>
-                  {metrics.market_metrics.correlation_with_nifty || 'N/A'}
+                <div className={`font-bold text-sm mb-1 ${(metrics.market_metrics.correlation !== null && metrics.market_metrics.correlation !== undefined) ? (Math.abs(metrics.market_metrics.correlation) > 0.7 ? 'text-yellow-400' : 'text-emerald-400') : (metrics.market_metrics.correlation_with_nifty !== null ? (Math.abs(metrics.market_metrics.correlation_with_nifty) > 0.7 ? 'text-yellow-400' : 'text-emerald-400') : 'text-slate-400')}`}>
+                  {metrics.market_metrics.correlation ?? metrics.market_metrics.correlation_with_nifty ?? 'N/A'}
                 </div>
                 <p className="text-[10px] text-slate-500">Correlation</p>
-                <p className="text-[9px] text-slate-600 mt-0.5">Market sync</p>
+                <p className="text-[9px] text-slate-600 mt-0.5">{benchName} sync</p>
               </div>
               
               <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center col-span-2">
@@ -201,13 +205,14 @@ export default function PortfolioMetrics({ ticker }) {
               <div className="flex items-center gap-2 mb-3">
                 <Target className="h-4 w-4 text-purple-400" />
                 <h4 className="font-bold text-sm text-purple-400">Options Analysis</h4>
+                <InfoBadge infoKey="options_pricing" />
                 <span className="text-[10px] text-slate-500 px-2 py-0.5 rounded bg-slate-800">Black-Scholes</span>
               </div>
               
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                 <div className="p-3 bg-purple-500/5 rounded-lg border border-purple-500/20 text-center">
                   <div className="font-bold text-sm mb-1 text-purple-300">
-                    Rs.{metrics.options_pricing.call_price}
+                    {currSym}{metrics.options_pricing.call_price}
                   </div>
                   <p className="text-[10px] text-slate-500">Call Price</p>
                   <p className="text-[9px] text-slate-600 mt-0.5">ATM, 30D</p>
@@ -215,7 +220,7 @@ export default function PortfolioMetrics({ ticker }) {
                 
                 <div className="p-3 bg-purple-500/5 rounded-lg border border-purple-500/20 text-center">
                   <div className="font-bold text-sm mb-1 text-purple-300">
-                    Rs.{metrics.options_pricing.put_price}
+                    {currSym}{metrics.options_pricing.put_price}
                   </div>
                   <p className="text-[10px] text-slate-500">Put Price</p>
                   <p className="text-[9px] text-slate-600 mt-0.5">ATM, 30D</p>

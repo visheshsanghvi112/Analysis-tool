@@ -69,10 +69,10 @@ def calculate_fibonacci_levels(data):
 def fetch_news_sentiment(ticker):
     try:
         search_term = ticker.replace('.NS', '').replace('.BO', '')
-        url = (
-            f"https://news.google.com/rss/search?"
-            f"q={search_term}+stock+India&hl=en-IN&gl=IN&ceid=IN:en"
-        )
+        is_us = not ticker.endswith('.NS') and not ticker.endswith('.BO') and not ticker.startswith('^')
+        query = f"{search_term}+stock" if is_us else f"{search_term}+stock+India"
+        hl_gl = "hl=en-US&gl=US&ceid=US:en" if is_us else "hl=en-IN&gl=IN&ceid=IN:en"
+        url = f"https://news.google.com/rss/search?q={query}&{hl_gl}"
         feed    = feedparser.parse(url)
         entries = feed.entries[:10]
         if not entries:
@@ -314,18 +314,47 @@ def calculate_risk_metrics(close_series):
     }
 
 
-def calculate_relative_strength(ticker, start_date, end_date):
+def calculate_relative_strength(ticker, start_date=None, end_date=None, days=None):
     try:
-        nifty = get_history('^NSEI', period='1y')
-        stock = get_history(ticker,  period='1y')
-        if nifty.empty or stock.empty:
+        is_us = not ticker.endswith('.NS') and not ticker.endswith('.BO') and not ticker.startswith('^')
+        bench_ticker = '^GSPC' if is_us else '^NSEI'
+        bench_name   = 'S&P 500' if is_us else 'NIFTY 50'
+
+        period = '1y'
+        if days:
+            if days <= 35:
+                period = '1mo'
+            elif days <= 100:
+                period = '3mo'
+            elif days <= 200:
+                period = '6mo'
+            elif days <= 370:
+                period = '1y'
+            elif days <= 750:
+                period = '2y'
+            else:
+                period = '5y'
+
+        bench = get_history(bench_ticker, period=period)
+        stock = get_history(ticker, period=period)
+        if bench is None or stock is None or bench.empty or stock.empty:
             return {}
-        n_ret = (_scalar(nifty['Close'].iloc[-1]) / _scalar(nifty['Close'].iloc[0]) - 1) * 100
-        s_ret = (_scalar(stock['Close'].iloc[-1]) / _scalar(stock['Close'].iloc[0]) - 1) * 100
+        b_start = _scalar(bench['Close'].iloc[0])
+        b_end   = _scalar(bench['Close'].iloc[-1])
+        s_start = _scalar(stock['Close'].iloc[0])
+        s_end   = _scalar(stock['Close'].iloc[-1])
+
+        if b_start <= 0 or s_start <= 0:
+            return {}
+
+        b_ret = (b_end / b_start - 1) * 100
+        s_ret = (s_end / s_start - 1) * 100
         return {
-            'stockReturn':    round(s_ret, 2),
-            'niftyReturn':    round(n_ret, 2),
-            'outperformance': round(s_ret - n_ret, 2),
+            'stockReturn':     round(s_ret, 2),
+            'benchmarkReturn': round(b_ret, 2),
+            'niftyReturn':     round(b_ret, 2),
+            'benchmarkName':   bench_name,
+            'outperformance':  round(s_ret - b_ret, 2),
         }
     except Exception:
         return {}
@@ -449,23 +478,28 @@ def analyze_ticker(ticker, start_date=None, end_date=None):
             'obv':        int(_scalar(row['OBV'])),
         })
 
+    is_ticker_us = not ticker.endswith('.NS') and not ticker.endswith('.BO') and not ticker.startswith('^')
+    curr_sym     = '$' if is_ticker_us else '₹'
+
     return {
-        'ticker':  ticker,
+        'ticker':          ticker,
+        'currency_symbol': curr_sym,
         'summary': {
-            'close':          round(latest_close, 2),
-            'signal':         signal,
-            'signalScore':    signal_score,
-            'signalReasons':  signal_reasons,
-            'support':        support,
-            'resistance':     resistance,
-            'fib236':         round(fib1, 2),
-            'fib382':         round(fib2, 2),
-            'fib618':         round(fib3, 2),
-            'rsi':            round(latest_rsi,  2),
-            'macd':           round(latest_macd, 4),
-            'macdSignal':     round(latest_sig,  4),
-            'adx':            round(latest_adx,  2),
-            'atr':            round(latest_atr,  2),
+            'close':           round(latest_close, 2),
+            'signal':          signal,
+            'signalScore':     signal_score,
+            'signalReasons':   signal_reasons,
+            'support':         support,
+            'resistance':      resistance,
+            'fib236':          round(fib1, 2),
+            'fib382':          round(fib2, 2),
+            'fib618':          round(fib3, 2),
+            'rsi':             round(latest_rsi,  2),
+            'macd':            round(latest_macd, 4),
+            'macdSignal':      round(latest_sig,  4),
+            'adx':             round(latest_adx,  2),
+            'atr':             round(latest_atr,  2),
+            'currency_symbol': curr_sym,
         },
         'fundamentals':     fundamentals,
         'risk':             risk,
