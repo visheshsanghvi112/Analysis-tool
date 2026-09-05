@@ -298,7 +298,8 @@ export default function Dashboard() {
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               marginBottom: '14px', background: 'rgba(255,255,255,0.02)',
-              border: '1px solid #1a1a22', borderRadius: '10px', padding: '10px 16px'
+              border: '1px solid #1a1a22', borderRadius: '10px', padding: '10px 16px',
+              flexWrap: 'wrap', gap: '10px'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '12px', color: '#777', fontWeight: 500 }}>Active Asset:</span>
@@ -306,21 +307,39 @@ export default function Dashboard() {
                   {selectedTicker}
                 </span>
               </div>
-              <button
-                onClick={() => setReportModalOpen(true)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                  padding: '6px 13px', background: 'rgba(59, 130, 246, 0.1)',
-                  border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '7px',
-                  color: '#60a5fa', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                  transition: 'all 0.15s'
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.18)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'}
-              >
-                <FileText style={{ width: '13px', height: '13px' }} />
-                <span>Export Research Memo</span>
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Link
+                  href={`/intraday?ticker=${encodeURIComponent(selectedTicker)}`}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    padding: '6px 13px', background: 'rgba(16, 185, 129, 0.1)',
+                    border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '7px',
+                    color: '#34d399', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                    textDecoration: 'none', transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(16, 185, 129, 0.18)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(16, 185, 129, 0.1)'}
+                  title="Open in High-Frequency Intraday Desk"
+                >
+                  <Activity style={{ width: '13px', height: '13px' }} />
+                  <span>⚡ Intraday Trading Desk</span>
+                </Link>
+                <button
+                  onClick={() => setReportModalOpen(true)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    padding: '6px 13px', background: 'rgba(59, 130, 246, 0.1)',
+                    border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '7px',
+                    color: '#60a5fa', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.18)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'}
+                >
+                  <FileText style={{ width: '13px', height: '13px' }} />
+                  <span>Export Research Memo</span>
+                </button>
+              </div>
             </div>
 
             {/* Charts grid */}

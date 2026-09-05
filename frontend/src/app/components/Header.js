@@ -332,7 +332,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
               {/* Intraday Desk Link */}
               <Link
-                href="/intraday"
+                href={currentTicker ? `/intraday?ticker=${encodeURIComponent(currentTicker)}` : '/intraday'}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '6px',
                   padding: '6px 11px', background: 'rgba(16, 185, 129, 0.08)',

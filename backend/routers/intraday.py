@@ -159,11 +159,16 @@ def _calculate_volume_profile(df: pd.DataFrame, n_bins: int = 25) -> Dict[str, A
 
 def _calculate_pivots(daily_df: pd.DataFrame) -> Dict[str, Any]:
     """
-    Computes Camarilla Equation levels (H1-H4, L1-L4) and Floor Pivots
-    from the preceding completed trading session's High, Low, and Close.
+    Computes Camarilla Equation levels (H1-H4, L1-L4), Floor Pivots,
+    and Previous Day benchmark boundaries (PDH, PDL, PDC) from the preceding
+    completed trading session's High, Low, and Close.
     """
     if daily_df.empty or len(daily_df) < 1:
-        return {"camarilla": {}, "floor": {}}
+        return {
+            "daily_levels": {"pdh": 0.0, "pdl": 0.0, "pdc": 0.0, "range": 0.0},
+            "camarilla": {},
+            "floor": {}
+        }
 
     prev_bar = daily_df.iloc[-2] if len(daily_df) >= 2 else daily_df.iloc[-1]
     h = float(prev_bar["High"])
@@ -191,6 +196,12 @@ def _calculate_pivots(daily_df: pd.DataFrame) -> Dict[str, Any]:
     s3 = l - 2 * (h - p)
 
     return {
+        "daily_levels": {
+            "pdh": _safe_float(h),
+            "pdl": _safe_float(l),
+            "pdc": _safe_float(c),
+            "range": _safe_float(rng),
+        },
         "camarilla": {
             "h4": _safe_float(h4),
             "h3": _safe_float(h3),
@@ -601,6 +612,10 @@ def _generate_battle_plan(
     Auto-generates structured 1-Click Intraday Battle Plan.
     """
     is_long = "BUY" in bias or (supertrend_dir == 1 and curr_price >= curr_vwap)
+    daily_lvls = pivots.get("daily_levels", {}) if isinstance(pivots, dict) else {}
+    pdh = daily_lvls.get("pdh", 0.0)
+    pdl = daily_lvls.get("pdl", 0.0)
+    pdc = daily_lvls.get("pdc", 0.0)
 
     if is_long:
         entry_price = round(max(curr_vwap, curr_price * 0.998), 2)
@@ -608,18 +623,28 @@ def _generate_battle_plan(
         risk_per_share = max(round(entry_price - stop_loss, 2), 0.5)
         target_1 = round(entry_price + (risk_per_share * 1.5), 2)
         target_2 = round(entry_price + (risk_per_share * 2.5), 2)
-        setup_name = "VWAP Reclaim & Momentum Pullback"
-        trigger_rule = f"Enter on 5m candle test of {curr_sym}{entry_price} holding above VWAP"
+        if pdh > 0 and curr_price >= pdh:
+            setup_name = "PDH Breakout & Trend Extension"
+            trigger_rule = f"Long retest of PDH {curr_sym}{pdh:.2f} holding as dynamic floor above VWAP"
+        else:
+            setup_name = "VWAP Reclaim & Momentum Pullback"
+            trigger_rule = f"Enter on 5m candle test of {curr_sym}{entry_price} holding above VWAP"
     else:
         entry_price = round(min(curr_vwap, curr_price * 1.002), 2)
         stop_loss = round(max(supertrend, entry_price * 1.007), 2)
         risk_per_share = max(round(stop_loss - entry_price, 2), 0.5)
         target_1 = round(entry_price - (risk_per_share * 1.5), 2)
         target_2 = round(entry_price - (risk_per_share * 2.5), 2)
-        setup_name = "VWAP Rejection & Breakdown Scalp"
-        trigger_rule = f"Short on 5m candle test of {curr_sym}{entry_price} with rejection below VWAP"
+        if pdl > 0 and curr_price <= pdl:
+            setup_name = "PDL Breakdown & Liquidation Scalp"
+            trigger_rule = f"Short retest of PDL {curr_sym}{pdl:.2f} failing below dynamic ceiling and VWAP"
+        else:
+            setup_name = "VWAP Rejection & Breakdown Scalp"
+            trigger_rule = f"Short on 5m candle test of {curr_sym}{entry_price} with rejection below VWAP"
 
     rr_ratio = "1:2.0"
+
+    ref_line = f"Key Reference: PDH {curr_sym}{pdh:.2f} | PDL {curr_sym}{pdl:.2f} | PDC {curr_sym}{pdc:.2f}\n" if pdh > 0 else ""
 
     formatted_card = (
         f"═══════════════════════════════════════════\n"
@@ -628,6 +653,7 @@ def _generate_battle_plan(
         f"Ticker: {ticker} ({company})\n"
         f"Tactical Setup: {setup_name}\n"
         f"Directional Bias: {bias}\n"
+        f"{ref_line}"
         f"-------------------------------------------\n"
         f"Entry Trigger: {curr_sym}{entry_price:.2f}\n"
         f"Rule: {trigger_rule}\n"

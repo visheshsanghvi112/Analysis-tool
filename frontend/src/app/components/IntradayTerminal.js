@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   Activity, ArrowUpRight, ArrowDownRight, RefreshCw, Layers,
   Compass, Calculator, ShieldAlert, Sparkles, Sliders, ChevronDown,
   Search, TrendingUp, TrendingDown, Target, Zap, Clock, ShieldCheck,
   BarChart2, Flame, Eye, ArrowRight, CheckCircle2, XCircle, AlertCircle,
-  Copy, Check, Scale, AlertTriangle, Play, HelpCircle
+  Copy, Check, Scale, AlertTriangle, Play, HelpCircle,
+  Volume2, VolumeX, Edit3, Trash2
 } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 
@@ -39,7 +41,10 @@ const TIMEFRAMES = [
 ];
 
 export default function IntradayTerminal() {
-  const [ticker, setTicker] = useState('RELIANCE.NS');
+  const searchParams = useSearchParams();
+  const urlTicker = searchParams ? searchParams.get('ticker') : null;
+
+  const [ticker, setTicker] = useState(urlTicker ? urlTicker.trim().toUpperCase() : 'RELIANCE.NS');
   const [searchInput, setSearchInput] = useState('');
   const [interval, setInterval] = useState('5m');
   const [period, setPeriod] = useState('1d');
@@ -56,6 +61,9 @@ export default function IntradayTerminal() {
   const [refreshCountdown, setRefreshCountdown] = useState(30);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Audio Alerts state
+  const [soundAlerts, setSoundAlerts] = useState(false);
+
   // Chart Overlays
   const [showVWAP, setShowVWAP] = useState(true);
   const [showVWAPBands, setShowVWAPBands] = useState(true);
@@ -63,6 +71,10 @@ export default function IntradayTerminal() {
   const [showEMA, setShowEMA] = useState(true);
   const [showORB, setShowORB] = useState(true);
   const [showCamarilla, setShowCamarilla] = useState(false);
+  const [showPDH, setShowPDH] = useState(true);
+
+  // Viewport Zoom: 'all' | '60' | '30'
+  const [candleSlice, setCandleSlice] = useState('all');
 
   // Sub-chart selector
   const [activeSubChart, setActiveSubChart] = useState('volume'); // 'volume' | 'rsi' | 'cvd'
@@ -77,6 +89,11 @@ export default function IntradayTerminal() {
   const [calcEntry, setCalcEntry] = useState('');
   const [calcStop, setCalcStop] = useState('');
 
+  // Trader's Scratchpad & Journal state
+  const [scratchpadOpen, setScratchpadOpen] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [notesSaved, setNotesSaved] = useState(false);
+
   // Scanner state
   const [scannerMarket, setScannerMarket] = useState('IN');
   const [scannerData, setScannerData] = useState([]);
@@ -87,6 +104,122 @@ export default function IntradayTerminal() {
 
   const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
   const currSym = data?.currency_symbol || (isUS ? '$' : '₹');
+
+  // Sync URL query when urlTicker changes
+  useEffect(() => {
+    if (urlTicker && urlTicker.trim()) {
+      const clean = urlTicker.trim().toUpperCase();
+      if (clean !== ticker) {
+        setTicker(clean);
+      }
+    }
+  }, [urlTicker, ticker]);
+
+  // Sync URL in browser history when ticker changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && ticker) {
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('ticker') !== ticker) {
+          url.searchParams.set('ticker', ticker);
+          window.history.replaceState({}, '', url.toString());
+        }
+      } catch (_) {}
+    }
+  }, [ticker]);
+
+  // Load Trader's Scratchpad notes for active ticker
+  useEffect(() => {
+    if (typeof window !== 'undefined' && ticker) {
+      try {
+        const saved = localStorage.getItem('stockiq_intraday_notes_' + ticker);
+        setNotes(saved || '');
+      } catch (_) {}
+    }
+  }, [ticker]);
+
+  const handleNotesChange = (e) => {
+    const val = e.target.value;
+    setNotes(val);
+    if (typeof window !== 'undefined' && ticker) {
+      try {
+        localStorage.setItem('stockiq_intraday_notes_' + ticker, val);
+        setNotesSaved(true);
+        setTimeout(() => setNotesSaved(false), 1200);
+      } catch (_) {}
+    }
+  };
+
+  const addTimestampToNotes = () => {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const insertion = notes ? `\n[${timeStr}] ` : `[${timeStr}] `;
+    const updated = notes + insertion;
+    setNotes(updated);
+    if (typeof window !== 'undefined' && ticker) {
+      try {
+        localStorage.setItem('stockiq_intraday_notes_' + ticker, updated);
+      } catch (_) {}
+    }
+  };
+
+  const addTemplateTag = (tag) => {
+    const updated = notes ? `${notes} ${tag} ` : `${tag} `;
+    setNotes(updated);
+    if (typeof window !== 'undefined' && ticker) {
+      try {
+        localStorage.setItem('stockiq_intraday_notes_' + ticker, updated);
+      } catch (_) {}
+    }
+  };
+
+  // Synthesizer Chime via Native Web Audio API
+  const playChime = useCallback((type = 'notification') => {
+    if (!soundAlerts || typeof window === 'undefined') return;
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      if (type === 'warning') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(800, now);
+        osc.frequency.setValueAtTime(580, now + 0.12);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      } else if (type === 'breakout') {
+        [523.25, 659.25, 783.99].forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + i * 0.08);
+          gain.gain.setValueAtTime(0.1, now + i * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + (i + 1) * 0.14);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + i * 0.08);
+          osc.stop(now + (i + 1) * 0.14);
+        });
+      } else {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(659.25, now);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.2);
+      }
+    } catch (_) {}
+  }, [soundAlerts]);
 
   // Fetch Main Intraday Data
   const fetchData = useCallback(async (isSilent = false) => {
@@ -122,6 +255,17 @@ export default function IntradayTerminal() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Audio Alert trigger on trap or breakout detection
+  useEffect(() => {
+    if (data && soundAlerts) {
+      if (data.trap_alert?.detected) {
+        playChime('warning');
+      } else if (data.orb?.status && data.orb.status !== 'INSIDE_RANGE') {
+        playChime('breakout');
+      }
+    }
+  }, [data, soundAlerts, playChime]);
 
   // Auto-refresh countdown timer
   useEffect(() => {
@@ -280,7 +424,14 @@ export default function IntradayTerminal() {
   };
 
   // SVG Candlestick Chart calculations
-  const candles = data?.candles || [];
+  const rawCandles = data?.candles || [];
+  const candles = useMemo(() => {
+    if (!rawCandles.length) return [];
+    if (candleSlice === '30') return rawCandles.slice(-30);
+    if (candleSlice === '60') return rawCandles.slice(-60);
+    return rawCandles;
+  }, [rawCandles, candleSlice]);
+
   const chartHeight = 360;
   const chartWidth = 720;
   const padding = { top: 20, right: 65, bottom: 30, left: 10 };
@@ -305,6 +456,12 @@ export default function IntradayTerminal() {
       }
     });
 
+    if (showPDH && data?.pivots?.daily_levels) {
+      const { pdh, pdl } = data.pivots.daily_levels;
+      if (pdh > 0 && pdh > max) max = pdh;
+      if (pdl > 0 && pdl < min) min = pdl;
+    }
+
     const buffer = (max - min) * 0.05 || 1;
     min -= buffer;
     max += buffer;
@@ -314,10 +471,10 @@ export default function IntradayTerminal() {
 
     const xs = (idx) => padding.left + (idx / Math.max(candles.length - 1, 1)) * innerW;
     const ys = (val) => padding.top + innerH - ((val - min) / (max - min)) * innerH;
-    const cw = Math.max(2, Math.min(14, (innerW / candles.length) * 0.7));
+    const cw = Math.max(2, Math.min(22, (innerW / candles.length) * 0.7));
 
     return { priceMin: min, priceMax: max, xScale: xs, yScale: ys, candleWidth: cw };
-  }, [candles, showVWAPBands, showSupertrend]);
+  }, [candles, showVWAPBands, showSupertrend, showPDH, data]);
 
   return (
     <div className="w-full min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-6 lg:p-8 font-sans">
@@ -429,6 +586,56 @@ export default function IntradayTerminal() {
                 </span>
               )}
             </div>
+
+            {/* Audio Alerts Toggle */}
+            <button
+              onClick={() => {
+                const next = !soundAlerts;
+                setSoundAlerts(next);
+                if (next) {
+                  try {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) {
+                      const ctx = new AudioCtx();
+                      const now = ctx.currentTime;
+                      const osc = ctx.createOscillator();
+                      const gain = ctx.createGain();
+                      osc.type = 'sine';
+                      osc.frequency.setValueAtTime(659.25, now);
+                      gain.gain.setValueAtTime(0.08, now);
+                      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+                      osc.connect(gain);
+                      gain.connect(ctx.destination);
+                      osc.start(now);
+                      osc.stop(now + 0.2);
+                    }
+                  } catch (_) {}
+                }
+              }}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition ${
+                soundAlerts
+                  ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+                  : 'bg-slate-900/90 text-slate-500 border-slate-800 hover:text-slate-300'
+              }`}
+              title={soundAlerts ? 'Audio Alerts: ACTIVE (Click to Mute)' : 'Audio Alerts: MUTED (Click to Enable Synthesizer Chimes)'}
+            >
+              {soundAlerts ? <Volume2 className="w-3.5 h-3.5 text-cyan-400" /> : <VolumeX className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">{soundAlerts ? 'Sound ON' : 'Muted'}</span>
+            </button>
+
+            {/* Trader's Scratchpad Toggle */}
+            <button
+              onClick={() => setScratchpadOpen(!scratchpadOpen)}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition ${
+                scratchpadOpen
+                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                  : 'bg-slate-900/90 text-slate-400 border-slate-800 hover:text-slate-200'
+              }`}
+              title="Open Trader's Real-Time Execution Notepad & Journal"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Trader&apos;s Journal</span>
+            </button>
 
             <button
               onClick={() => fetchData(false)}
@@ -639,20 +846,44 @@ export default function IntradayTerminal() {
           <div className="xl:col-span-3 space-y-4">
             <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-4 sm:p-6 backdrop-blur-md">
               <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
-                <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-                  {TIMEFRAMES.map((tf) => (
-                    <button
-                      key={tf.label}
-                      onClick={() => { setInterval(tf.interval); setPeriod(tf.period); }}
-                      className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
-                        interval === tf.interval
-                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                          : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      {tf.label}
-                    </button>
-                  ))}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                    {TIMEFRAMES.map((tf) => (
+                      <button
+                        key={tf.label}
+                        onClick={() => { setInterval(tf.interval); setPeriod(tf.period); }}
+                        className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+                          interval === tf.interval
+                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {tf.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Viewport Zoom */}
+                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                    <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 px-1.5">Zoom</span>
+                    {[
+                      { id: 'all', label: 'All Day' },
+                      { id: '60', label: '60 Bars' },
+                      { id: '30', label: '30 Bars' },
+                    ].map((z) => (
+                      <button
+                        key={z.id}
+                        onClick={() => setCandleSlice(z.id)}
+                        className={`px-2 py-1 text-[11px] font-semibold rounded-lg transition ${
+                          candleSlice === z.id
+                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {z.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Overlay Toggles */}
@@ -715,6 +946,16 @@ export default function IntradayTerminal() {
                   >
                     <span className="w-2 h-0.5 bg-rose-400 rounded-full" />
                     Camarilla
+                  </button>
+
+                  <button
+                    onClick={() => setShowPDH(!showPDH)}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 ${
+                      showPDH ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-950 text-slate-500 border border-slate-800'
+                    }`}
+                  >
+                    <span className="w-2 h-0.5 bg-amber-400 rounded-full" />
+                    PDH / PDL
                   </button>
                 </div>
               </div>
@@ -848,6 +1089,80 @@ export default function IntradayTerminal() {
                         {data.pivots.camarilla.l4 && (
                           <line x1={padding.left} y1={yScale(data.pivots.camarilla.l4)} x2={chartWidth - padding.right} y2={yScale(data.pivots.camarilla.l4)} stroke="#f43f5e" strokeWidth="1" strokeDasharray="2 2" />
                         )}
+                      </g>
+                    )}
+
+                    {/* Previous Day Benchmark Levels (PDH, PDL, PDC) */}
+                    {showPDH && data?.pivots?.daily_levels && data.pivots.daily_levels.pdh > 0 && (
+                      <g>
+                        {/* PDH Line & Tag */}
+                        <line
+                          x1={padding.left}
+                          y1={yScale(data.pivots.daily_levels.pdh)}
+                          x2={chartWidth - padding.right}
+                          y2={yScale(data.pivots.daily_levels.pdh)}
+                          stroke="#f59e0b"
+                          strokeDasharray="4 3"
+                          strokeWidth="1.2"
+                          strokeOpacity={0.85}
+                        />
+                        <text
+                          x={chartWidth - padding.right + 4}
+                          y={yScale(data.pivots.daily_levels.pdh) + 3}
+                          fill="#f59e0b"
+                          fontSize="8"
+                          fontFamily="monospace"
+                          fontWeight="bold"
+                        >
+                          PDH
+                        </text>
+
+                        {/* PDC Line & Tag */}
+                        {data.pivots.daily_levels.pdc > 0 && (
+                          <>
+                            <line
+                              x1={padding.left}
+                              y1={yScale(data.pivots.daily_levels.pdc)}
+                              x2={chartWidth - padding.right}
+                              y2={yScale(data.pivots.daily_levels.pdc)}
+                              stroke="#94a3b8"
+                              strokeDasharray="2 2"
+                              strokeWidth="1"
+                              strokeOpacity={0.6}
+                            />
+                            <text
+                              x={chartWidth - padding.right + 4}
+                              y={yScale(data.pivots.daily_levels.pdc) + 3}
+                              fill="#94a3b8"
+                              fontSize="8"
+                              fontFamily="monospace"
+                            >
+                              PDC
+                            </text>
+                          </>
+                        )}
+
+                        {/* PDL Line & Tag */}
+                        <line
+                          x1={padding.left}
+                          y1={yScale(data.pivots.daily_levels.pdl)}
+                          x2={chartWidth - padding.right}
+                          y2={yScale(data.pivots.daily_levels.pdl)}
+                          stroke="#06b6d4"
+                          strokeDasharray="4 3"
+                          strokeWidth="1.2"
+                          strokeOpacity={0.85}
+                        />
+                        <text
+                          x={chartWidth - padding.right + 4}
+                          y={yScale(data.pivots.daily_levels.pdl) + 3}
+                          fill="#06b6d4"
+                          fontSize="8"
+                          fontFamily="monospace"
+                          fontWeight="bold"
+                        >
+                          PDL
+                        </text>
                       </g>
                     )}
 
@@ -1254,6 +1569,96 @@ export default function IntradayTerminal() {
                 <p className="text-[10px] text-slate-500 mt-1 font-sans">Full runner exit target</p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ── TRADER'S EXECUTION SCRATCHPAD & JOURNAL ─────────────────────── */}
+        {scratchpadOpen && (
+          <div className="bg-slate-900/90 border border-amber-500/30 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl shadow-amber-950/10">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
+                  <Edit3 className="w-4 h-4 text-amber-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-white tracking-wide">
+                      Trader&apos;s Execution Scratchpad &amp; Mental Discipline Journal
+                    </h3>
+                    <InfoBadge infoKey="traders_scratchpad" />
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Live trade thesis, mental stops &amp; execution notes for <strong>{ticker}</strong> — auto-saved locally
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {notesSaved && (
+                  <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                    <CheckCircle2 className="w-3 h-3" /> Saved
+                  </span>
+                )}
+                <button
+                  onClick={addTimestampToNotes}
+                  className="px-2.5 py-1 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 flex items-center gap-1 transition"
+                  title="Insert current local time into journal"
+                >
+                  <Clock className="w-3 h-3 text-cyan-400" />
+                  <span>+ Timestamp</span>
+                </button>
+                <button
+                  onClick={() => {
+                    navigator.clipboard?.writeText(notes || '');
+                    alert('Journal notes copied to clipboard!');
+                  }}
+                  className="px-2.5 py-1 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 flex items-center gap-1 transition"
+                >
+                  <Copy className="w-3 h-3 text-slate-400" />
+                  <span>Copy</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm(`Clear execution notes for ${ticker}?`)) {
+                      setNotes('');
+                      try { localStorage.removeItem('stockiq_intraday_notes_' + ticker); } catch (_) {}
+                    }
+                  }}
+                  className="p-1.5 text-slate-500 hover:text-rose-400 transition"
+                  title="Clear notes"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Discipline Tags */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-3 pb-2 text-[11px]">
+              <span className="text-slate-500 font-mono text-[10px] uppercase">Discipline Tags:</span>
+              {[
+                { tag: '📌 [VWAP Retest Entry]', color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
+                { tag: '🛑 [Hard Stop Violation Risk]', color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
+                { tag: '🎯 [Camarilla Target Achieved]', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+                { tag: '⚠️ [Lunch Chop Slump - No Trade]', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+                { tag: '⚡ [MIS Square-Off Approaching]', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+              ].map((chip) => (
+                <button
+                  key={chip.tag}
+                  onClick={() => addTemplateTag(chip.tag)}
+                  className={`px-2 py-0.5 rounded border text-[11px] font-mono transition hover:scale-105 active:scale-95 ${chip.color}`}
+                >
+                  {chip.tag}
+                </button>
+              ))}
+            </div>
+
+            {/* Notepad Textarea */}
+            <textarea
+              value={notes}
+              onChange={handleNotesChange}
+              placeholder={`Write your trade hypothesis for ${ticker}...\nExample:\n- 10:15 AM: Bullish reclaim of VWAP with positive CVD (+15,000 delta).\n- Entry: At VWAP retest.\n- Stop Loss: 5m close below Supertrend.\n- Target: Camarilla H3 resistance.`}
+              className="w-full h-28 sm:h-32 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs sm:text-sm font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500/50 resize-y"
+            />
           </div>
         )}
 

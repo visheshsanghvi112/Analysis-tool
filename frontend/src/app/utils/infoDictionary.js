@@ -333,5 +333,17 @@ export const INFO_DICTIONARY = {
     what: 'A structured, pre-calculated algorithmic trade card specifying the exact Entry Trigger, Hard Stop Loss, Target 1 (1.5R), Target 2 (2.5R), and net profit after all charges.',
     why: 'Eliminates emotional hesitation and panic. Real-world prop trading mandates having a fully written, quantified trade plan before transmitting any live order.',
     interpretation: 'Execute only when price meets the exact trigger rule; trail stop-loss to breakeven once Target 1 is achieved to guarantee a risk-free runner.'
+  },
+  pdh_pdl_levels: {
+    title: 'Previous Day High (PDH), Low (PDL) & Close (PDC)',
+    what: 'Critical horizontal reference price boundaries established during the previous trading day\'s regular session.',
+    why: 'Floor traders, institutional market makers, and algorithmic execution algorithms treat PDH, PDL, and PDC as the most vital liquidity and rejection barriers of the active day.',
+    interpretation: 'A clean 5m candle close above PDH indicates bullish trend continuation; rejection at PDH indicates an institutional liquidity sweep. Sustained trading below PDL signals heavy institutional liquidation.'
+  },
+  traders_scratchpad: {
+    title: 'Trader\'s Execution Scratchpad & Real-Time Journal',
+    what: 'A private, real-time tactical journal stored locally in browser storage for logging trade hypotheses, entry rules, stops, and psychological discipline.',
+    why: 'Proprietary trading desk studies show that traders who document their setups prior to order submission maintain 40% tighter drawdown control and avoid revenge trades.',
+    interpretation: 'Log your reason for entry, execution trigger price, and stop discipline prior to placing trades; add timestamps to track price action evolution.'
   }
 };

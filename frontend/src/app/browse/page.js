@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Search, X, TrendingUp, TrendingDown,
-  ChevronRight, Sparkles, Filter, RefreshCw, Flame, Award, ShieldAlert
+  ChevronRight, Sparkles, Filter, RefreshCw, Flame, Award, ShieldAlert, Activity
 } from 'lucide-react';
 import { smartSearch } from '../utils/smartSearch';
 
@@ -260,6 +260,28 @@ function ScreenerStockCard({ stock, type, onSelect }) {
           }}>
             {isPos ? '+' : ''}{changePct.toFixed(2)}%
           </span>
+          <a
+            href={`/intraday?ticker=${encodeURIComponent(stock.ticker)}`}
+            onClick={(e) => e.stopPropagation()}
+            title="Open in Intraday Desk"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '24px',
+              height: '24px',
+              borderRadius: '6px',
+              background: 'rgba(52, 211, 153, 0.1)',
+              border: '1px solid rgba(52, 211, 153, 0.3)',
+              color: '#34d399',
+              textDecoration: 'none',
+              transition: 'all 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(52, 211, 153, 0.25)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(52, 211, 153, 0.1)'}
+          >
+            <Activity style={{ width: '12px', height: '12px' }} />
+          </a>
         </div>
       </div>
     </button>
