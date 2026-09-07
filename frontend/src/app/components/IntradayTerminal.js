@@ -21,19 +21,27 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (
 );
 
 const QUICK_TICKERS = [
-  { symbol: 'RELIANCE.NS', name: 'Reliance Ind.', market: 'IN' },
-  { symbol: 'TCS.NS',      name: 'TCS',           market: 'IN' },
-  { symbol: 'HDFCBANK.NS', name: 'HDFC Bank',     market: 'IN' },
-  { symbol: 'INFY.NS',     name: 'Infosys',       market: 'IN' },
-  { symbol: 'TATAMOTORS.NS', name: 'Tata Motors', market: 'IN' },
-  { symbol: 'NVDA',        name: 'Nvidia Corp',   market: 'US' },
-  { symbol: 'AAPL',        name: 'Apple Inc',     market: 'US' },
-  { symbol: 'TSLA',        name: 'Tesla Inc',     market: 'US' },
-  { symbol: 'MSFT',        name: 'Microsoft',     market: 'US' },
+  { symbol: 'RELIANCE.NS',   name: 'Reliance Ind.', market: 'IN' },
+  { symbol: 'TCS.NS',        name: 'TCS',           market: 'IN' },
+  { symbol: 'HDFCBANK.NS',   name: 'HDFC Bank',     market: 'IN' },
+  { symbol: 'INFY.NS',       name: 'Infosys',       market: 'IN' },
+  { symbol: 'TATAMOTORS.NS', name: 'Tata Motors',   market: 'IN' },
+  { symbol: 'SBIN.NS',       name: 'SBI',           market: 'IN' },
+  { symbol: 'ICICIBANK.NS',  name: 'ICICI Bank',    market: 'IN' },
+  { symbol: 'BHARTIARTL.NS', name: 'Airtel',        market: 'IN' },
+  { symbol: 'NVDA',          name: 'Nvidia Corp',   market: 'US' },
+  { symbol: 'AAPL',          name: 'Apple Inc',     market: 'US' },
+  { symbol: 'TSLA',          name: 'Tesla Inc',     market: 'US' },
+  { symbol: 'MSFT',          name: 'Microsoft',     market: 'US' },
+  { symbol: 'AMD',           name: 'AMD Inc',       market: 'US' },
+  { symbol: 'AMZN',          name: 'Amazon',        market: 'US' },
+  { symbol: 'SPY',           name: 'S&P 500 ETF',   market: 'US' },
+  { symbol: 'QQQ',           name: 'Invesco QQQ',   market: 'US' },
 ];
 
 const TIMEFRAMES = [
   { label: '1m', interval: '1m', period: '1d' },
+  { label: '2m', interval: '2m', period: '1d' },
   { label: '3m', interval: '3m', period: '1d' },
   { label: '5m', interval: '5m', period: '1d' },
   { label: '15m', interval: '15m', period: '1d' },
@@ -47,7 +55,7 @@ export default function IntradayTerminal() {
 
   const [ticker, setTicker] = useState(urlTicker ? urlTicker.trim().toUpperCase() : 'RELIANCE.NS');
   const [searchInput, setSearchInput] = useState('');
-  const [interval, setInterval] = useState('5m');
+  const [candleInterval, setCandleInterval] = useState('5m');
   const [period, setPeriod] = useState('1d');
 
   const [data, setData] = useState(null);
@@ -266,7 +274,7 @@ export default function IntradayTerminal() {
     setIsRefreshing(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/intraday/analysis?ticker=${encodeURIComponent(ticker)}&interval=${interval}&period=${period}`);
+      const res = await fetch(`${API_BASE_URL}/api/intraday/analysis?ticker=${encodeURIComponent(ticker)}&interval=${candleInterval}&period=${period}`);
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson.detail || `Server returned status ${res.status}`);
@@ -288,7 +296,7 @@ export default function IntradayTerminal() {
       setIsRefreshing(false);
       setRefreshCountdown(autoRefreshSecs);
     }
-  }, [ticker, interval, period, autoRefreshSecs]);
+  }, [ticker, candleInterval, period, autoRefreshSecs]);
 
   // Initial and param-change load
   useEffect(() => {
@@ -594,11 +602,11 @@ export default function IntradayTerminal() {
     let max = -Infinity;
 
     candles.forEach(c => {
-      if (c.low < min) min = c.low;
-      if (c.high > max) max = c.high;
+      if (c.low > 0 && c.low < min) min = c.low;
+      if (c.high > 0 && c.high > max) max = c.high;
       if (showVWAPBands) {
-        if (c.lower_band_2 < min && c.lower_band_2 > 0) min = c.lower_band_2;
-        if (c.upper_band_2 > max) max = c.upper_band_2;
+        if (c.lower_band_2 > 0 && c.lower_band_2 < min) min = c.lower_band_2;
+        if (c.upper_band_2 > 0 && c.upper_band_2 > max) max = c.upper_band_2;
       }
       if (showSupertrend && c.supertrend > 0) {
         if (c.supertrend < min) min = c.supertrend;
@@ -606,10 +614,32 @@ export default function IntradayTerminal() {
       }
     });
 
+    if (data?.current_price > 0) {
+      if (data.current_price < min) min = data.current_price;
+      if (data.current_price > max) max = data.current_price;
+    }
+
     if (showPDH && data?.pivots?.daily_levels) {
       const { pdh, pdl } = data.pivots.daily_levels;
       if (pdh > 0 && pdh > max) max = pdh;
       if (pdl > 0 && pdl < min) min = pdl;
+    }
+
+    if (showORB && data?.orb) {
+      const { high_15m, low_15m } = data.orb;
+      if (high_15m > 0 && high_15m > max) max = high_15m;
+      if (low_15m > 0 && low_15m < min) min = low_15m;
+    }
+
+    if (showCamarilla && data?.pivots?.camarilla) {
+      const { h4, l4 } = data.pivots.camarilla;
+      if (h4 > 0 && h4 > max) max = h4;
+      if (l4 > 0 && l4 < min) min = l4;
+    }
+
+    if (!isFinite(min) || !isFinite(max) || min <= 0) {
+      min = candles[0]?.open || 100;
+      max = min * 1.05;
     }
 
     const buffer = (max - min) * 0.05 || 1;
@@ -620,11 +650,11 @@ export default function IntradayTerminal() {
     const innerH = chartHeight - padding.top - padding.bottom;
 
     const xs = (idx) => padding.left + (idx / Math.max(candles.length - 1, 1)) * innerW;
-    const ys = (val) => padding.top + innerH - ((val - min) / (max - min)) * innerH;
+    const ys = (val) => padding.top + innerH - ((val - min) / Math.max(max - min, 1e-6)) * innerH;
     const cw = Math.max(2, Math.min(22, (innerW / candles.length) * 0.7));
 
     return { priceMin: min, priceMax: max, xScale: xs, yScale: ys, candleWidth: cw };
-  }, [candles, showVWAPBands, showSupertrend, showPDH, data]);
+  }, [candles, showVWAPBands, showSupertrend, showPDH, showORB, showCamarilla, data]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col justify-between">
@@ -738,6 +768,7 @@ export default function IntradayTerminal() {
                 onChange={(e) => setAutoRefreshSecs(Number(e.target.value))}
                 className="bg-transparent text-white font-mono text-xs focus:outline-none cursor-pointer"
               >
+                <option value={10} className="bg-slate-900">10s (Fast Live)</option>
                 <option value={15} className="bg-slate-900">15s</option>
                 <option value={30} className="bg-slate-900">30s</option>
                 <option value={60} className="bg-slate-900">60s</option>
@@ -939,6 +970,26 @@ export default function IntradayTerminal() {
                 <span>H: <strong className="text-emerald-400">{currSym}{data.high}</strong></span>
                 <span>L: <strong className="text-rose-400">{currSym}{data.low}</strong></span>
               </div>
+              {data.high > data.low && data.current_price && (
+                <div className="mt-1.5 space-y-0.5">
+                  <div className="w-full bg-slate-800/80 h-1 rounded-full overflow-hidden relative">
+                    <div className="h-full bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-500 w-full" />
+                    <div
+                      className="absolute top-0 bottom-0 w-1.5 bg-white rounded-full shadow-sm ring-1 ring-white/60"
+                      style={{
+                        left: `${Math.max(0, Math.min(97, ((data.current_price - data.low) / (data.high - data.low)) * 100))}%`
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[8px] text-slate-500 font-mono">
+                    <span>LOD</span>
+                    <span className="text-slate-400">
+                      {Math.round(((data.current_price - data.low) / (data.high - data.low)) * 100)}% of Range
+                    </span>
+                    <span>HOD</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Session VWAP */}
@@ -1087,9 +1138,9 @@ export default function IntradayTerminal() {
                     {TIMEFRAMES.map((tf) => (
                       <button
                         key={tf.label}
-                        onClick={() => { setInterval(tf.interval); setPeriod(tf.period); }}
+                        onClick={() => { setCandleInterval(tf.interval); setPeriod(tf.period); }}
                         className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
-                          interval === tf.interval
+                          candleInterval === tf.interval
                             ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
                             : 'text-slate-400 hover:text-slate-200'
                         }`}
@@ -1279,8 +1330,17 @@ export default function IntradayTerminal() {
                     onMouseLeave={() => { setHoveredCandle(null); setHoveredX(null); setHoveredY(null); }}
                     onMouseMove={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
-                      setHoveredX(((e.clientX - rect.left) / rect.width) * chartWidth);
-                      setHoveredY(((e.clientY - rect.top) / rect.height) * chartHeight);
+                      const currentX = ((e.clientX - rect.left) / rect.width) * chartWidth;
+                      const currentY = ((e.clientY - rect.top) / rect.height) * chartHeight;
+                      setHoveredX(currentX);
+                      setHoveredY(currentY);
+
+                      const innerW = chartWidth - padding.left - padding.right;
+                      const relX = currentX - padding.left;
+                      const candleIdx = Math.round((relX / Math.max(innerW, 1)) * (candles.length - 1));
+                      if (candleIdx >= 0 && candleIdx < candles.length) {
+                        setHoveredCandle(candles[candleIdx]);
+                      }
                     }}
                   >
                     {/* Horizontal Price Grid Lines */}
@@ -1492,7 +1552,7 @@ export default function IntradayTerminal() {
                     {showSupertrend && (
                       <g>
                         {candles.map((c, i) => {
-                          if (i === 0 || !candles[i - 1].supertrend || !c.supertrend) return null;
+                          if (i === 0 || !candles[i - 1].supertrend || !c.supertrend || candles[i - 1].supertrend_dir !== c.supertrend_dir) return null;
                           return (
                             <line
                               key={`st-${i}`}
@@ -1537,6 +1597,57 @@ export default function IntradayTerminal() {
                         </text>
                       );
                     })}
+
+                    {/* Live Market Price Horizontal Line & Right Axis Badge */}
+                    {data?.current_price && (() => {
+                      const liveY = yScale(data.current_price);
+                      if (liveY < padding.top || liveY > chartHeight - padding.bottom) return null;
+                      const lastX = candles.length > 0 ? xScale(candles.length - 1) : chartWidth - padding.right;
+                      const isUpDay = data.current_price >= (data.prev_close || data.candles?.[0]?.open || data.current_price);
+                      const liveColor = isUpDay ? '#10b981' : '#f43f5e';
+                      return (
+                        <g pointerEvents="none" key="live-price-indicator">
+                          {/* Pulsating radar ping beacon at the active candle tick */}
+                          <circle cx={lastX} cy={liveY} r="7" fill={liveColor} fillOpacity="0.2">
+                            <animate attributeName="r" values="3;9;3" dur="2s" repeatCount="indefinite" />
+                            <animate attributeName="fill-opacity" values="0.6;0.1;0.6" dur="2s" repeatCount="indefinite" />
+                          </circle>
+                          <circle cx={lastX} cy={liveY} r="3" fill={liveColor} />
+
+                          {/* Horizontal dashed price level line across the chart */}
+                          <line
+                            x1={padding.left}
+                            y1={liveY}
+                            x2={chartWidth - padding.right}
+                            y2={liveY}
+                            stroke={liveColor}
+                            strokeWidth="1.2"
+                            strokeDasharray="4 3"
+                            strokeOpacity={0.85}
+                          />
+
+                          {/* Right Y-Axis Illuminated Price Badge */}
+                          <rect
+                            x={chartWidth - padding.right + 2}
+                            y={liveY - 9}
+                            width={padding.right - 4}
+                            height={18}
+                            rx={3}
+                            fill={liveColor}
+                          />
+                          <text
+                            x={chartWidth - padding.right + 5}
+                            y={liveY + 3.5}
+                            fill="#ffffff"
+                            fontSize="8.5"
+                            fontFamily="monospace"
+                            fontWeight="bold"
+                          >
+                            {currSym}{data.current_price.toFixed(2)}
+                          </text>
+                        </g>
+                      );
+                    })()}
 
                     {/* Crosshair vertical line */}
                     {hoveredX !== null && (
@@ -1613,11 +1724,13 @@ export default function IntradayTerminal() {
                         const maxVol = Math.max(...candles.map(c => c.volume || 1), 1);
                         const hasDelta = candles.some(c => (c.buyer_vol || 0) + (c.seller_vol || 0) > 0);
                         const lastCandle = candles[candles.length - 1];
+                        const activeCandle = hoveredCandle || lastCandle;
                         return (
                           <>
                             <text x={padding.left + 4} y={14} fill="#64748b" fontSize="8" fontFamily="monospace">
-                              Vol: {lastCandle?.volume?.toLocaleString() || 0}
-                              {hasDelta && ` | Buyers: ${lastCandle?.buyer_vol?.toLocaleString() || 0} | Sellers: ${lastCandle?.seller_vol?.toLocaleString() || 0}`}
+                              Vol: {activeCandle?.volume?.toLocaleString() || 0}
+                              {hasDelta && ` | Buyers: ${activeCandle?.buyer_vol?.toLocaleString() || 0} | Sellers: ${activeCandle?.seller_vol?.toLocaleString() || 0}`}
+                              {hoveredCandle && ` (${activeCandle?.time})`}
                             </text>
                             <text x={chartWidth - padding.right + 4} y={14} fill="#475569" fontSize="8" fontFamily="monospace">
                               Max {(maxVol / 1000).toFixed(0)}K
@@ -1646,19 +1759,32 @@ export default function IntradayTerminal() {
 
                   {activeSubChart === 'rsi' && (
                     <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full">
-                      <line x1={padding.left} y1={30} x2={chartWidth - padding.right} y2={30} stroke="#f43f5e" strokeDasharray="3 3" strokeOpacity={0.5} />
-                      <text x={padding.left + 4} y={28} fill="#f43f5e" fontSize="8" fontFamily="monospace" fillOpacity={0.8}>OB 70</text>
-                      <line x1={padding.left} y1={70} x2={chartWidth - padding.right} y2={70} stroke="#10b981" strokeDasharray="3 3" strokeOpacity={0.5} />
-                      <text x={padding.left + 4} y={83} fill="#10b981" fontSize="8" fontFamily="monospace" fillOpacity={0.8}>OS 30</text>
-                      <text x={chartWidth - padding.right - 10} y={16} fill="#94a3b8" fontSize="8" fontFamily="monospace" textAnchor="end">
-                        RSI (14): <tspan fill={(candles[candles.length - 1]?.rsi || 50) >= 70 ? '#f43f5e' : (candles[candles.length - 1]?.rsi || 50) <= 30 ? '#10b981' : '#38bdf8'} fontWeight="bold">{(candles[candles.length - 1]?.rsi || 50).toFixed(1)}</tspan>
-                      </text>
-                      <path
-                        d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${100 - (c.rsi || 50)}`, '')}
-                        fill="none"
-                        stroke="#38bdf8"
-                        strokeWidth="1.5"
-                      />
+                      {(() => {
+                        const lastCandle = candles[candles.length - 1];
+                        const activeCandle = hoveredCandle || lastCandle;
+                        const activeRsi = (activeCandle?.rsi !== undefined && activeCandle?.rsi !== null) ? activeCandle.rsi : 50;
+                        return (
+                          <>
+                            <line x1={padding.left} y1={30} x2={chartWidth - padding.right} y2={30} stroke="#f43f5e" strokeDasharray="3 3" strokeOpacity={0.5} />
+                            <text x={padding.left + 4} y={28} fill="#f43f5e" fontSize="8" fontFamily="monospace" fillOpacity={0.8}>OB 70</text>
+                            <line x1={padding.left} y1={70} x2={chartWidth - padding.right} y2={70} stroke="#10b981" strokeDasharray="3 3" strokeOpacity={0.5} />
+                            <text x={padding.left + 4} y={83} fill="#10b981" fontSize="8" fontFamily="monospace" fillOpacity={0.8}>OS 30</text>
+                            <text x={chartWidth - padding.right - 10} y={16} fill="#94a3b8" fontSize="8" fontFamily="monospace" textAnchor="end">
+                              RSI (14): <tspan fill={activeRsi >= 70 ? '#f43f5e' : activeRsi <= 30 ? '#10b981' : '#38bdf8'} fontWeight="bold">{activeRsi.toFixed(1)}</tspan>
+                              {hoveredCandle && ` (${activeCandle?.time})`}
+                            </text>
+                            <path
+                              d={candles.reduce((acc, c, i) => {
+                                const r = (c.rsi !== undefined && c.rsi !== null) ? c.rsi : 50;
+                                return `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${100 - r}`;
+                              }, '')}
+                              fill="none"
+                              stroke="#38bdf8"
+                              strokeWidth="1.5"
+                            />
+                          </>
+                        );
+                      })()}
                     </svg>
                   )}
 
@@ -1669,17 +1795,19 @@ export default function IntradayTerminal() {
                         const macdLine = candles.map(c => c.macd || 0);
                         const signalLine = candles.map(c => c.macd_signal || 0);
                         const allVals = [...histVals, ...macdLine, ...signalLine];
-                        const minV = Math.min(...allVals);
-                        const maxV = Math.max(...allVals);
+                        const minV = Math.min(...allVals, 0);
+                        const maxV = Math.max(...allVals, 0);
                         const range = (maxV - minV) || 0.001;
                         const norm = (v) => 90 - ((v - minV) / range) * 80;
-                        const zeroY = norm(0);
+                        const zeroY = Math.max(10, Math.min(90, norm(0)));
                         const lastCandle = candles[candles.length - 1];
+                        const activeCandle = hoveredCandle || lastCandle;
                         return (
                           <>
                             {/* Top info badge */}
                             <text x={padding.left + 4} y={14} fill="#64748b" fontSize="8" fontFamily="monospace">
-                              MACD: <tspan fill="#38bdf8">{(lastCandle?.macd || 0).toFixed(2)}</tspan> | Sig: <tspan fill="#f59e0b">{(lastCandle?.macd_signal || 0).toFixed(2)}</tspan> | Hist: <tspan fill={(lastCandle?.macd_histogram || 0) >= 0 ? '#10b981' : '#f43f5e'}>{(lastCandle?.macd_histogram || 0).toFixed(2)}</tspan>
+                              MACD: <tspan fill="#38bdf8">{(activeCandle?.macd || 0).toFixed(2)}</tspan> | Sig: <tspan fill="#f59e0b">{(activeCandle?.macd_signal || 0).toFixed(2)}</tspan> | Hist: <tspan fill={(activeCandle?.macd_histogram || 0) >= 0 ? '#10b981' : '#f43f5e'}>{(activeCandle?.macd_histogram || 0).toFixed(2)}</tspan>
+                              {hoveredCandle && ` (${activeCandle?.time})`}
                             </text>
                             {/* Zero line */}
                             <line x1={padding.left} y1={zeroY} x2={chartWidth - padding.right} y2={zeroY} stroke="#475569" strokeOpacity={0.6} strokeDasharray="2 2" />
@@ -1728,12 +1856,14 @@ export default function IntradayTerminal() {
                         const minCvd = Math.min(...cvdVals, 0);
                         const maxCvd = Math.max(...cvdVals, 1);
                         const cvdRange = (maxCvd - minCvd) || 1;
-                        const zeroY = 90 - ((0 - minCvd) / cvdRange) * 80;
+                        const zeroY = Math.max(10, Math.min(90, 90 - ((0 - minCvd) / cvdRange) * 80));
                         const lastCandle = candles[candles.length - 1];
+                        const activeCandle = hoveredCandle || lastCandle;
                         return (
                           <>
                             <text x={padding.left + 4} y={14} fill="#64748b" fontSize="8" fontFamily="monospace">
-                              CVD Net Cumulative Delta: <tspan fill={(lastCandle?.cum_delta || 0) >= 0 ? '#eab308' : '#f43f5e'} fontWeight="bold">{(lastCandle?.cum_delta || 0) >= 0 ? '+' : ''}{(lastCandle?.cum_delta || 0).toLocaleString()} shares</tspan>
+                              CVD Net Cumulative Delta: <tspan fill={(activeCandle?.cum_delta || 0) >= 0 ? '#eab308' : '#f43f5e'} fontWeight="bold">{(activeCandle?.cum_delta || 0) >= 0 ? '+' : ''}{(activeCandle?.cum_delta || 0).toLocaleString()} shares</tspan>
+                              {hoveredCandle && ` (${activeCandle?.time})`}
                             </text>
                             <line x1={padding.left} y1={zeroY} x2={chartWidth - padding.right} y2={zeroY} stroke="#475569" strokeOpacity={0.6} strokeDasharray="2 2" />
                             <path
@@ -2346,53 +2476,63 @@ export default function IntradayTerminal() {
             </div>
 
             {pcrData ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className={`text-2xl font-black font-mono ${
-                      pcrData.color === 'bearish' ? 'text-rose-400' :
-                      pcrData.color === 'bullish' ? 'text-emerald-400' : 'text-amber-400'
-                    }`}>{pcrData.pcr_oi}</span>
-                    <span className="text-slate-500 text-xs ml-1">PCR OI</span>
-                  </div>
-                  <div className="text-right">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      pcrData.color === 'bearish' ? 'bg-rose-500/20 text-rose-400' :
-                      pcrData.color === 'bullish' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                    }`}>{pcrData.sentiment?.replace('_', ' ')}</span>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{pcrData.expiry_date}</p>
-                  </div>
+              pcrData.available === false ? (
+                <div className="h-36 flex flex-col items-center justify-center p-3 text-center bg-slate-950/40 rounded-2xl border border-slate-800/60">
+                  <Scale className="w-6 h-6 text-slate-600 mb-2" />
+                  <span className="text-xs font-semibold text-slate-300 mb-1">Derivatives Unavailable</span>
+                  <p className="text-[11px] text-slate-500 max-w-[220px] leading-relaxed">
+                    {pcrData.message || 'Options chain data is available for US securities and select F&O listings.'}
+                  </p>
                 </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className={`text-2xl font-black font-mono ${
+                        pcrData.color === 'bearish' ? 'text-rose-400' :
+                        pcrData.color === 'bullish' ? 'text-emerald-400' : 'text-amber-400'
+                      }`}>{pcrData.pcr_oi}</span>
+                      <span className="text-slate-500 text-xs ml-1">PCR OI</span>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        pcrData.color === 'bearish' ? 'bg-rose-500/20 text-rose-400' :
+                        pcrData.color === 'bullish' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                      }`}>{pcrData.sentiment?.replace('_', ' ')}</span>
+                      <p className="text-[10px] text-slate-400 mt-0.5">{pcrData.expiry_date}</p>
+                    </div>
+                  </div>
 
-                {/* Put vs Call OI bar */}
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[10px] font-mono">
-                    <span className="text-emerald-400">Calls: {(pcrData.call_oi / 1000).toFixed(0)}K OI</span>
-                    <span className="text-rose-400">Puts: {(pcrData.put_oi / 1000).toFixed(0)}K OI</span>
+                  {/* Put vs Call OI bar */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[10px] font-mono">
+                      <span className="text-emerald-400">Calls: {(pcrData.call_oi / 1000).toFixed(0)}K OI</span>
+                      <span className="text-rose-400">Puts: {(pcrData.put_oi / 1000).toFixed(0)}K OI</span>
+                    </div>
+                    <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden flex">
+                      {(() => {
+                        const total = (pcrData.call_oi || 0) + (pcrData.put_oi || 0) || 1;
+                        const callPct = Math.round((pcrData.call_oi / total) * 100);
+                        return (
+                          <>
+                            <div className="bg-emerald-500 h-full transition-all" style={{ width: `${callPct}%` }} />
+                            <div className="bg-rose-500 h-full transition-all" style={{ width: `${100 - callPct}%` }} />
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
-                  <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden flex">
-                    {(() => {
-                      const total = (pcrData.call_oi || 0) + (pcrData.put_oi || 0) || 1;
-                      const callPct = Math.round((pcrData.call_oi / total) * 100);
-                      return (
-                        <>
-                          <div className="bg-emerald-500 h-full transition-all" style={{ width: `${callPct}%` }} />
-                          <div className="bg-rose-500 h-full transition-all" style={{ width: `${100 - callPct}%` }} />
-                        </>
-                      );
-                    })()}
-                  </div>
+
+                  {pcrData.max_pain_strike && (
+                    <div className="p-2 bg-slate-950/60 rounded-xl border border-slate-800 flex justify-between text-xs">
+                      <span className="text-slate-400">Max Pain Strike:</span>
+                      <span className="font-bold font-mono text-amber-400">{currSym}{pcrData.max_pain_strike}</span>
+                    </div>
+                  )}
+
+                  <p className="text-[10px] text-slate-500 leading-snug">{pcrData.sentiment_label}</p>
                 </div>
-
-                {pcrData.max_pain_strike && (
-                  <div className="p-2 bg-slate-950/60 rounded-xl border border-slate-800 flex justify-between text-xs">
-                    <span className="text-slate-400">Max Pain Strike:</span>
-                    <span className="font-bold font-mono text-amber-400">{currSym}{pcrData.max_pain_strike}</span>
-                  </div>
-                )}
-
-                <p className="text-[10px] text-slate-500 leading-snug">{pcrData.sentiment_label}</p>
-              </div>
+              )
             ) : (
               <div className="h-32 flex items-center justify-center text-xs text-slate-500">
                 {pcrLoading ? 'Loading options chain...' : 'No options data available for this ticker'}

@@ -91,8 +91,8 @@ def _calculate_volume_profile(df: pd.DataFrame, n_bins: int = 25) -> Dict[str, A
 
     candle_spread = np.maximum(df["High"] - df["Low"], 1e-6)
     buy_ratio = np.clip((df["Close"] - df["Low"]) / candle_spread, 0.1, 0.9)
-    buy_vols = vol * buy_ratio
-    sell_vols = vol * (1.0 - buy_ratio)
+    buy_vols = vol * np.asarray(buy_ratio)
+    sell_vols = vol * (1.0 - np.asarray(buy_ratio))
 
     bin_indices = np.digitize(tp.values, bin_edges) - 1
     bin_indices = np.clip(bin_indices, 0, n_bins - 1)
@@ -724,13 +724,37 @@ def get_intraday_analysis(
     is_us = not clean_ticker.endswith(".NS") and not clean_ticker.endswith(".BO")
     currency_symbol = "$" if is_us else "₹"
 
+    valid_intervals = ["1m", "2m", "3m", "5m", "15m", "30m", "60m", "1h", "1d"]
+    clean_interval = str(interval).strip() if interval and not str(interval).startswith("[object") else "5m"
+    if clean_interval not in valid_intervals:
+        clean_interval = "5m"
+
+    valid_periods = ["1d", "5d", "1mo", "3mo", "6mo", "1y", "ytd", "max"]
+    clean_period = str(period).strip() if period and not str(period).startswith("[object") else "1d"
+    if clean_period not in valid_periods:
+        clean_period = "1d"
+
     try:
         # 1. Fetch intraday OHLCV
-        df = get_history(clean_ticker, period=period, interval=interval)
+        if clean_interval == "3m":
+            df_1m = get_history(clean_ticker, period=clean_period, interval="1m")
+            if not df_1m.empty and len(df_1m) >= 3:
+                df = df_1m.resample("3min").agg({
+                    "Open": "first",
+                    "High": "max",
+                    "Low": "min",
+                    "Close": "last",
+                    "Volume": "sum"
+                }).dropna()
+            else:
+                df = get_history(clean_ticker, period=clean_period, interval="5m")
+        else:
+            df = get_history(clean_ticker, period=clean_period, interval=clean_interval)
+            if df.empty or len(df) < 2:
+                df = get_history(clean_ticker, period="5d", interval=clean_interval)
+        
         if df.empty or len(df) < 2:
-            df = get_history(clean_ticker, period="5d", interval=interval)
-            if df.empty:
-                raise HTTPException(status_code=404, detail=f"No intraday chart data available for {clean_ticker}")
+            raise HTTPException(status_code=404, detail=f"No intraday chart data available for {clean_ticker}")
 
         # 2. Fetch daily history for Pivots & Prev Close
         daily_df = get_history(clean_ticker, period="5d", interval="1d")
@@ -764,7 +788,7 @@ def get_intraday_analysis(
         vpvr = _calculate_volume_profile(df, n_bins=25)
 
         # 9. Opening Range Breakout (ORB)
-        orb = _calculate_orb(df, interval)
+        orb = _calculate_orb(df, clean_interval)
 
         # 10. Candles transformation & Order Flow Delta
         candles = []
@@ -821,10 +845,18 @@ def get_intraday_analysis(
             })
 
         # Headline metrics
-        curr_price = _safe_float(df["Close"].iloc[-1])
+        live_quote_price = _safe_float(quote.get("price"))
+        curr_price = live_quote_price if live_quote_price > 0 else _safe_float(df["Close"].iloc[-1])
+        if candles and live_quote_price > 0:
+            candles[-1]["close"] = curr_price
+            if curr_price > candles[-1]["high"]:
+                candles[-1]["high"] = curr_price
+            if curr_price < candles[-1]["low"]:
+                candles[-1]["low"] = curr_price
+
         open_price = _safe_float(df["Open"].iloc[0])
-        day_high = _safe_float(df["High"].max())
-        day_low = _safe_float(df["Low"].min())
+        day_high = max(_safe_float(df["High"].max()), curr_price)
+        day_low = min(_safe_float(df["Low"].min()), curr_price) if _safe_float(df["Low"].min()) > 0 else curr_price
         curr_vwap = _safe_float(vwap_dict["vwap"][-1])
         curr_st = _safe_float(st_dict["supertrend"][-1]) if len(st_dict["supertrend"]) > 0 else curr_price
         curr_st_dir = int(st_dict["direction"][-1]) if len(st_dict["direction"]) > 0 else 1
@@ -1244,11 +1276,33 @@ def get_options_pcr(
     """
     import requests as _req
 
-    clean_ticker = ticker.strip().upper()
-    is_in = market.upper() == "IN"
+    clean_ticker = ticker.strip().upper() if isinstance(ticker, str) else str(getattr(ticker, "default", ticker)).strip().upper()
+    market_str = str(getattr(market, "default", market) if not isinstance(market, str) else market).strip().upper()
+    is_in = (market_str == "IN") or clean_ticker.endswith(".NS") or clean_ticker.endswith(".BO")
     currency_symbol = "₹" if is_in else "$"
 
     try:
+        # If Indian equity or derivative feed unavailable on Yahoo
+        if is_in:
+            return {
+                "ticker": clean_ticker,
+                "available": False,
+                "message": "Options chain feed is available for US equities (Indian NSE F&O requires exchange broker integration).",
+                "currency_symbol": currency_symbol,
+                "call_oi": 0,
+                "put_oi": 0,
+                "call_volume": 0,
+                "put_volume": 0,
+                "pcr_oi": 0.0,
+                "pcr_volume": 0.0,
+                "sentiment": "UNAVAILABLE",
+                "sentiment_label": "No Options Data Available for Indian Equities",
+                "color": "neutral",
+                "max_pain_strike": None,
+                "top_call_strikes": [],
+                "top_put_strikes": [],
+            }
+
         # Yahoo Finance v7 options endpoint
         url = f"https://query1.finance.yahoo.com/v7/finance/options/{clean_ticker}"
         headers = {
@@ -1262,19 +1316,70 @@ def get_options_pcr(
         }
         resp = _req.get(url, headers=headers, timeout=10)
         if resp.status_code != 200:
-            raise HTTPException(status_code=503, detail=f"Options data unavailable for {clean_ticker}")
+            return {
+                "ticker": clean_ticker,
+                "available": False,
+                "message": f"Options chain not currently available for {clean_ticker}.",
+                "currency_symbol": currency_symbol,
+                "call_oi": 0,
+                "put_oi": 0,
+                "call_volume": 0,
+                "put_volume": 0,
+                "pcr_oi": 0.0,
+                "pcr_volume": 0.0,
+                "sentiment": "UNAVAILABLE",
+                "sentiment_label": "Options Chain Unavailable",
+                "color": "neutral",
+                "max_pain_strike": None,
+                "top_call_strikes": [],
+                "top_put_strikes": [],
+            }
 
         data = resp.json()
         result = data.get("optionChain", {}).get("result", [])
         if not result:
-            raise HTTPException(status_code=404, detail=f"No options chain found for {clean_ticker}")
+            return {
+                "ticker": clean_ticker,
+                "available": False,
+                "message": f"No options chain listed for {clean_ticker}.",
+                "currency_symbol": currency_symbol,
+                "call_oi": 0,
+                "put_oi": 0,
+                "call_volume": 0,
+                "put_volume": 0,
+                "pcr_oi": 0.0,
+                "pcr_volume": 0.0,
+                "sentiment": "UNAVAILABLE",
+                "sentiment_label": "No Active Expiries",
+                "color": "neutral",
+                "max_pain_strike": None,
+                "top_call_strikes": [],
+                "top_put_strikes": [],
+            }
 
         chain = result[0]
         expiration_dates = chain.get("expirationDates", [])
         options = chain.get("options", [{}])
 
         if not options:
-            raise HTTPException(status_code=404, detail=f"Options chain empty for {clean_ticker}")
+            return {
+                "ticker": clean_ticker,
+                "available": False,
+                "message": f"Options chain empty for {clean_ticker}.",
+                "currency_symbol": currency_symbol,
+                "call_oi": 0,
+                "put_oi": 0,
+                "call_volume": 0,
+                "put_volume": 0,
+                "pcr_oi": 0.0,
+                "pcr_volume": 0.0,
+                "sentiment": "UNAVAILABLE",
+                "sentiment_label": "No Active Options",
+                "color": "neutral",
+                "max_pain_strike": None,
+                "top_call_strikes": [],
+                "top_put_strikes": [],
+            }
 
         # Use nearest expiry (first element)
         nearest = options[0]
@@ -1337,6 +1442,7 @@ def get_options_pcr(
 
         return {
             "ticker": clean_ticker,
+            "available": True,
             "expiry_date": expiry_date,
             "total_expiries": len(expiration_dates),
             "currency_symbol": currency_symbol,
@@ -1354,11 +1460,26 @@ def get_options_pcr(
             "top_put_strikes": max_pain_puts,
         }
 
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Options PCR error for {clean_ticker}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Options chain computation failed: {str(e)}")
+        logger.warning(f"Options PCR unavailable for {clean_ticker}: {e}")
+        return {
+            "ticker": clean_ticker,
+            "available": False,
+            "message": "Options data currently unavailable.",
+            "currency_symbol": currency_symbol,
+            "call_oi": 0,
+            "put_oi": 0,
+            "call_volume": 0,
+            "put_volume": 0,
+            "pcr_oi": 0.0,
+            "pcr_volume": 0.0,
+            "sentiment": "UNAVAILABLE",
+            "sentiment_label": "No Options Data Available",
+            "color": "neutral",
+            "max_pain_strike": None,
+            "top_call_strikes": [],
+            "top_put_strikes": [],
+        }
 
 
 @router.get("/block-deals")
