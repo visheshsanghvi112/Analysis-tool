@@ -29,6 +29,12 @@ const QUICK_TICKERS = [
   { symbol: 'SBIN.NS',       name: 'SBI',           market: 'IN' },
   { symbol: 'ICICIBANK.NS',  name: 'ICICI Bank',    market: 'IN' },
   { symbol: 'BHARTIARTL.NS', name: 'Airtel',        market: 'IN' },
+  { symbol: 'BAJFINANCE.NS', name: 'Bajaj Finance', market: 'IN' },
+  { symbol: 'MARUTI.NS',     name: 'Maruti Suzuki', market: 'IN' },
+  { symbol: 'TATASTEEL.NS',  name: 'Tata Steel',    market: 'IN' },
+  { symbol: 'SUNPHARMA.NS',  name: 'Sun Pharma',    market: 'IN' },
+  { symbol: 'ADANIENT.NS',   name: 'Adani Ent',     market: 'IN' },
+  { symbol: 'TITAN.NS',      name: 'Titan Co',      market: 'IN' },
   { symbol: 'NVDA',          name: 'Nvidia Corp',   market: 'US' },
   { symbol: 'AAPL',          name: 'Apple Inc',     market: 'US' },
   { symbol: 'TSLA',          name: 'Tesla Inc',     market: 'US' },
@@ -81,6 +87,7 @@ export default function IntradayTerminal() {
   const [showORB, setShowORB] = useState(true);
   const [showCamarilla, setShowCamarilla] = useState(false);
   const [showPDH, setShowPDH] = useState(true);
+  const [showCPR, setShowCPR] = useState(true);
 
   // Viewport Zoom: 'all' | '60' | '30'
   const [candleSlice, setCandleSlice] = useState('all');
@@ -700,15 +707,33 @@ export default function IntradayTerminal() {
 
             {/* Benchmark Indices Pills */}
             <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 scrollbar-none">
-              {marketPulse.indices?.map((idx) => (
-                <div key={idx.symbol} className="px-2.5 py-1 rounded-xl bg-slate-950/80 border border-slate-800 text-xs font-mono shrink-0">
-                  <span className="text-slate-400 font-semibold mr-1.5">{idx.name}:</span>
-                  <span className="text-white font-bold">{idx.price?.toLocaleString()}</span>
-                  <span className={`ml-1 text-[11px] font-bold ${idx.change_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {idx.change_pct >= 0 ? '+' : ''}{idx.change_pct}%
-                  </span>
-                </div>
-              ))}
+              {marketPulse.indices?.map((idx) => {
+                const isVix = idx.name.includes('VIX');
+                return (
+                  <div
+                    key={idx.symbol}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-mono shrink-0 flex items-center gap-1.5 ${
+                      isVix
+                        ? 'bg-purple-950/40 border border-purple-500/40 text-purple-300'
+                        : 'bg-slate-950/80 border border-slate-800 text-white'
+                    }`}
+                  >
+                    <span className="text-slate-400 font-semibold">{idx.name}:</span>
+                    <span className="font-bold">{idx.price?.toLocaleString()}</span>
+                    <span className={`text-[11px] font-bold ${idx.change_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {idx.change_pct >= 0 ? '+' : ''}{idx.change_pct}%
+                    </span>
+                    {isVix && marketPulse.vix?.regime && (
+                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${
+                        marketPulse.vix.regime === 'LOW' ? 'bg-emerald-500/20 text-emerald-300' :
+                        marketPulse.vix.regime === 'NORMAL' ? 'bg-cyan-500/20 text-cyan-300' : 'bg-rose-500/20 text-rose-300'
+                      }`}>
+                        {marketPulse.vix.regime}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
 
               {marketPulse.mins_to_mis_squareoff > 0 && (
                 <div className="px-3 py-1 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-mono shrink-0 flex items-center gap-1.5 font-bold">
@@ -717,6 +742,27 @@ export default function IntradayTerminal() {
                 </div>
               )}
             </div>
+
+            {/* Live Sectoral Heatmap Flow Strip */}
+            {marketPulse.sectors && marketPulse.sectors.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto w-full pt-2 border-t border-slate-800/60 scrollbar-none text-[11px] font-mono">
+                <div className="flex items-center gap-1 text-slate-500 uppercase tracking-wider font-sans font-bold text-[10px] shrink-0">
+                  <Flame className="w-3 h-3 text-amber-400" />
+                  <span>Sector Flow:</span>
+                </div>
+                {marketPulse.sectors.map((sec) => (
+                  <div
+                    key={sec.symbol}
+                    className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-950/60 border border-slate-800/80 shrink-0"
+                  >
+                    <span className="text-slate-300 font-medium font-sans">{sec.name.replace('NIFTY ', '')}</span>
+                    <span className={`font-bold ${sec.change_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {sec.change_pct >= 0 ? '+' : ''}{sec.change_pct}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -1286,6 +1332,16 @@ export default function IntradayTerminal() {
                     <span className="w-2 h-0.5 bg-amber-400 rounded-full" />
                     PDH / PDL
                   </button>
+
+                  <button
+                    onClick={() => setShowCPR(!showCPR)}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 ${
+                      showCPR ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40' : 'bg-slate-950 text-slate-500 border border-slate-800'
+                    }`}
+                  >
+                    <span className="w-2 h-0.5 bg-indigo-400 rounded-full" />
+                    CPR Range
+                  </button>
                 </div>
 
               {/* Hover Inspection Bar */}
@@ -1504,6 +1560,84 @@ export default function IntradayTerminal() {
                           fontWeight="bold"
                         >
                           PDL
+                        </text>
+                      </g>
+                    )}
+
+                    {/* Central Pivot Range (CPR: TC, Pivot, BC) */}
+                    {showCPR && data?.pivots?.cpr && data.pivots.cpr.pivot > 0 && (
+                      <g key="cpr-overlay">
+                        {/* Shaded CPR Range Cloud */}
+                        <rect
+                          x={padding.left}
+                          y={Math.min(yScale(data.pivots.cpr.tc), yScale(data.pivots.cpr.bc))}
+                          width={chartWidth - padding.left - padding.right}
+                          height={Math.max(1, Math.abs(yScale(data.pivots.cpr.tc) - yScale(data.pivots.cpr.bc)))}
+                          fill="#6366f1"
+                          fillOpacity={0.08}
+                        />
+
+                        {/* TC Line (Top Central) */}
+                        <line
+                          x1={padding.left}
+                          y1={yScale(data.pivots.cpr.tc)}
+                          x2={chartWidth - padding.right}
+                          y2={yScale(data.pivots.cpr.tc)}
+                          stroke="#818cf8"
+                          strokeDasharray="3 3"
+                          strokeWidth="1.1"
+                          strokeOpacity={0.8}
+                        />
+                        <text
+                          x={chartWidth - padding.right + 4}
+                          y={yScale(data.pivots.cpr.tc) + 3}
+                          fill="#818cf8"
+                          fontSize="8"
+                          fontFamily="monospace"
+                        >
+                          TC
+                        </text>
+
+                        {/* Central Pivot (P) */}
+                        <line
+                          x1={padding.left}
+                          y1={yScale(data.pivots.cpr.pivot)}
+                          x2={chartWidth - padding.right}
+                          y2={yScale(data.pivots.cpr.pivot)}
+                          stroke="#6366f1"
+                          strokeWidth="1.4"
+                          strokeOpacity={0.9}
+                        />
+                        <text
+                          x={chartWidth - padding.right + 4}
+                          y={yScale(data.pivots.cpr.pivot) + 3}
+                          fill="#6366f1"
+                          fontSize="8"
+                          fontFamily="monospace"
+                          fontWeight="bold"
+                        >
+                          CPR-P
+                        </text>
+
+                        {/* BC Line (Bottom Central) */}
+                        <line
+                          x1={padding.left}
+                          y1={yScale(data.pivots.cpr.bc)}
+                          x2={chartWidth - padding.right}
+                          y2={yScale(data.pivots.cpr.bc)}
+                          stroke="#a855f7"
+                          strokeDasharray="3 3"
+                          strokeWidth="1.1"
+                          strokeOpacity={0.8}
+                        />
+                        <text
+                          x={chartWidth - padding.right + 4}
+                          y={yScale(data.pivots.cpr.bc) + 3}
+                          fill="#a855f7"
+                          fontSize="8"
+                          fontFamily="monospace"
+                        >
+                          BC
                         </text>
                       </g>
                     )}
@@ -2012,16 +2146,56 @@ export default function IntradayTerminal() {
               </div>
             )}
 
-            {/* Camarilla & Floor Pivots */}
-            {data?.pivots?.camarilla && (
+            {/* CPR & Camarilla Inflection Levels */}
+            {(data?.pivots?.camarilla || data?.pivots?.cpr) && (
               <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 backdrop-blur-md">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
                     <Compass className="w-4 h-4 text-cyan-400" />
-                    Camarilla Inflection Levels
+                    CPR &amp; Institutional Pivots
                   </h3>
                   <InfoBadge infoKey="camarilla_pivots" />
                 </div>
+
+                {/* Central Pivot Range (CPR) Box */}
+                {data.pivots?.cpr && (
+                  <div className="mb-3 p-3 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-indigo-300 font-sans flex items-center gap-1">
+                        <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                        Central Pivot Range (CPR)
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase ${
+                        data.pivots.cpr.classification === 'NARROW'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : data.pivots.cpr.classification === 'WIDE'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                          : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                      }`}>
+                        {data.pivots.cpr.classification} CPR ({data.pivots.cpr.width_pct}%)
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1.5 text-center font-mono text-xs">
+                      <div className="p-1.5 rounded-xl bg-slate-950/70 border border-slate-800">
+                        <span className="text-[9px] text-slate-400 block font-sans">TC (Top)</span>
+                        <span className="font-bold text-indigo-300">{currSym}{data.pivots.cpr.tc}</span>
+                      </div>
+                      <div className="p-1.5 rounded-xl bg-slate-950/70 border border-slate-800">
+                        <span className="text-[9px] text-slate-400 block font-sans">Pivot (P)</span>
+                        <span className="font-bold text-white">{currSym}{data.pivots.cpr.pivot}</span>
+                      </div>
+                      <div className="p-1.5 rounded-xl bg-slate-950/70 border border-slate-800">
+                        <span className="text-[9px] text-slate-400 block font-sans">BC (Bottom)</span>
+                        <span className="font-bold text-purple-300">{currSym}{data.pivots.cpr.bc}</span>
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      {data.pivots.cpr.description}
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-2 text-xs font-mono">
                   <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
@@ -2486,6 +2660,12 @@ export default function IntradayTerminal() {
                 </div>
               ) : (
                 <div className="space-y-3">
+                  {pcrData.is_index_benchmark && (
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-purple-500/10 border border-purple-500/30 text-[10px] text-purple-300 font-mono">
+                      <Scale className="w-3 h-3 text-purple-400" />
+                      <span>{pcrData.benchmark_name} Macro Derivatives Sentiment</span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <div>
                       <span className={`text-2xl font-black font-mono ${
@@ -2546,7 +2726,7 @@ export default function IntradayTerminal() {
               <div className="flex items-center gap-1.5">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Flame className="w-4 h-4 text-orange-400" />
-                  NSE Block & Bulk Deals
+                  NSE Block &amp; Bulk Deals
                 </h3>
                 <InfoBadge infoKey="block_deals" />
               </div>
@@ -2585,8 +2765,14 @@ export default function IntradayTerminal() {
                   </div>
                 ))}
                 {blockDeals.block_count === 0 && blockDeals.bulk_count === 0 && (
-                  <div className="h-24 flex items-center justify-center text-xs text-slate-500">
-                    No block/bulk deals recorded today yet.
+                  <div className="h-32 flex flex-col items-center justify-center text-xs text-slate-400 p-3 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center gap-1.5">
+                    <span className="font-bold text-slate-300">Dedicated Window Schedule</span>
+                    <p className="text-[11px] text-slate-500 max-w-[230px] leading-relaxed">
+                      {blockDeals.next_window || 'Block Deals execute in two windows (08:45 AM & 02:05 PM IST). Bulk deals report at EOD.'}
+                    </p>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-cyan-400 font-semibold mt-0.5">
+                      Status: {blockDeals.window_status || 'STANDBY'}
+                    </span>
                   </div>
                 )}
               </div>
