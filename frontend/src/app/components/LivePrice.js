@@ -116,7 +116,7 @@ const DayRangeBar = ({ dayHigh, dayLow, currentPrice, currSym = '₹', loc = 'en
   const position = range > 0 ? ((currentPrice - dayLow) / range) * 100 : 50;
   
   return (
-    <div className="mt-4 p-3 glass-card border border-slate-800/60">
+    <div className="p-3 glass-card border border-slate-800/60">
       <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
         <div className="flex items-center gap-1.5">
           <span className="font-medium">Day Range</span>
@@ -132,6 +132,36 @@ const DayRangeBar = ({ dayHigh, dayLow, currentPrice, currSym = '₹', loc = 'en
         <div className="absolute inset-0 bg-gradient-to-r from-red-500/30 via-yellow-500/30 to-emerald-500/30 rounded-full" />
         <div
           className="absolute top-1/2 -translate-y-1/2 h-3 w-1 bg-white rounded-sm shadow-lg transition-all duration-500"
+          style={{ left: `calc(${Math.min(Math.max(position, 2), 98)}% - 2px)` }}
+        />
+      </div>
+    </div>
+  );
+};
+
+const YearRangeBar = ({ yearHigh, yearLow, currentPrice, currSym = '₹', loc = 'en-IN' }) => {
+  if (!yearHigh || !yearLow || !currentPrice) return null;
+  
+  const range = yearHigh - yearLow;
+  const position = range > 0 ? ((currentPrice - yearLow) / range) * 100 : 50;
+  
+  return (
+    <div className="p-3 glass-card border border-slate-800/60">
+      <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+        <div className="flex items-center gap-1.5">
+          <span className="font-medium">52-Week Range</span>
+          <InfoBadge infoKey="day_range" />
+        </div>
+        <span className="font-semibold text-slate-200">{currSym}{fmt(currentPrice, 2, loc)}</span>
+      </div>
+      <div className="flex justify-between text-[11px] text-slate-500 mb-1.5 font-mono">
+        <span>52W L: {currSym}{fmt(yearLow, 2, loc)}</span>
+        <span>52W H: {currSym}{fmt(yearHigh, 2, loc)}</span>
+      </div>
+      <div className="relative h-2 bg-slate-800 rounded-full overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-red-500/30 via-amber-500/30 to-emerald-500/30 rounded-full" />
+        <div
+          className="absolute top-1/2 -translate-y-1/2 h-3 w-1 bg-amber-300 rounded-sm shadow-lg transition-all duration-500"
           style={{ left: `calc(${Math.min(Math.max(position, 2), 98)}% - 2px)` }}
         />
       </div>
@@ -336,14 +366,23 @@ export default function LivePrice({ ticker }) {
               />
             </div>
 
-            {/* Day Range Visualization */}
-            <DayRangeBar 
-              dayHigh={quote.dayHigh}
-              dayLow={quote.dayLow}
-              currentPrice={quote.price}
-              currSym={currSym}
-              loc={loc}
-            />
+            {/* Day & 52-Week Range Visualizations */}
+            <div className={`grid gap-3 mt-4 ${quote.fiftyTwoWeekHigh && quote.fiftyTwoWeekLow ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+              <DayRangeBar 
+                dayHigh={quote.dayHigh}
+                dayLow={quote.dayLow}
+                currentPrice={quote.price}
+                currSym={currSym}
+                loc={loc}
+              />
+              <YearRangeBar 
+                yearHigh={quote.fiftyTwoWeekHigh}
+                yearLow={quote.fiftyTwoWeekLow}
+                currentPrice={quote.price}
+                currSym={currSym}
+                loc={loc}
+              />
+            </div>
 
             {/* Footer */}
             <div className="flex justify-between items-center text-xs text-slate-600 mt-4 pt-3 border-t border-slate-800/40">
