@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { TrendingUp, TrendingDown, Minus, Trophy, Search, X, ChevronRight, Zap, Shield, Activity, BarChart2, AlertCircle, RefreshCw } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Trophy, Search, X, ChevronRight, Zap, Shield, Activity, BarChart2, AlertCircle, RefreshCw, Download } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 
 const API = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
@@ -178,20 +178,70 @@ export default function PeerComparison({ ticker }) {
   const symA = ticker?.replace('.NS','').replace('.BO','');
   const symB = selectedPeer?.replace('.NS','').replace('.BO','');
 
+  const exportComparisonCSV = () => {
+    if (!comparison) return;
+    const headers = ['Metric', symA, symB, 'Winner'];
+    const rows = [
+      ['Current Price', comparison.metrics_a.current_price ?? '', comparison.metrics_b.current_price ?? '', ''],
+      ['1-Month Return (%)', comparison.metrics_a.ret_1m ?? '', comparison.metrics_b.ret_1m ?? '', comparison.winners.ret_1m ?? ''],
+      ['3-Month Return (%)', comparison.metrics_a.ret_3m ?? '', comparison.metrics_b.ret_3m ?? '', comparison.winners.ret_3m ?? ''],
+      ['6-Month Return (%)', comparison.metrics_a.ret_6m ?? '', comparison.metrics_b.ret_6m ?? '', comparison.winners.ret_6m ?? ''],
+      ['1-Year Return (%)', comparison.metrics_a.ret_1y ?? '', comparison.metrics_b.ret_1y ?? '', comparison.winners.ret_1y ?? ''],
+      ['Sharpe Ratio', comparison.metrics_a.sharpe ?? '', comparison.metrics_b.sharpe ?? '', comparison.winners.sharpe ?? ''],
+      ['Sortino Ratio', comparison.metrics_a.sortino ?? '', comparison.metrics_b.sortino ?? '', comparison.winners.sortino ?? ''],
+      ['Calmar Ratio', comparison.metrics_a.calmar ?? '', comparison.metrics_b.calmar ?? '', comparison.winners.calmar ?? ''],
+      ['Max Drawdown (%)', comparison.metrics_a.max_drawdown ?? '', comparison.metrics_b.max_drawdown ?? '', comparison.winners.max_drawdown ?? ''],
+      ['Dist from 52W High (%)', comparison.metrics_a.pct_from_high ?? '', comparison.metrics_b.pct_from_high ?? '', comparison.winners.pct_from_high ?? ''],
+      ['Annual Volatility (%)', comparison.metrics_a.annual_vol ?? '', comparison.metrics_b.annual_vol ?? '', comparison.winners.annual_vol ?? ''],
+      ['RSI (14)', comparison.metrics_a.rsi ?? '', comparison.metrics_b.rsi ?? '', ''],
+      ['ML Return (%)', comparison.metrics_a.ml_return ?? '', comparison.metrics_b.ml_return ?? '', comparison.winners.ml_return ?? ''],
+      ['ML Signal', comparison.metrics_a.ml_signal ?? '', comparison.metrics_b.ml_signal ?? '', ''],
+    ];
+    const csvContent = [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `peer_comparison_${symA}_vs_${symB}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div style={{ background: '#0a0a0a', border: '1px solid #1c1c1c', borderRadius: '16px', padding: '20px', color: '#fff', fontFamily: 'var(--font-poppins), sans-serif' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-        <div style={{ width: '32px', height: '32px', background: '#3b82f615', border: '1px solid #3b82f630', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <BarChart2 style={{ width: '16px', height: '16px', color: '#3b82f6' }} />
-        </div>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#fff', margin: 0 }}>Peer-to-Peer Comparison</h3>
-            <InfoBadge infoKey="peer_valuation" />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '32px', height: '32px', background: '#3b82f615', border: '1px solid #3b82f630', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <BarChart2 style={{ width: '16px', height: '16px', color: '#3b82f6' }} />
           </div>
-          {sector && <p style={{ fontSize: '11px', color: '#666', margin: 0 }}>{sector} Sector</p>}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#fff', margin: 0 }}>Peer-to-Peer Comparison</h3>
+              <InfoBadge infoKey="peer_valuation" />
+            </div>
+            {sector && <p style={{ fontSize: '11px', color: '#666', margin: 0 }}>{sector} Sector</p>}
+          </div>
         </div>
+        {comparison && (
+          <button
+            onClick={exportComparisonCSV}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '6px 12px', background: 'rgba(59, 130, 246, 0.1)',
+              border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '6px',
+              color: '#60a5fa', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+              transition: 'all 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'}
+            title="Download CSV report of comparison metrics"
+          >
+            <Download style={{ width: '12px', height: '12px' }} />
+            <span>Export CSV</span>
+          </button>
+        )}
       </div>
 
       {/* Suggested Peer Chips */}
@@ -355,6 +405,10 @@ export default function PeerComparison({ ticker }) {
             <MetricRow label="6-Month Return"   valA={comparison.metrics_a.ret_6m}     valB={comparison.metrics_b.ret_6m}     winner={comparison.winners.ret_6m}     tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} unit="%" />
             <MetricRow label="1-Year Return"    valA={comparison.metrics_a.ret_1y}     valB={comparison.metrics_b.ret_1y}     winner={comparison.winners.ret_1y}     tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} unit="%" />
             <MetricRow label="Sharpe Ratio"     valA={comparison.metrics_a.sharpe}     valB={comparison.metrics_b.sharpe}     winner={comparison.winners.sharpe}     tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} />
+            <MetricRow label="Sortino Ratio"    valA={comparison.metrics_a.sortino}    valB={comparison.metrics_b.sortino}    winner={comparison.winners.sortino}    tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} />
+            <MetricRow label="Calmar Ratio"     valA={comparison.metrics_a.calmar}     valB={comparison.metrics_b.calmar}     winner={comparison.winners.calmar}     tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} />
+            <MetricRow label="Max Drawdown (1Y)" valA={comparison.metrics_a.max_drawdown} valB={comparison.metrics_b.max_drawdown} winner={comparison.winners.max_drawdown} tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} unit="%" higherIsBetter={true} />
+            <MetricRow label="Dist from 52W High" valA={comparison.metrics_a.pct_from_high} valB={comparison.metrics_b.pct_from_high} winner={comparison.winners.pct_from_high} tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} unit="%" higherIsBetter={true} />
             <MetricRow label="Annual Volatility" valA={comparison.metrics_a.annual_vol} valB={comparison.metrics_b.annual_vol} winner={comparison.winners.annual_vol} tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} unit="%" higherIsBetter={false} />
             <MetricRow label="RSI (14)"          valA={comparison.metrics_a.rsi}        valB={comparison.metrics_b.rsi}        winner={null}                          tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} />
             {(comparison.metrics_a.ml_return !== null || comparison.metrics_b.ml_return !== null) && (

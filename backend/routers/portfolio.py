@@ -125,6 +125,16 @@ def get_portfolio_metrics(ticker: str = Query(..., description="Stock ticker sym
         excess_returns = returns - rf_daily
         ret_std = float(returns.std())
         sharpe_ratio = _safe_float(float(excess_returns.mean() / (ret_std + 1e-9) * (252 ** 0.5)), default=0.0, ndigits=3) if ret_std != 0 else 0.0
+
+        # Sortino Ratio (downside risk-adjusted return)
+        downside_returns = returns[returns < rf_daily]
+        downside_std = float(downside_returns.std()) if len(downside_returns) > 5 else 0.0
+        sortino_ratio = _safe_float(float(excess_returns.mean() / (downside_std + 1e-9) * (252 ** 0.5)), default=0.0, ndigits=3) if downside_std > 0 else 0.0
+
+        # Calmar Ratio (CAGR / Max Drawdown)
+        cagr = float(((cumulative.iloc[-1]) ** (252.0 / max(len(returns), 1))) - 1.0) * 100.0
+        abs_mdd = abs(max_drawdown)
+        calmar_ratio = _safe_float(cagr / abs_mdd, default=None, ndigits=2) if abs_mdd > 0.5 else None
         
         # Information Ratio & Tracking Error (vs Benchmark)
         if beta is not None and correlation is not None:
@@ -200,7 +210,9 @@ def get_portfolio_metrics(ticker: str = Query(..., description="Stock ticker sym
                 "max_drawdown": max_drawdown,
                 "skewness": skewness,
                 "kurtosis": kurtosis,
-                "sharpe_ratio": sharpe_ratio
+                "sharpe_ratio": sharpe_ratio,
+                "sortino_ratio": sortino_ratio,
+                "calmar_ratio": calmar_ratio
             },
             "market_metrics": {
                 "beta": _safe_float(beta, default=None, ndigits=3),

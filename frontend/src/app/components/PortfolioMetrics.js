@@ -113,7 +113,7 @@ export default function PortfolioMetrics({ ticker }) {
               <InfoBadge infoKey="risk_assessment" />
             </div>
             
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
               <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center">
                 <div className={`font-bold text-sm mb-1 ${getRiskColor(metrics.risk_metrics.var_95_daily, {good: 2, moderate: 4})}`}>
                   {metrics.risk_metrics.var_95_daily}%
@@ -145,21 +145,37 @@ export default function PortfolioMetrics({ ticker }) {
                 <p className="text-[10px] text-slate-500">Annual Vol</p>
                 <p className="text-[9px] text-slate-600 mt-0.5">Price volatility</p>
               </div>
-              
-              <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center">
-                <div className="font-bold text-sm mb-1 text-slate-200">
-                  {metrics.risk_metrics.skewness}
-                </div>
-                <p className="text-[10px] text-slate-500">Skewness</p>
-                <p className="text-[9px] text-slate-600 mt-0.5">Return asymmetry</p>
-              </div>
-              
+
               <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center">
                 <div className={`font-bold text-sm mb-1 ${getPerformanceColor(metrics.risk_metrics.sharpe_ratio)}`}>
                   {metrics.risk_metrics.sharpe_ratio}
                 </div>
                 <p className="text-[10px] text-slate-500">Sharpe Ratio</p>
-                <p className="text-[9px] text-slate-600 mt-0.5">Risk-adj return</p>
+                <p className="text-[9px] text-slate-600 mt-0.5">Total risk-adj</p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center">
+                <div className={`font-bold text-sm mb-1 ${metrics.risk_metrics.sortino_ratio !== undefined && metrics.risk_metrics.sortino_ratio !== null ? getPerformanceColor(metrics.risk_metrics.sortino_ratio) : 'text-slate-400'}`}>
+                  {metrics.risk_metrics.sortino_ratio ?? 'N/A'}
+                </div>
+                <p className="text-[10px] text-slate-500">Sortino Ratio</p>
+                <p className="text-[9px] text-slate-600 mt-0.5">Downside-adj</p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center">
+                <div className={`font-bold text-sm mb-1 ${metrics.risk_metrics.calmar_ratio !== undefined && metrics.risk_metrics.calmar_ratio !== null ? getPerformanceColor(metrics.risk_metrics.calmar_ratio) : 'text-slate-400'}`}>
+                  {metrics.risk_metrics.calmar_ratio ?? 'N/A'}
+                </div>
+                <p className="text-[10px] text-slate-500">Calmar Ratio</p>
+                <p className="text-[9px] text-slate-600 mt-0.5">CAGR / Max DD</p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-center">
+                <div className="font-bold text-sm mb-1 text-slate-200">
+                  {metrics.risk_metrics.skewness} / {metrics.risk_metrics.kurtosis ?? '0.0'}
+                </div>
+                <p className="text-[10px] text-slate-500">Skew / Kurtosis</p>
+                <p className="text-[9px] text-slate-600 mt-0.5">Tail distribution</p>
               </div>
             </div>
           </div>

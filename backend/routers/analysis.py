@@ -75,6 +75,21 @@ def _compute_quick_metrics(ticker: str) -> dict | None:
         high52 = float(close.max())
         pct_from_high = _safe_float((current_price - high52) / high52 * 100, default=0.0, ndigits=2)
 
+        # Max Drawdown (1Y)
+        cum_ret = (1 + returns).cumprod()
+        rolling_max = cum_ret.expanding().max()
+        dd_series = (cum_ret - rolling_max) / rolling_max
+        max_drawdown = _safe_float(float(dd_series.min() * 100), default=0.0, ndigits=2)
+
+        # Sortino Ratio (excess return / downside deviation)
+        downside_returns = returns[returns < rf_daily]
+        downside_std = float(downside_returns.std()) if len(downside_returns) > 5 else 0.0
+        sortino = _safe_float(float(excess.mean() / (downside_std + 1e-9) * np.sqrt(252)), default=0.0, ndigits=3) if downside_std > 0 else 0.0
+
+        # Calmar Ratio (1Y return / absolute max drawdown)
+        abs_dd = abs(max_drawdown)
+        calmar = _safe_float(ret_1y / abs_dd, default=None, ndigits=2) if (ret_1y is not None and abs_dd > 0.5) else None
+
         return {
             'ticker':        ticker,
             'current_price': _safe_float(current_price, default=0.0, ndigits=2),
@@ -84,6 +99,9 @@ def _compute_quick_metrics(ticker: str) -> dict | None:
             'ret_1y':        ret_1y,
             'annual_vol':    annual_vol,
             'sharpe':        sharpe,
+            'sortino':       sortino,
+            'calmar':        calmar,
+            'max_drawdown':  max_drawdown,
             'rsi':           rsi,
             'pct_from_high': pct_from_high,
             'ml_signal':     None,
@@ -518,6 +536,10 @@ def peer_compare_endpoint(
             'ret_6m':        winner('ret_6m'),
             'ret_1y':        winner('ret_1y'),
             'sharpe':        winner('sharpe'),
+            'sortino':       winner('sortino'),
+            'calmar':        winner('calmar'),
+            'max_drawdown':  winner('max_drawdown', higher_is_better=True),
+            'pct_from_high': winner('pct_from_high', higher_is_better=True),
             'annual_vol':    winner('annual_vol', higher_is_better=False),
             'rsi':           None,
             'ml_return':     winner('ml_return'),
