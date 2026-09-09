@@ -99,7 +99,7 @@ def fetch_news_sentiment(ticker):
 
 
 def generate_signal(rsi, macd, signal_line, close, upper_band, lower_band,
-                    adx, prev_macd=None, prev_signal=None):
+                    adx, prev_macd=None, prev_signal=None, ma50=None, ma200=None):
     reasons = []
     score   = 0
 
@@ -143,6 +143,12 @@ def generate_signal(rsi, macd, signal_line, close, upper_band, lower_band,
         reasons.append(f"ADX strong ({adx:.1f}) — trend confirmed")
     else:
         reasons.append(f"ADX moderate ({adx:.1f})")
+
+    if ma50 is not None and ma200 is not None and not np.isnan(ma50) and not np.isnan(ma200):
+        if ma50 > ma200:
+            score += 1; reasons.append(f"Golden Cross structure (50 DMA > 200 DMA)")
+        else:
+            score -= 1; reasons.append(f"Death Cross structure (50 DMA < 200 DMA)")
 
     signal = "BUY" if score >= 3 else "SELL" if score <= -3 else "HOLD"
     return signal, score, reasons
@@ -402,6 +408,7 @@ def analyze_ticker(ticker, start_date=None, end_date=None):
     sd['20 Day MA']  = sd['Close'].rolling(20).mean()
     sd['50 Day MA']  = sd['Close'].rolling(50).mean()
     sd['100 Day MA'] = sd['Close'].rolling(100).mean()
+    sd['200 Day MA'] = sd['Close'].rolling(200).mean()
     sd['20 Day STD'] = sd['Close'].rolling(20).std()
     sd['Upper Band'] = sd['20 Day MA'] + 2 * sd['20 Day STD']
     sd['Lower Band'] = sd['20 Day MA'] - 2 * sd['20 Day STD']
@@ -435,10 +442,14 @@ def analyze_ticker(ticker, start_date=None, end_date=None):
     prev_macd = _scalar(prev['MACD'])       if prev is not None else None
     prev_sig  = _scalar(prev['Signal Line']) if prev is not None else None
 
+    latest_ma50  = _scalar(latest['50 Day MA']) if '50 Day MA' in latest and not pd.isna(latest['50 Day MA']) else None
+    latest_ma200 = _scalar(latest['200 Day MA']) if '200 Day MA' in latest and not pd.isna(latest['200 Day MA']) else None
+
     signal, signal_score, signal_reasons = generate_signal(
         latest_rsi, latest_macd, latest_sig,
         latest_close, latest_upper, latest_lower,
         latest_adx, prev_macd, prev_sig,
+        ma50=latest_ma50, ma200=latest_ma200
     )
 
     support, resistance = calculate_support_resistance(sd)
@@ -467,6 +478,7 @@ def analyze_ticker(ticker, start_date=None, end_date=None):
             'ma20':       round(_scalar(row['20 Day MA']),   2) if not pd.isna(row['20 Day MA'])   else None,
             'ma50':       round(_scalar(row['50 Day MA']),   2) if not pd.isna(row['50 Day MA'])   else None,
             'ma100':      round(_scalar(row['100 Day MA']),  2) if not pd.isna(row['100 Day MA'])  else None,
+            'ma200':      round(_scalar(row['200 Day MA']),  2) if not pd.isna(row['200 Day MA'])  else None,
             'upperBand':  round(_scalar(row['Upper Band']),  2) if not pd.isna(row['Upper Band'])  else None,
             'lowerBand':  round(_scalar(row['Lower Band']),  2) if not pd.isna(row['Lower Band'])  else None,
             'rsi':        round(_scalar(row['RSI']),         2) if not pd.isna(row['RSI'])         else None,
@@ -499,6 +511,8 @@ def analyze_ticker(ticker, start_date=None, end_date=None):
             'macdSignal':      round(latest_sig,  4),
             'adx':             round(latest_adx,  2),
             'atr':             round(latest_atr,  2),
+            'ma50':            round(latest_ma50, 2) if latest_ma50 is not None else None,
+            'ma200':           round(latest_ma200, 2) if latest_ma200 is not None else None,
             'currency_symbol': curr_sym,
         },
         'fundamentals':     fundamentals,

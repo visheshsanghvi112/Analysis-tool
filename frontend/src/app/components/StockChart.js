@@ -233,6 +233,11 @@ export default function StockChart({ ticker }) {
               <span className="text-slate-400">
                 VOL <span className="font-semibold text-slate-100 ml-1">{latestDataPoint.volume !== undefined ? latestDataPoint.volume.toLocaleString() : '--'}</span>
               </span>
+              {latestDataPoint.ma200 !== undefined && latestDataPoint.ma200 !== null && (
+                <span className="text-amber-400/90 font-medium">
+                  200 DMA <span className="font-semibold text-amber-300 ml-1">{currSym}{latestDataPoint.ma200.toLocaleString()}</span>
+                </span>
+              )}
             </div>
           </div>
 
@@ -319,6 +324,7 @@ export default function StockChart({ ticker }) {
                 <Line type="monotone" dataKey="ma20"   stroke="#3b82f6" strokeWidth={1.2} dot={false} name="MA 20" />
                 <Line type="monotone" dataKey="ma50"   stroke="#f97316" strokeWidth={1.2} dot={false} name="MA 50" />
                 <Line type="monotone" dataKey="ma100"  stroke="#8b5cf6" strokeWidth={1.2} dot={false} name="MA 100" />
+                <Line type="monotone" dataKey="ma200"  stroke="#eab308" strokeWidth={1.4} strokeDasharray="3 3" dot={false} name="MA 200 (Golden/Death Cross)" />
               </ComposedChart>
             )}
           </ChartContainer>
