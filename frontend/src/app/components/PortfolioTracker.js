@@ -10,6 +10,7 @@ import {
   Plus, Trash2, RefreshCw, TrendingUp, TrendingDown,
   AlertCircle, Briefcase, ShieldAlert, Search, X,
   Lightbulb, Zap, Target, ArrowDownRight, Sparkles, Wallet,
+  Upload,
 } from 'lucide-react';
 import SmartCapitalAdvisor from './SmartCapitalAdvisor';
 import Header from './Header';
@@ -815,6 +816,91 @@ export default function PortfolioTracker() {
     document.body.removeChild(link);
   };
 
+  const handleCSVImport = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result;
+        if (!text) return;
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        if (lines.length < 2) {
+          alert('CSV file is empty or has no data rows.');
+          return;
+        }
+
+        const parseCSVLine = (line) => {
+          const res = [];
+          let cur = '';
+          let inQuotes = false;
+          for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') inQuotes = !inQuotes;
+            else if (char === ',' && !inQuotes) {
+              res.push(cur.trim().replace(/^["']|["']$/g, ''));
+              cur = '';
+            } else {
+              cur += char;
+            }
+          }
+          res.push(cur.trim().replace(/^["']|["']$/g, ''));
+          return res;
+        };
+
+        const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
+        const symIdx = headers.findIndex(h => h.includes('symbol') || h.includes('ticker') || h.includes('instrument') || h.includes('stock'));
+        const qtyIdx = headers.findIndex(h => h.includes('qty') || h.includes('quantity') || h.includes('shares') || h.includes('volume'));
+        const priceIdx = headers.findIndex(h => h.includes('buy_price') || h.includes('buy price') || h.includes('avg_price') || h.includes('avg price') || h.includes('average_price') || h.includes('price') || h.includes('rate') || h.includes('cost'));
+
+        if (symIdx === -1 || qtyIdx === -1 || priceIdx === -1) {
+          alert('Could not detect columns. Please ensure CSV contains Symbol, Qty, and Buy/Avg Price headers.');
+          return;
+        }
+
+        const newRows = [];
+        let nextId = Date.now();
+        for (let i = 1; i < lines.length; i++) {
+          const cols = parseCSVLine(lines[i]);
+          if (cols.length <= Math.max(symIdx, qtyIdx, priceIdx)) continue;
+          let sym = cols[symIdx]?.trim().toUpperCase();
+          const qty = cols[qtyIdx]?.trim().replace(/,/g, '');
+          const price = cols[priceIdx]?.trim().replace(/,/g, '');
+
+          if (!sym || !qty || !price || isNaN(qty) || isNaN(price) || +qty <= 0 || +price <= 0) continue;
+
+          if (!sym.endsWith('.NS') && !sym.endsWith('.BO') && !sym.startsWith('^') && !sym.includes('.')) {
+            sym = `${sym}.NS`;
+          }
+
+          newRows.push({
+            id: nextId++,
+            ticker: sym,
+            qty: String(qty),
+            buy_price: String(price),
+          });
+        }
+
+        if (newRows.length === 0) {
+          alert('No valid rows found in CSV. Please verify rows have valid ticker, quantity, and buy price.');
+          return;
+        }
+
+        setRows(newRows);
+        setResult(null);
+        setAdvice(null);
+        setSimTicker('');
+        setSimResult(null);
+        setOptResult(null);
+        setOptError(null);
+      } catch (err) {
+        alert('Failed to parse CSV file. Please check file format.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   const s   = result?.summary;
   const risk = result?.risk;
 
@@ -885,6 +971,15 @@ export default function PortfolioTracker() {
               className="flex items-center gap-1.5 text-[11px] text-slate-350 hover:text-indigo-300 transition cursor-pointer">
               <Sparkles className="h-3.5 w-3.5 text-indigo-400" /> Load Demo
             </button>
+            <label className="flex items-center gap-1.5 text-[11px] text-slate-350 hover:text-emerald-300 transition cursor-pointer" title="Import holdings from Zerodha, Groww, AngelOne, or CSV">
+              <Upload className="h-3.5 w-3.5 text-emerald-400" /> Import CSV
+              <input
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={handleCSVImport}
+              />
+            </label>
             <button onClick={clearAll}
               className="flex items-center gap-1.5 text-[11px] text-slate-350 hover:text-rose-400 transition cursor-pointer">
               <Trash2 className="h-3.5 w-3.5" /> Clear All
