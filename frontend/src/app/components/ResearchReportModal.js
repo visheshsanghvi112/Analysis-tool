@@ -27,12 +27,14 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
     let isMounted = true;
     setLoading(true);
 
-    // Fetch live quote and fundamentals for report
+    // Fetch live quote, fundamentals, valuation, risk metrics, and technical analysis
     Promise.all([
       fetch(`${API_BASE_URL}/api/live?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch(`${API_BASE_URL}/api/valuation?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch(`${API_BASE_URL}/api/fundamentals?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null)
-    ]).then(([quote, valuation, fundamentals]) => {
+      fetch(`${API_BASE_URL}/api/fundamentals?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${API_BASE_URL}/api/portfolio-metrics?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${API_BASE_URL}/api/analyze?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([quote, valuation, fundamentals, riskMetrics, analysis]) => {
       if (!isMounted) return;
       const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
       const loc = isUS ? 'en-US' : 'en-IN';
@@ -40,6 +42,8 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
         quote,
         valuation,
         fundamentals,
+        riskMetrics,
+        analysis,
         generatedAt: new Date().toLocaleString(loc, {
           dateStyle: 'medium',
           timeStyle: 'short'
@@ -61,6 +65,9 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
   const q = data?.quote || {};
   const v = data?.valuation || {};
   const f = data?.fundamentals || {};
+  const rm = data?.riskMetrics?.risk_metrics || {};
+  const mm = data?.riskMetrics?.market_metrics || {};
+  const sum = data?.analysis?.summary || {};
   const currSym = q.currency_symbol || (isUS ? '$' : '₹');
   const loc = isUS ? 'en-US' : 'en-IN';
 
@@ -171,24 +178,24 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
                 </div>
               </div>
 
-              {/* Two-Column Deep Dive */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Three-Column Analytical Deep Dive */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Financial Health & Fundamentals */}
                 <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] print:border-slate-300">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 print:text-black mb-3 flex items-center gap-1.5">
-                    <Activity className="w-3.5 h-3.5 text-blue-400" /> Fundamental Health Ratios
+                    <Activity className="w-3.5 h-3.5 text-blue-400" /> Fundamental Health
                   </h3>
                   <div className="space-y-2.5 text-xs">
                     <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
-                      <span className="text-slate-400 print:text-slate-600">Trailing P/E Ratio</span>
+                      <span className="text-slate-400 print:text-slate-600">Trailing P/E</span>
                       <span className="font-bold text-white print:text-black">{f.trailingPE ? f.trailingPE.toFixed(2) : '—'}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
-                      <span className="text-slate-400 print:text-slate-600">Price to Book (P/B)</span>
+                      <span className="text-slate-400 print:text-slate-600">Price to Book</span>
                       <span className="font-bold text-white print:text-black">{f.priceToBook ? f.priceToBook.toFixed(2) : '—'}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
-                      <span className="text-slate-400 print:text-slate-600">Return on Equity (RoE)</span>
+                      <span className="text-slate-400 print:text-slate-600">Return on Equity</span>
                       <span className="font-bold text-white print:text-black">{f.returnOnEquity ? `${(f.returnOnEquity * 100).toFixed(2)}%` : '—'}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
@@ -202,23 +209,85 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
                   </div>
                 </div>
 
-                {/* Analytical Synthesis & Model View */}
+                {/* Technical Momentum & Trend */}
                 <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] print:border-slate-300">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 print:text-black mb-3 flex items-center gap-1.5">
-                    <Brain className="w-3.5 h-3.5 text-purple-400" /> Quantitative Intelligence Summary
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-400" /> Technical &amp; Trend
                   </h3>
-                  <div className="space-y-3 text-xs leading-relaxed text-slate-300 print:text-slate-700">
-                    <p>
-                      <strong>Valuation Horizon:</strong> The DCF model projects intrinsic worth based on free cash flows discounted at a normalized Cost of Equity. The gap indicates potential medium-to-long term margin of safety.
-                    </p>
-                    <p>
-                      <strong>Volatility Profiling:</strong> Operating within a 52-week corridor of {currSym}{q.fiftyTwoWeekLow?.toFixed(0) || '—'} to {currSym}{q.fiftyTwoWeekHigh?.toFixed(0) || '—'}. Positioned at {
-                        q.price && q.fiftyTwoWeekHigh
-                          ? `${(((q.fiftyTwoWeekHigh - q.price) / q.fiftyTwoWeekHigh) * 100).toFixed(1)}% below annual peak.`
-                          : 'balanced distribution.'
-                      }
-                    </p>
+                  <div className="space-y-2.5 text-xs">
+                    <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                      <span className="text-slate-400 print:text-slate-600">Core Signal</span>
+                      <span className={`font-bold ${sum.signal === 'BUY' ? 'text-emerald-400' : sum.signal === 'SELL' ? 'text-rose-400' : 'text-amber-400'} print:text-black`}>
+                        {sum.signal || 'HOLD'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                      <span className="text-slate-400 print:text-slate-600">50 Day MA</span>
+                      <span className="font-bold text-white print:text-black">{sum.ma50 ? `${currSym}${sum.ma50.toLocaleString(loc)}` : '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                      <span className="text-slate-400 print:text-slate-600">200 Day MA</span>
+                      <span className="font-bold text-amber-300 print:text-black">{sum.ma200 ? `${currSym}${sum.ma200.toLocaleString(loc)}` : '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                      <span className="text-slate-400 print:text-slate-600">Cross Status</span>
+                      <span className={`font-bold ${sum.ma50 && sum.ma200 && sum.ma50 > sum.ma200 ? 'text-emerald-400' : 'text-rose-400'} print:text-black`}>
+                        {sum.ma50 && sum.ma200 ? (sum.ma50 > sum.ma200 ? 'Golden Cross' : 'Death Cross') : 'Neutral'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-slate-400 print:text-slate-600">RSI (14)</span>
+                      <span className="font-bold text-white print:text-black">{sum.rsi ? sum.rsi.toFixed(1) : '—'}</span>
+                    </div>
                   </div>
+                </div>
+
+                {/* Institutional Risk & Volatility */}
+                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] print:border-slate-300">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 print:text-black mb-3 flex items-center gap-1.5">
+                    <ShieldAlert className="w-3.5 h-3.5 text-purple-400" /> Institutional Risk
+                  </h3>
+                  <div className="space-y-2.5 text-xs">
+                    <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                      <span className="text-slate-400 print:text-slate-600">Sharpe Ratio</span>
+                      <span className="font-bold text-white print:text-black">{rm.sharpe_ratio ?? '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                      <span className="text-slate-400 print:text-slate-600">Sortino Ratio</span>
+                      <span className="font-bold text-emerald-400 print:text-black">{rm.sortino_ratio ?? '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                      <span className="text-slate-400 print:text-slate-600">Max Drawdown</span>
+                      <span className="font-bold text-rose-400 print:text-black">{rm.max_drawdown ? `${rm.max_drawdown}%` : '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                      <span className="text-slate-400 print:text-slate-600">Beta vs Bench</span>
+                      <span className="font-bold text-white print:text-black">{mm.beta ?? '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-slate-400 print:text-slate-600">Annual Vol</span>
+                      <span className="font-bold text-white print:text-black">{rm.annual_volatility ? `${rm.annual_volatility}%` : '—'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Analytical Synthesis & Model View */}
+              <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] print:border-slate-300">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 print:text-black mb-3 flex items-center gap-1.5">
+                  <Brain className="w-3.5 h-3.5 text-purple-400" /> Quantitative Intelligence Summary
+                </h3>
+                <div className="space-y-2 text-xs leading-relaxed text-slate-300 print:text-slate-700">
+                  <p>
+                    <strong>Valuation Horizon:</strong> The DCF model projects intrinsic worth based on free cash flows discounted at a normalized Cost of Equity. The gap indicates potential medium-to-long term margin of safety.
+                  </p>
+                  <p>
+                    <strong>Volatility Profiling:</strong> Operating within a 52-week corridor of {currSym}{q.fiftyTwoWeekLow?.toFixed(0) || '—'} to {currSym}{q.fiftyTwoWeekHigh?.toFixed(0) || '—'}. Positioned at {
+                      q.price && q.fiftyTwoWeekHigh
+                        ? `${(((q.fiftyTwoWeekHigh - q.price) / q.fiftyTwoWeekHigh) * 100).toFixed(1)}% below annual peak.`
+                        : 'balanced distribution.'
+                    }
+                  </p>
                 </div>
               </div>
 
