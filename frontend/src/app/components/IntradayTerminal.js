@@ -343,6 +343,64 @@ export default function IntradayTerminal() {
     }
   }, [ticker, candleInterval, period, autoRefreshSecs]);
 
+  // Export Intraday Candles & Technical Indicators to CSV
+  const handleExportIntradayCSV = useCallback(() => {
+    if (!data?.candles?.length) return;
+    const cleanTicker = (ticker || 'INTRADAY').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const headers = [
+      'Timestamp',
+      'Open',
+      'High',
+      'Low',
+      'Close',
+      'Volume',
+      'VWAP',
+      'VWAP_Upper_1',
+      'VWAP_Lower_1',
+      'Supertrend',
+      'Supertrend_Signal',
+      'EMA9',
+      'EMA21',
+      'EMA50',
+      'EMA200',
+      'RSI',
+      'MACD',
+      'MACD_Signal',
+      'ATR'
+    ];
+    const rows = data.candles.map(c => [
+      `"${c.timestamp || ''}"`,
+      c.open ?? '',
+      c.high ?? '',
+      c.low ?? '',
+      c.close ?? '',
+      c.volume ?? '',
+      c.vwap ?? '',
+      c.upper_1 ?? '',
+      c.lower_1 ?? '',
+      c.supertrend ?? '',
+      c.supertrend_dir === 1 ? 'BULLISH' : 'BEARISH',
+      c.ema9 ?? '',
+      c.ema21 ?? '',
+      c.ema50 ?? '',
+      c.ema200 ?? '',
+      c.rsi ?? '',
+      c.macd ?? '',
+      c.macd_signal ?? '',
+      c.atr ?? ''
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${cleanTicker}_Intraday_${candleInterval}_${period}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [data?.candles, ticker, candleInterval, period]);
+
   // Initial and param-change load
   useEffect(() => {
     fetchData();
@@ -1033,6 +1091,17 @@ export default function IntradayTerminal() {
               <Keyboard className="w-3.5 h-3.5 text-cyan-400" />
               <span className="hidden sm:inline">Shortcuts</span>
               <kbd className="px-1 py-0.2 rounded bg-slate-800 text-[10px] text-cyan-300 font-mono">?</kbd>
+            </button>
+
+            {/* Export Candles & Indicators CSV */}
+            <button
+              onClick={handleExportIntradayCSV}
+              disabled={!data?.candles?.length}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition bg-slate-900/90 hover:bg-cyan-500/10 text-cyan-400 border-slate-800 hover:border-cyan-500/30 disabled:opacity-40 cursor-pointer"
+              title="Download Intraday Candles & Technical Indicators as CSV"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Export CSV</span>
             </button>
 
             <button

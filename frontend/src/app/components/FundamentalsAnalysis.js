@@ -9,7 +9,7 @@ import {
   TrendingUp, TrendingDown, DollarSign, Users, PieChart,
   Calendar, AlertTriangle, RefreshCw, ChevronDown, ChevronUp,
   Award, Landmark, ArrowUpRight, ArrowDownRight, Minus,
-  CheckCircle2, ShieldCheck,
+  CheckCircle2, ShieldCheck, Download
 } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 
@@ -185,7 +185,7 @@ function ProsAndConsCard({ prosAndCons }) {
 }
 
 // ── Earnings & Revenue Panel ──────────────────────────────────────────────────
-function EarningsPanel({ annual, quarterly, ratios, price_cagr, sales_cagr_3y, profit_cagr_3y, currSym = '₹', isUS = false }) {
+function EarningsPanel({ annual, quarterly, ratios, price_cagr, sales_cagr_3y, profit_cagr_3y, currSym = '₹', isUS = false, ticker }) {
   const [view, setView] = useState('annual'); // 'annual' | 'quarterly'
   const data = view === 'annual' ? annual : quarterly;
   const xKey = view === 'annual' ? 'year' : 'quarter';
@@ -197,6 +197,44 @@ function EarningsPanel({ annual, quarterly, ratios, price_cagr, sales_cagr_3y, p
   const earningsGrowth = ratios?.earnings_growth != null
     ? `${(ratios.earnings_growth * 100).toFixed(1)}% YoY`
     : null;
+
+  const handleExportFinancialsCSV = () => {
+    if (!data || !data.length) return;
+    const cleanTicker = (ticker || 'STOCK').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const headers = [
+      view === 'annual' ? 'Financial Year' : 'Fiscal Quarter',
+      'Revenue',
+      'Net Profit',
+      'Operating Profit',
+      'Profit Margin (%)'
+    ];
+    const rows = data.map(item => {
+      const periodLabel = item.year || item.quarter || '';
+      const rev = item.revenue ?? '';
+      const netInc = item.net_income ?? item.netProfit ?? '';
+      const opInc = item.operating_income ?? item.operatingProfit ?? '';
+      const margin = (rev && netInc && typeof rev === 'number' && typeof netInc === 'number' && rev !== 0)
+        ? ((netInc / rev) * 100).toFixed(2)
+        : '';
+      return [
+        `"${periodLabel}"`,
+        rev,
+        netInc,
+        opInc,
+        margin
+      ];
+    });
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${cleanTicker}_financials_${view}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="glass-card p-5 space-y-4">
@@ -213,18 +251,30 @@ function EarningsPanel({ annual, quarterly, ratios, price_cagr, sales_cagr_3y, p
         }}
       />
 
-      {/* Toggle */}
-      <div className="flex gap-2 p-1 bg-white/[0.02] border border-white/[0.06] rounded-xl w-fit">
-        {['annual', 'quarterly'].map(v => (
-          <button key={v} onClick={() => setView(v)}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer ${
-              view === v
-                ? 'bg-indigo-500/20 border border-indigo-500/30 text-indigo-300'
-                : 'text-slate-500 hover:text-slate-300'
-            }`}>
-            {v === 'annual' ? '📅 Annual' : '📊 Quarterly'}
-          </button>
-        ))}
+      {/* Toggle & Export Row */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex gap-2 p-1 bg-white/[0.02] border border-white/[0.06] rounded-xl w-fit">
+          {['annual', 'quarterly'].map(v => (
+            <button key={v} onClick={() => setView(v)}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                view === v
+                  ? 'bg-indigo-500/20 border border-indigo-500/30 text-indigo-300'
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}>
+              {v === 'annual' ? '📅 Annual' : '📊 Quarterly'}
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={handleExportFinancialsCSV}
+          disabled={!data || !data.length}
+          className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 transition cursor-pointer font-medium disabled:opacity-40"
+          title={`Export ${view === 'annual' ? 'Annual' : 'Quarterly'} financial statements to CSV`}
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span>Export Financials (CSV)</span>
+        </button>
       </div>
 
       {/* Compounding & Return Scorecard */}
@@ -720,6 +770,7 @@ export default function FundamentalsAnalysis({ ticker }) {
 
       {/* Earnings Panel (full width) */}
       <EarningsPanel
+        ticker={ticker}
         annual={data.income_annual}
         quarterly={data.income_quarterly}
         ratios={data.ratios}

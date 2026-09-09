@@ -13,7 +13,9 @@ import {
   ShieldAlert,
   Info,
   Scale,
-  Award
+  Award,
+  RotateCcw,
+  Download
 } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 
@@ -175,6 +177,56 @@ export default function LongTermAnalysis({ ticker }) {
     return 'text-rose-400 border-rose-500/20 bg-rose-500/[0.03]';
   };
 
+  const handleResetDCF = () => {
+    if (data?.dcf_defaults) {
+      setDcfFlow(data.dcf_defaults.starting_flow);
+      setDcfGrowth(Math.round(data.dcf_defaults.growth_rate * 1000) / 10);
+      setDcfDiscount(Math.round(data.dcf_defaults.discount_rate * 1000) / 10);
+      setDcfTerminal(Math.round(data.dcf_defaults.terminal_growth * 1000) / 10);
+      setFlowType(data.dcf_defaults.flow_type);
+    }
+  };
+
+  const handleExportDCF = () => {
+    if (!dcfResults || !data) return;
+    const cleanTicker = (ticker || 'STOCK').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const lines = [
+      ['Metric', 'Value'],
+      ['Ticker', cleanTicker],
+      ['Current Market Price', currentPrice],
+      ['Intrinsic DCF Value', dcfResults.intrinsicValue.toFixed(2)],
+      ['Margin of Safety (%)', marginOfSafety.toFixed(2)],
+      ['Valuation Status', marginOfSafety >= 15 ? 'Undervalued (Safe)' : marginOfSafety >= 0 ? 'Fair Value' : 'Overvalued'],
+      ['Starting Cash Flow Proxy', `${flowType} (${dcfFlow})`],
+      ['5Y Growth Rate (%)', `${dcfGrowth}%`],
+      ['Discount Rate / WACC (%)', `${dcfDiscount}%`],
+      ['Terminal Growth Rate (%)', `${dcfTerminal}%`],
+      ['Enterprise Value', dcfResults.enterpriseValue.toFixed(0)],
+      ['Total Cash', data.total_cash || 0],
+      ['Total Debt', data.total_debt || 0],
+      ['Equity Value', dcfResults.equityValue.toFixed(0)],
+      ['Shares Outstanding', data.shares_outstanding || 0],
+      [],
+      ['Projection Year', 'Projected Cash Flow', 'Discounted Present Value (PV)']
+    ];
+    dcfResults.projections.forEach(p => {
+      lines.push([`Year ${p.year}`, p.flow.toFixed(0), p.pv.toFixed(0)]);
+    });
+    lines.push(['Sum of 5Y Discounted Cash Flows', dcfResults.pvFcfSum.toFixed(0)]);
+    lines.push(['Present Value of Terminal Value', dcfResults.pvTerminalValue.toFixed(0)]);
+
+    const csvContent = lines.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${cleanTicker}_DCF_Valuation_Model.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       
@@ -205,13 +257,31 @@ export default function LongTermAnalysis({ ticker }) {
         {/* INTERACTIVE DCF CALCULATOR */}
         <div className="glass-card p-5 sm:p-6 space-y-6 flex flex-col justify-between">
           <div className="space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-indigo-400" />
                 <h3 className="text-sm sm:text-base font-bold text-white">Interactive DCF Intrinsic Value</h3>
                 <InfoBadge infoKey="dcf_valuation" />
               </div>
-              <span className="text-[10px] bg-indigo-500/10 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/20 font-bold">CAPM / WACC Model</span>
+              <div className="flex items-center gap-2">
+                <span className="hidden sm:inline-block text-[10px] bg-indigo-500/10 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/20 font-bold">CAPM / WACC Model</span>
+                <button
+                  onClick={handleResetDCF}
+                  className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer font-medium"
+                  title="Reset DCF parameters to algorithmic baseline defaults"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Reset</span>
+                </button>
+                <button
+                  onClick={handleExportDCF}
+                  className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-md bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 transition cursor-pointer font-medium"
+                  title="Export DCF 5-year cashflow projections to CSV"
+                >
+                  <Download className="w-3 h-3" />
+                  <span>Export Model</span>
+                </button>
+              </div>
             </div>
 
             {/* DCF METRIC PANEL */}

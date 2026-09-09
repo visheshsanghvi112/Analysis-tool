@@ -7,7 +7,7 @@ import {
 import {
   Calculator, TrendingUp, Target, Calendar,
   Sparkles, BarChart3, Info, ChevronDown, ChevronUp,
-  Copy, Check, Flame, ShieldCheck, ArrowUpRight, Percent, Clock, Layers
+  Copy, Check, Flame, ShieldCheck, ArrowUpRight, Percent, Clock, Layers, Download
 } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 
@@ -380,6 +380,31 @@ export default function SIPCalculator({ ticker }) {
     setCopiedSchedule(true);
     setTimeout(() => setCopiedSchedule(false), 2000);
   }, [result.series, currSym, isUS]);
+
+  // Export Schedule as CSV for spreadsheets
+  const handleExportScheduleCSV = useCallback(() => {
+    if (!result?.series?.length) return;
+    const cleanTicker = (ticker || 'PORTFOLIO').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const headers = ['Timeline', 'Year Number', 'Annual Deposit', 'Cumulative Invested', 'Yearly Gains', 'Closing Balance'];
+    const rows = result.series.map(s => [
+      `"${s.year} (Year ${s.yearNum})"`,
+      s.yearNum,
+      s.annualDeposit,
+      s.invested,
+      s.yearlyGains,
+      s.value
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${cleanTicker}_SIP_Schedule_${calcMode}_${years}Y.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [result.series, ticker, calcMode, years]);
 
   // Preset arrays
   const MONTHLY_PRESETS = isUS ? [100, 250, 500, 1000, 2500] : [2500, 5000, 10000, 25000, 50000];
@@ -902,13 +927,23 @@ export default function SIPCalculator({ ticker }) {
           </button>
 
           {showSchedule && (
-            <button
-              onClick={handleCopySchedule}
-              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer font-mono"
-            >
-              {copiedSchedule ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              {copiedSchedule ? 'Copied to Clipboard' : 'Copy Schedule'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopySchedule}
+                className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer font-mono"
+              >
+                {copiedSchedule ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedSchedule ? 'Copied' : 'Copy'}</span>
+              </button>
+              <button
+                onClick={handleExportScheduleCSV}
+                className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition cursor-pointer font-mono"
+                title="Download compounding schedule as CSV for Excel / Google Sheets"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export CSV</span>
+              </button>
+            </div>
           )}
         </div>
 
