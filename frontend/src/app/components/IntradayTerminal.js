@@ -10,7 +10,7 @@ import {
   BarChart2, Flame, Eye, ArrowRight, CheckCircle2, XCircle, AlertCircle,
   Copy, Check, Scale, AlertTriangle, Play, HelpCircle,
   Volume2, VolumeX, Edit3, Trash2, Maximize2, Minimize2, Bell, BellOff,
-  Star, Keyboard, X
+  Star, Keyboard, X, Download
 } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 import Header from './Header';
@@ -570,6 +570,31 @@ export default function IntradayTerminal() {
     const updated = tradeLog.filter(t => t.id !== id);
     setTradeLog(updated);
     try { localStorage.setItem('stockiq_trade_log', JSON.stringify(updated)); } catch (_) {}
+  };
+
+  const exportTradeLogCSV = () => {
+    if (!tradeLog.length) return;
+    const headers = ['Date', 'Time', 'Ticker', 'Direction', 'Entry', 'Exit', 'Qty', 'Gross_PnL', 'Status', 'Note'];
+    const rows = tradeLog.map(t => [
+      `"${t.date || ''}"`,
+      `"${t.time || ''}"`,
+      `"${t.ticker || ''}"`,
+      `"${t.direction || ''}"`,
+      t.entry || '',
+      t.exit || '',
+      t.qty || '',
+      t.grossPnl !== null ? t.grossPnl : '',
+      `"${t.status || ''}"`,
+      `"${(t.note || '').replace(/"/g, '""')}"`
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `trade_log_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Position Sizing & Friction Breakeven Calculations
@@ -3055,14 +3080,26 @@ export default function IntradayTerminal() {
                 </h3>
                 <InfoBadge infoKey="trade_log" />
               </div>
-              <button
-                onClick={() => setTradeLogOpen(!tradeLogOpen)}
-                className={`text-xs font-semibold px-2 py-1 rounded-lg border transition ${
-                  tradeLogOpen ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'
-                }`}
-              >
-                {tradeLogOpen ? 'Hide Form' : '+ Log Trade'}
-              </button>
+              <div className="flex items-center gap-1.5">
+                {tradeLog.length > 0 && (
+                  <button
+                    onClick={exportTradeLogCSV}
+                    className="text-xs font-semibold px-2 py-1 rounded-lg border bg-slate-800 text-slate-300 border-slate-700 hover:text-emerald-400 hover:border-emerald-500/40 transition flex items-center gap-1"
+                    title="Export logged trades as CSV spreadsheet"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span className="hidden sm:inline">CSV</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setTradeLogOpen(!tradeLogOpen)}
+                  className={`text-xs font-semibold px-2 py-1 rounded-lg border transition ${
+                    tradeLogOpen ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}
+                >
+                  {tradeLogOpen ? 'Hide Form' : '+ Log Trade'}
+                </button>
+              </div>
             </div>
 
             {tradeLogOpen && (
