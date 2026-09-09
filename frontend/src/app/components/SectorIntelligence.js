@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Trophy, Flame, Shield, Brain, TrendingUp, TrendingDown, RefreshCw, AlertCircle, Zap, Target, Crown } from 'lucide-react';
+import { Trophy, Flame, Shield, Brain, TrendingUp, TrendingDown, RefreshCw, AlertCircle, Zap, Target, Crown, Download, ArrowRight } from 'lucide-react';
 
 const API = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
 
@@ -83,6 +83,30 @@ export default function SectorIntelligence({ ticker }) {
   const ranked   = data?.ranked || [];
   const queriedData = ranked.find(m => m.ticker === ticker);
 
+  const exportSectorCSV = () => {
+    if (!ranked || ranked.length === 0) return;
+    const headers = ['Rank', 'Ticker', 'Composite Score (100)', 'ML Signal', '3M Return (%)', '1Y Return (%)', 'Sharpe Ratio', 'Annual Volatility (%)'];
+    const rows = ranked.map(m => [
+      m.rank,
+      m.ticker.replace('.NS', '').replace('.BO', ''),
+      m.score,
+      m.ml_signal || '',
+      m.ret_3m ?? '',
+      m.ret_1y ?? '',
+      m.sharpe ?? '',
+      m.annual_vol ?? ''
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `sector_rankings_${data?.sector?.toLowerCase().replace(/\s+/g, '_') || 'sector'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div style={{ background: '#0a0a0a', border: '1px solid #1c1c1c', borderRadius: '16px', padding: '20px', color: '#fff', fontFamily: 'var(--font-poppins), sans-serif' }}>
       {/* Header */}
@@ -96,20 +120,39 @@ export default function SectorIntelligence({ ticker }) {
             {data && <p style={{ fontSize: '11px', color: '#666', margin: 0 }}>{data.sector} · {ranked.length} peers ranked</p>}
           </div>
         </div>
-        <button
-          onClick={load}
-          disabled={loading}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '5px',
-            background: loaded ? '#141414' : '#f59e0b',
-            border: `1px solid ${loaded ? '#2a2a2a' : '#f59e0b'}`,
-            borderRadius: '8px', padding: '7px 14px', color: loaded ? '#aaa' : '#000',
-            fontSize: '11px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
-          }}
-        >
-          <RefreshCw style={{ width: '12px', height: '12px', animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-          {loading ? 'Ranking...' : loaded ? 'Refresh' : 'Run Sector Analysis'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {loaded && ranked.length > 0 && (
+            <button
+              onClick={exportSectorCSV}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '5px',
+                background: '#141414', border: '1px solid #2a2a2a',
+                borderRadius: '8px', padding: '7px 12px', color: '#60a5fa',
+                fontSize: '11px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = '#3b82f6'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = '#2a2a2a'}
+              title="Download full sector rankings CSV"
+            >
+              <Download style={{ width: '12px', height: '12px' }} />
+              <span>Export CSV</span>
+            </button>
+          )}
+          <button
+            onClick={load}
+            disabled={loading}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '5px',
+              background: loaded ? '#141414' : '#f59e0b',
+              border: `1px solid ${loaded ? '#2a2a2a' : '#f59e0b'}`,
+              borderRadius: '8px', padding: '7px 14px', color: loaded ? '#aaa' : '#000',
+              fontSize: '11px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
+            }}
+          >
+            <RefreshCw style={{ width: '12px', height: '12px', animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            {loading ? 'Ranking...' : loaded ? 'Refresh' : 'Run Sector Analysis'}
+          </button>
+        </div>
       </div>
 
       <style>{`
@@ -199,6 +242,11 @@ export default function SectorIntelligence({ ticker }) {
                 return (
                   <div
                     key={m.ticker}
+                    onClick={() => {
+                      if (!isQueried) {
+                        window.location.href = `/?ticker=${encodeURIComponent(m.ticker)}`;
+                      }
+                    }}
                     style={{
                       display: 'grid',
                       gridTemplateColumns: '24px 1fr auto',
@@ -208,8 +256,22 @@ export default function SectorIntelligence({ ticker }) {
                       background: isQueried ? '#1a233a' : '#111',
                       border: `1px solid ${isQueried ? '#3b82f640' : '#1c1c1c'}`,
                       borderRadius: '8px',
-                      transition: 'border-color 0.15s',
+                      cursor: isQueried ? 'default' : 'pointer',
+                      transition: 'all 0.15s',
                     }}
+                    onMouseEnter={e => {
+                      if (!isQueried) {
+                        e.currentTarget.style.borderColor = '#3b82f660';
+                        e.currentTarget.style.background = '#151515';
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (!isQueried) {
+                        e.currentTarget.style.borderColor = '#1c1c1c';
+                        e.currentTarget.style.background = '#111';
+                      }
+                    }}
+                    title={isQueried ? 'Currently active asset' : `Click to analyze ${sym}`}
                   >
                     <span style={{ fontSize: '14px', textAlign: 'center' }}>
                       {i < 3 ? MEDAL[i] : <span style={{ fontSize: '11px', color: '#555', fontWeight: 700 }}>#{m.rank}</span>}
@@ -221,6 +283,11 @@ export default function SectorIntelligence({ ticker }) {
                         {m.ml_signal && (
                           <span style={{ fontSize: '9px', background: `${SIGNAL_COLOR[m.ml_signal]}15`, color: SIGNAL_COLOR[m.ml_signal], borderRadius: '4px', padding: '1px 5px', fontWeight: 700 }}>
                             {m.ml_signal}
+                          </span>
+                        )}
+                        {!isQueried && (
+                          <span style={{ fontSize: '9px', color: '#555', marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                            View <ArrowRight style={{ width: '8px', height: '8px' }} />
                           </span>
                         )}
                       </div>
