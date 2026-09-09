@@ -380,7 +380,24 @@ def _calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float 
                 direction[i] = -1
                 supertrend[i] = final_ub[i]
 
-    return {"supertrend": supertrend, "direction": direction}
+    return {"supertrend": supertrend, "direction": direction, "atr": atr}
+
+
+def _calculate_atr(df: pd.DataFrame, period: int = 14) -> np.ndarray:
+    """Computes standard Average True Range (ATR) across candlestick bars."""
+    if len(df) < 2:
+        return np.zeros(len(df))
+    h = df["High"].values
+    l = df["Low"].values
+    c = df["Close"].values
+    tr1 = h - l
+    tr2 = np.abs(h - np.roll(c, 1))
+    tr3 = np.abs(l - np.roll(c, 1))
+    tr2[0] = tr1[0]
+    tr3[0] = tr1[0]
+    tr = np.maximum(tr1, np.maximum(tr2, tr3))
+    atr = pd.Series(tr).rolling(period, min_periods=1).mean().values
+    return np.nan_to_num(atr, nan=0.0)
 
 
 def _calculate_rsi(series: pd.Series, period: int = 14) -> np.ndarray:
@@ -811,11 +828,12 @@ def get_intraday_analysis(
         # 5. Supertrend ATR(10, 3)
         st_dict = _calculate_supertrend(df, period=10, multiplier=3.0)
 
-        # 6. Exponential Moving Averages (9, 21, 50)
+        # 6. Exponential Moving Averages (9, 21, 50, 200)
         c_series = df["Close"]
         ema9 = c_series.ewm(span=9, adjust=False).mean().values
         ema21 = c_series.ewm(span=21, adjust=False).mean().values
         ema50 = c_series.ewm(span=50, adjust=False).mean().values
+        ema200 = c_series.ewm(span=200, adjust=False).mean().values
 
         # 7. RSI (14)
         rsi_vals = _calculate_rsi(c_series, period=14)
@@ -825,6 +843,9 @@ def get_intraday_analysis(
         macd_vals = macd_dict["macd"]
         macd_signal_vals = macd_dict["signal"]
         macd_hist_vals = macd_dict["histogram"]
+
+        # 7c. ATR (14) Volatility
+        atr_vals = _calculate_atr(df, period=14)
 
         # 8. Volume Profile (VPVR)
         vpvr = _calculate_volume_profile(df, n_bins=25)
@@ -880,6 +901,8 @@ def get_intraday_analysis(
                 "ema9": _safe_float(ema9[i]),
                 "ema21": _safe_float(ema21[i]),
                 "ema50": _safe_float(ema50[i]),
+                "ema200": _safe_float(ema200[i]) if len(ema200) > i else 0.0,
+                "atr": _safe_float(atr_vals[i], decimals=2) if len(atr_vals) > i else 0.0,
                 "rsi": _safe_float(rsi_vals[i]),
                 "macd": _safe_float(macd_vals[i], decimals=4),
                 "macd_signal": _safe_float(macd_signal_vals[i], decimals=4),
@@ -905,6 +928,9 @@ def get_intraday_analysis(
         curr_rsi = _safe_float(rsi_vals[-1])
         curr_ema9 = _safe_float(ema9[-1])
         curr_ema21 = _safe_float(ema21[-1])
+        curr_ema50 = _safe_float(ema50[-1])
+        curr_ema200 = _safe_float(ema200[-1]) if len(ema200) > 0 else 0.0
+        curr_atr = _safe_float(atr_vals[-1], decimals=2) if len(atr_vals) > 0 else 0.0
 
         prev_close = quote.get("prevClose")
         if not prev_close or prev_close == 0:
@@ -960,6 +986,12 @@ def get_intraday_analysis(
             checklist.append({"factor": "RSI Velocity", "status": "BEARISH", "desc": f"RSI at {curr_rsi:.1f} indicates intense selling velocity."})
         else:
             checklist.append({"factor": "RSI Velocity", "status": "NEUTRAL", "desc": f"RSI at {curr_rsi:.1f} neutral equilibrium."})
+
+        if curr_ema200 > 0:
+            if curr_price >= curr_ema200:
+                checklist.append({"factor": "200 EMA Institutional Anchor", "status": "BULLISH", "desc": f"Trading above institutional 200 EMA ({currency_symbol}{curr_ema200:.2f})."})
+            else:
+                checklist.append({"factor": "200 EMA Institutional Anchor", "status": "BEARISH", "desc": f"Trading below institutional 200 EMA ({currency_symbol}{curr_ema200:.2f})."})
 
         quant_score = max(-100, min(100, quant_score))
         if quant_score >= 50:
@@ -1018,6 +1050,9 @@ def get_intraday_analysis(
             "rsi": curr_rsi,
             "ema9": curr_ema9,
             "ema21": curr_ema21,
+            "ema50": curr_ema50,
+            "ema200": curr_ema200,
+            "atr": curr_atr,
             "candles": candles,
             "volume_profile": vpvr,
             "pivots": pivots,

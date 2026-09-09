@@ -9,7 +9,8 @@ import {
   Search, TrendingUp, TrendingDown, Target, Zap, Clock, ShieldCheck,
   BarChart2, Flame, Eye, ArrowRight, CheckCircle2, XCircle, AlertCircle,
   Copy, Check, Scale, AlertTriangle, Play, HelpCircle,
-  Volume2, VolumeX, Edit3, Trash2, Maximize2, Minimize2, Bell, BellOff
+  Volume2, VolumeX, Edit3, Trash2, Maximize2, Minimize2, Bell, BellOff,
+  Star, Keyboard, X
 } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 import Header from './Header';
@@ -88,6 +89,13 @@ export default function IntradayTerminal() {
   const [showCamarilla, setShowCamarilla] = useState(false);
   const [showPDH, setShowPDH] = useState(true);
   const [showCPR, setShowCPR] = useState(true);
+  const [showEMA200, setShowEMA200] = useState(false);
+  const [candleMode, setCandleMode] = useState('regular'); // 'regular' | 'heikin_ashi'
+
+  // Pinned Watchlist & Hotkeys Modal
+  const [pinnedTickers, setPinnedTickers] = useState([]);
+  const [showHotkeysModal, setShowHotkeysModal] = useState(false);
+  const searchInputRef = useRef(null);
 
   // Viewport Zoom: 'all' | '60' | '30'
   const [candleSlice, setCandleSlice] = useState('all');
@@ -190,6 +198,36 @@ export default function IntradayTerminal() {
         setNotes(saved || '');
       } catch (_) {}
     }
+  }, [ticker]);
+
+  // Load Pinned Watchlist from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('stockiq_pinned_tickers');
+        if (saved) {
+          setPinnedTickers(JSON.parse(saved));
+        } else {
+          const defaults = ['RELIANCE.NS', 'HDFCBANK.NS', 'TCS.NS', 'INFY.NS', 'TATAMOTORS.NS'];
+          setPinnedTickers(defaults);
+          localStorage.setItem('stockiq_pinned_tickers', JSON.stringify(defaults));
+        }
+      } catch (_) {}
+    }
+  }, []);
+
+  const togglePinTicker = useCallback((sym) => {
+    const target = (sym || ticker).toUpperCase();
+    setPinnedTickers(prev => {
+      const exists = prev.includes(target);
+      const updated = exists ? prev.filter(t => t !== target) : [...prev, target];
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('stockiq_pinned_tickers', JSON.stringify(updated));
+        } catch (_) {}
+      }
+      return updated;
+    });
   }, [ticker]);
 
   const handleNotesChange = (e) => {
@@ -308,6 +346,57 @@ export default function IntradayTerminal() {
   // Initial and param-change load
   useEffect(() => {
     fetchData();
+  }, [fetchData]);
+
+  // Pro Trading Hotkeys global keyboard listener
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+        if (e.key === 'Escape') {
+          document.activeElement?.blur();
+        }
+        return;
+      }
+
+      if (e.key === '/') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === '1') {
+        setCandleInterval('1m'); setPeriod('1d');
+      } else if (e.key === '2') {
+        setCandleInterval('2m'); setPeriod('1d');
+      } else if (e.key === '3') {
+        setCandleInterval('3m'); setPeriod('1d');
+      } else if (e.key === '5') {
+        setCandleInterval('5m'); setPeriod('1d');
+      } else if (e.key === '4') {
+        setCandleInterval('15m'); setPeriod('1d');
+      } else if (e.key === '6') {
+        setCandleInterval('30m'); setPeriod('1d');
+      } else if (e.key.toLowerCase() === 'h' && !e.ctrlKey && !e.metaKey) {
+        setCandleInterval('1h'); setPeriod('5d');
+      } else if (e.key.toLowerCase() === 'v') {
+        setShowVWAP(prev => !prev);
+      } else if (e.key.toLowerCase() === 's') {
+        setShowSupertrend(prev => !prev);
+      } else if (e.key.toLowerCase() === 'c') {
+        setShowCPR(prev => !prev);
+      } else if (e.key.toLowerCase() === 'k') {
+        setCandleMode(prev => prev === 'regular' ? 'heikin_ashi' : 'regular');
+      } else if (e.key.toLowerCase() === 'r') {
+        fetchData();
+      } else if (e.key.toLowerCase() === 'f') {
+        setFullscreenChart(prev => !prev);
+      } else if (e.key === '?') {
+        setShowHotkeysModal(prev => !prev);
+      } else if (e.key === 'Escape') {
+        setShowHotkeysModal(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [fetchData]);
 
   // Audio Alert trigger on trap or breakout detection
@@ -590,12 +679,41 @@ export default function IntradayTerminal() {
 
   // SVG Candlestick Chart calculations
   const rawCandles = data?.candles || [];
-  const candles = useMemo(() => {
+  const slicedCandles = useMemo(() => {
     if (!rawCandles.length) return [];
     if (candleSlice === '30') return rawCandles.slice(-30);
     if (candleSlice === '60') return rawCandles.slice(-60);
     return rawCandles;
   }, [rawCandles, candleSlice]);
+
+  const candles = useMemo(() => {
+    if (!slicedCandles.length) return [];
+    if (candleMode !== 'heikin_ashi') return slicedCandles;
+
+    let prevHaOpen = null;
+    let prevHaClose = null;
+    return slicedCandles.map((c, idx) => {
+      const haClose = (c.open + c.high + c.low + c.close) / 4;
+      const haOpen = idx === 0 ? (c.open + c.close) / 2 : (prevHaOpen + prevHaClose) / 2;
+      const haHigh = Math.max(c.high, haOpen, haClose);
+      const haLow = Math.min(c.low, haOpen, haClose);
+      prevHaOpen = haOpen;
+      prevHaClose = haClose;
+
+      return {
+        ...c,
+        open: Number(haOpen.toFixed(2)),
+        high: Number(haHigh.toFixed(2)),
+        low: Number(haLow.toFixed(2)),
+        close: Number(haClose.toFixed(2)),
+        isHeikinAshi: true,
+        realOpen: c.open,
+        realHigh: c.high,
+        realLow: c.low,
+        realClose: c.close,
+      };
+    });
+  }, [slicedCandles, candleMode]);
 
   const chartHeight = 360;
   const chartWidth = 720;
@@ -618,6 +736,10 @@ export default function IntradayTerminal() {
       if (showSupertrend && c.supertrend > 0) {
         if (c.supertrend < min) min = c.supertrend;
         if (c.supertrend > max) max = c.supertrend;
+      }
+      if (showEMA200 && c.ema200 > 0) {
+        if (c.ema200 < min) min = c.ema200;
+        if (c.ema200 > max) max = c.ema200;
       }
     });
 
@@ -877,6 +999,17 @@ export default function IntradayTerminal() {
               <span className="hidden sm:inline">Trader&apos;s Journal</span>
             </button>
 
+            {/* Pro Hotkeys Modal Button */}
+            <button
+              onClick={() => setShowHotkeysModal(true)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition bg-slate-900/90 text-slate-400 border-slate-800 hover:text-slate-200"
+              title="Pro Keyboard Shortcuts (Press '?')"
+            >
+              <Keyboard className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">Shortcuts</span>
+              <kbd className="px-1 py-0.2 rounded bg-slate-800 text-[10px] text-cyan-300 font-mono">?</kbd>
+            </button>
+
             <button
               onClick={() => fetchData(false)}
               disabled={loading}
@@ -889,45 +1022,82 @@ export default function IntradayTerminal() {
         </header>
 
         {/* ── TICKER COMMAND BAR & POPULAR SHORTCUTS ───────────────────────── */}
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 backdrop-blur-md">
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider pl-1 pr-1 shrink-0">
-              Active Tickers:
-            </span>
-            {QUICK_TICKERS.filter(t => t.market === scannerMarket).map(t => (
-              <button
-                key={t.symbol}
-                onClick={() => setTicker(t.symbol)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition flex items-center gap-1.5 ${
-                  ticker === t.symbol
-                    ? 'bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/10'
-                    : 'bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/40'
-                }`}
-              >
-                <span>{t.name}</span>
-                <span className="text-[10px] text-slate-500 font-mono">({t.symbol.split('.')[0]})</span>
-              </button>
-            ))}
-          </div>
+        <div className="space-y-2 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 backdrop-blur-md">
+          {/* Pinned Watchlist Strip (If Available) */}
+          {pinnedTickers.length > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs border-b border-slate-800/60 scrollbar-none">
+              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider pl-1 pr-1 shrink-0 flex items-center gap-1">
+                <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                Pinned Desk:
+              </span>
+              {pinnedTickers.map(sym => (
+                <div
+                  key={sym}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 transition border ${
+                    ticker === sym
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm shadow-amber-500/10'
+                      : 'bg-slate-950/70 text-slate-300 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <button
+                    onClick={() => setTicker(sym)}
+                    className="cursor-pointer font-mono text-[11px]"
+                  >
+                    {sym.split('.')[0]}
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); togglePinTicker(sym); }}
+                    className="text-slate-500 hover:text-rose-400 ml-1"
+                    title="Unpin from desk"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
-          <form onSubmit={handleSearchSubmit} className="relative min-w-[240px]">
-            <input
-              type="text"
-              placeholder={`Search ${scannerMarket === 'IN' ? 'NSE stock (e.g. SBIN)' : 'US stock (e.g. AMD)'}...`}
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-8 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition"
-            />
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-            {searchInput && (
-              <button
-                type="submit"
-                className="absolute right-2 top-1.5 px-2 py-0.5 text-[10px] font-bold bg-cyan-500/20 text-cyan-300 rounded hover:bg-cyan-500/30 transition"
-              >
-                Load
-              </button>
-            )}
-          </form>
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider pl-1 pr-1 shrink-0">
+                Active Tickers:
+              </span>
+              {QUICK_TICKERS.filter(t => t.market === scannerMarket).map(t => (
+                <button
+                  key={t.symbol}
+                  onClick={() => setTicker(t.symbol)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition flex items-center gap-1.5 ${
+                    ticker === t.symbol
+                      ? 'bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/10'
+                      : 'bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/40'
+                  }`}
+                >
+                  <span>{t.name}</span>
+                  <span className="text-[10px] text-slate-500 font-mono">({t.symbol.split('.')[0]})</span>
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={handleSearchSubmit} className="relative min-w-[240px]">
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder={`Search ${scannerMarket === 'IN' ? 'NSE stock (e.g. SBIN)' : 'US stock (e.g. AMD)'}... (Press '/')`}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-8 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition font-mono"
+              />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+              {searchInput && (
+                <button
+                  type="submit"
+                  className="absolute right-2 top-1.5 px-2 py-0.5 text-[10px] font-bold bg-cyan-500/20 text-cyan-300 rounded hover:bg-cyan-500/30 transition"
+                >
+                  Load
+                </button>
+              )}
+            </form>
+          </div>
         </div>
 
         {/* ── INSTITUTIONAL TRAP ALERT BANNER (If Active) ─────────────────── */}
@@ -974,7 +1144,20 @@ export default function IntradayTerminal() {
             }`}>
               <div>
                 <div className="flex items-center justify-between gap-1">
-                  <span className="text-xs font-semibold text-slate-400 truncate max-w-[110px]" title={data.company_name}>{data.company_name}</span>
+                  <div className="flex items-center gap-1.5 truncate max-w-[120px]">
+                    <button
+                      onClick={() => togglePinTicker(ticker)}
+                      className={`p-0.5 rounded transition ${
+                        pinnedTickers.includes(ticker)
+                          ? 'text-amber-400 hover:text-amber-300'
+                          : 'text-slate-600 hover:text-slate-400'
+                      }`}
+                      title={pinnedTickers.includes(ticker) ? 'Unpin from desk' : 'Pin to my desk'}
+                    >
+                      <Star className={`w-3.5 h-3.5 ${pinnedTickers.includes(ticker) ? 'fill-amber-400 text-amber-400' : ''}`} />
+                    </button>
+                    <span className="text-xs font-semibold text-slate-400 truncate" title={data.company_name}>{data.company_name}</span>
+                  </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <InfoBadge infoKey="live_prices" />
                   </div>
@@ -1342,12 +1525,37 @@ export default function IntradayTerminal() {
                     <span className="w-2 h-0.5 bg-indigo-400 rounded-full" />
                     CPR Range
                   </button>
+
+                  <button
+                    onClick={() => setShowEMA200(!showEMA200)}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 ${
+                      showEMA200 ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40' : 'bg-slate-950 text-slate-500 border border-slate-800'
+                    }`}
+                    title="200-period Exponential Moving Average (Institutional Anchor)"
+                  >
+                    <span className="w-2 h-0.5 bg-amber-400 rounded-full" />
+                    200 EMA
+                  </button>
+
+                  <button
+                    onClick={() => setCandleMode(candleMode === 'regular' ? 'heikin_ashi' : 'regular')}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 ${
+                      candleMode === 'heikin_ashi' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-slate-950 text-slate-500 border border-slate-800'
+                    }`}
+                    title="Toggle Heikin-Ashi Trend-Smoothing Candlesticks (HotKey: 'K')"
+                  >
+                    <span className="text-[10px]">🥢</span>
+                    {candleMode === 'heikin_ashi' ? 'Heikin-Ashi' : 'Candles'}
+                  </button>
                 </div>
 
               {/* Hover Inspection Bar */}
               <div className="min-h-6 flex items-center justify-between text-[11px] font-mono text-slate-400 mt-2 px-1 overflow-x-auto">
                 {hoveredCandle ? (
                   <div className="flex flex-wrap items-center gap-3">
+                    {candleMode === 'heikin_ashi' && (
+                      <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-bold">HA SMOOTHED</span>
+                    )}
                     <span>Time: <strong className="text-white">{hoveredCandle.time}</strong></span>
                     <span>O: <strong className="text-slate-200">{hoveredCandle.open}</strong></span>
                     <span>H: <strong className="text-emerald-400">{hoveredCandle.high}</strong></span>
@@ -1355,9 +1563,14 @@ export default function IntradayTerminal() {
                     <span>C: <strong className={hoveredCandle.close >= hoveredCandle.open ? 'text-emerald-400' : 'text-rose-400'}>{hoveredCandle.close}</strong></span>
                     <span>Vol: <strong className="text-cyan-300">{hoveredCandle.volume?.toLocaleString()}</strong></span>
                     <span>VWAP: <strong className="text-cyan-400">{hoveredCandle.vwap}</strong></span>
+                    {hoveredCandle.ema200 > 0 && <span>EMA200: <strong className="text-amber-400">{hoveredCandle.ema200}</strong></span>}
+                    {hoveredCandle.atr > 0 && <span>ATR: <strong className="text-amber-300">{hoveredCandle.atr}</strong></span>}
                   </div>
                 ) : (
-                  <span className="text-slate-500 italic">Hover over candles to inspect high-frequency metrics</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500 italic">Hover over candles to inspect high-frequency metrics</span>
+                    {candleMode === 'heikin_ashi' && <span className="text-cyan-400 text-[10px] font-mono">(Heikin-Ashi active: market noise smoothed)</span>}
+                  </div>
                 )}
               </div>
 
@@ -1682,6 +1895,18 @@ export default function IntradayTerminal() {
                       </g>
                     )}
 
+                    {/* EMA 200 Institutional Anchor */}
+                    {showEMA200 && (
+                      <path
+                        d={candles.reduce((acc, c, i) => !c.ema200 ? acc : `${acc}${acc ? ' L' : 'M'} ${xScale(i)} ${yScale(c.ema200)}`, '')}
+                        fill="none"
+                        stroke="#f59e0b"
+                        strokeWidth="1.8"
+                        strokeDasharray="4 3"
+                        strokeOpacity={0.9}
+                      />
+                    )}
+
                     {/* Supertrend Stop Line */}
                     {showSupertrend && (
                       <g>
@@ -1846,6 +2071,7 @@ export default function IntradayTerminal() {
                       <button onClick={() => setActiveSubChart('rsi')} className={`px-2.5 py-1 rounded-md transition ${activeSubChart === 'rsi' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400'}`}>RSI (14)</button>
                       <button onClick={() => setActiveSubChart('macd')} className={`px-2.5 py-1 rounded-md transition ${activeSubChart === 'macd' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400'}`}>MACD (12,26,9)</button>
                       <button onClick={() => setActiveSubChart('cvd')} className={`px-2.5 py-1 rounded-md transition ${activeSubChart === 'cvd' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400'}`}>Order Flow CVD</button>
+                      <button onClick={() => setActiveSubChart('atr')} className={`px-2.5 py-1 rounded-md transition ${activeSubChart === 'atr' ? 'bg-slate-800 text-amber-300 font-bold' : 'text-slate-400'}`}>ATR Volatility (14)</button>
                     </div>
                     <InfoBadge infoKey={activeSubChart === 'cvd' ? 'order_flow_delta' : activeSubChart === 'volume' ? 'order_flow_delta' : 'rsi'} />
                   </div>
@@ -2004,6 +2230,42 @@ export default function IntradayTerminal() {
                               d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${90 - (((c.cum_delta || 0) - minCvd) / cvdRange) * 80}`, '')}
                               fill="none"
                               stroke="#eab308"
+                              strokeWidth="1.8"
+                            />
+                          </>
+                        );
+                      })()}
+                    </svg>
+                  )}
+
+                  {activeSubChart === 'atr' && (
+                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full">
+                      {(() => {
+                        const atrVals = candles.map(c => c.atr || 0).filter(v => v > 0);
+                        const minAtr = atrVals.length ? Math.min(...atrVals) * 0.85 : 0;
+                        const maxAtr = atrVals.length ? Math.max(...atrVals) * 1.15 : 1;
+                        const atrRange = (maxAtr - minAtr) || 1;
+                        const lastCandle = candles[candles.length - 1];
+                        const activeCandle = hoveredCandle || lastCandle;
+                        const currentAtr = activeCandle?.atr || data?.atr || 0;
+                        const atrPct = data?.current_price > 0 ? ((currentAtr / data.current_price) * 100).toFixed(2) : '0';
+                        return (
+                          <>
+                            <text x={padding.left + 4} y={14} fill="#64748b" fontSize="8" fontFamily="monospace">
+                              Average True Range (14): <tspan fill="#f59e0b" fontWeight="bold">{currSym}{currentAtr} ({atrPct}% Volatility)</tspan>
+                              <tspan fill="#94a3b8" dx={8}>Dynamic 1.5× Stop Buffer: ±{currSym}{(currentAtr * 1.5).toFixed(2)}</tspan>
+                              {hoveredCandle && ` (${activeCandle?.time})`}
+                            </text>
+                            {/* ATR Area */}
+                            <path
+                              d={`${candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${90 - (((c.atr || 0) - minAtr) / atrRange) * 70}`, '')} L ${xScale(candles.length - 1)} 90 L ${xScale(0)} 90 Z`}
+                              fill="rgba(245, 158, 11, 0.08)"
+                            />
+                            {/* ATR Line */}
+                            <path
+                              d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${90 - (((c.atr || 0) - minAtr) / atrRange) * 70}`, '')}
+                              fill="none"
+                              stroke="#f59e0b"
                               strokeWidth="1.8"
                             />
                           </>
@@ -2911,6 +3173,65 @@ export default function IntradayTerminal() {
             </div>
           </div>
         </div>
+
+        {/* ── PRO KEYBOARD SHORTCUTS MODAL ─────────────────────────────────── */}
+        {showHotkeysModal && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-xl">
+                    <Keyboard className="w-5 h-5 text-cyan-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Pro Keyboard Shortcuts</h3>
+                    <p className="text-xs text-slate-400">Institutional desk navigation without touching the mouse</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowHotkeysModal(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white bg-slate-800/80 transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs max-h-[60vh] overflow-y-auto pr-1">
+                {[
+                  { key: '/', desc: 'Focus Ticker Search' },
+                  { key: '1, 2, 3, 5', desc: '1m, 2m, 3m, 5m Timeframe' },
+                  { key: '4', desc: '15m Timeframe' },
+                  { key: '6', desc: '30m Timeframe' },
+                  { key: 'H', desc: '1h Timeframe' },
+                  { key: 'V', desc: 'Toggle VWAP & Bands' },
+                  { key: 'S', desc: 'Toggle Supertrend' },
+                  { key: 'C', desc: 'Toggle CPR Range' },
+                  { key: 'K', desc: 'Toggle Heikin-Ashi' },
+                  { key: 'R', desc: 'Force Refresh Data' },
+                  { key: 'F', desc: 'Toggle Fullscreen Chart' },
+                  { key: '?', desc: 'Open this Shortcuts HUD' },
+                  { key: 'ESC', desc: 'Close Modals & Blur Input' },
+                ].map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 border border-slate-800">
+                    <span className="text-slate-300">{item.desc}</span>
+                    <kbd className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-cyan-400 font-mono font-bold text-[11px]">
+                      {item.key}
+                    </kbd>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-2 border-t border-slate-800 flex justify-end">
+                <button
+                  onClick={() => setShowHotkeysModal(false)}
+                  className="px-4 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-bold text-xs transition border border-cyan-500/40"
+                >
+                  Got it (Esc)
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         </main>
       </div>
