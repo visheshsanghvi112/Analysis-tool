@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import {
   FlaskConical, TrendingUp, TrendingDown, RefreshCw,
-  AlertCircle, Trophy, Target, Activity, BarChart2,
+  AlertCircle, Trophy, Target, Activity, BarChart2, Download,
 } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 
@@ -142,6 +142,32 @@ export default function Backtesting({ ticker }) {
       add(data.equity_curves.nifty, benchName);
     return Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
   })();
+
+  const exportTradesCSV = () => {
+    if (!data?.trades?.length) return;
+    const cleanSym = ticker.replace('.NS', '').replace('.BO', '');
+    const headers = ['#', 'Symbol', 'Entry Date', 'Exit Date', 'Entry Price', 'Exit Price', 'Return %', 'Result', 'Exit Reason'];
+    const rows = data.trades.map((t, i) => [
+      i + 1,
+      cleanSym,
+      t.entry_date,
+      t.exit_date,
+      t.entry_price,
+      t.exit_price,
+      t.return_pct,
+      t.result,
+      t.exit_reason || ''
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `backtest_trades_${cleanSym}_${period}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const s = data?.stats;
 
@@ -373,17 +399,27 @@ export default function Backtesting({ ticker }) {
             />
           </div>
 
-          {/* Trade log toggle */}
+          {/* Trade log toggle & CSV Export */}
           {data.trades?.length > 0 && (
             <div>
-              <button
-                onClick={() => setShowTrades((p) => !p)}
-                className="flex items-center gap-2 text-[10px] font-bold text-slate-400 hover:text-white transition mb-2 cursor-pointer"
-              >
-                <BarChart2 className="h-3.5 w-3.5" />
-                {showTrades ? 'Hide' : 'Show'} Trade Log ({data.trades.length} most recent)
-                <span className="ml-auto text-slate-600">{showTrades ? '▲' : '▼'}</span>
-              </button>
+              <div className="flex items-center justify-between mb-2">
+                <button
+                  onClick={() => setShowTrades((p) => !p)}
+                  className="flex items-center gap-2 text-[10px] font-bold text-slate-400 hover:text-white transition cursor-pointer"
+                >
+                  <BarChart2 className="h-3.5 w-3.5" />
+                  {showTrades ? 'Hide' : 'Show'} Trade Log ({data.trades.length} most recent)
+                  <span className="text-slate-600">{showTrades ? '▲' : '▼'}</span>
+                </button>
+                <button
+                  onClick={exportTradesCSV}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/[0.04] hover:bg-white/[0.08] text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 border border-white/[0.06] transition cursor-pointer"
+                  title="Export simulated trades to CSV"
+                >
+                  <Download className="h-3 w-3" />
+                  <span>Export Trades CSV</span>
+                </button>
+              </div>
 
               {showTrades && (
                 <div className="rounded-lg bg-white/[0.02] border border-white/[0.05] p-2 space-y-1 max-h-64 overflow-y-auto">
