@@ -8,7 +8,7 @@ import {
   PieChart as PieChartIcon, Activity, ChevronRight, Info, BookOpen, Layers, 
   TrendingDown, Target, HelpCircle, ArrowLeft, ArrowRight, ActivitySquare,
   GitBranch, CheckSquare, BarChart2, ShieldCheck, Clipboard, Sliders, Play,
-  Settings, Database, HelpCircle as QuestionIcon, RefreshCw, Terminal
+  Settings, Database, HelpCircle as QuestionIcon, RefreshCw, Terminal, Download
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -218,6 +218,51 @@ export default function DeepdiveFeatures() {
       { name: 'Extra Trees', Weight: shrink(baseWeights.extra) }
     ];
   }, [ridgeLambda]);
+
+  const handleExportSandboxCSV = () => {
+    const regimeLabel = simRegime === '0' ? 'Bullish' : simRegime === '1' ? 'Sideways' : 'Panic Sell';
+    const lines = [
+      '# StockIQ Pro Quantitative Sandbox Execution Model',
+      `Capital to Deploy (INR),${simCapital}`,
+      `Market Regime,${regimeLabel}`,
+      `ML Return Target %,${simMlExpectation}`,
+      `News Sentiment Score,${simSentiment}`,
+      `Trend Confirmation,${simTrendConfirm ? 'Yes' : 'No'}`,
+      `Fused Return %,${simResult.fusedReturn}`,
+      `Required Threshold %,${simResult.requiredThreshold}`,
+      `Execution Gate Status,"${simResult.status}"`,
+      `Mitigation Notes,"${simResult.mitigationNotes.replace(/"/g, '""')}"`,
+      '',
+      '# Tranche Allocation Plan',
+      'Tranche Name,Allocation %,Amount (INR),Trigger Condition'
+    ];
+
+    if (simResult.tranches && simResult.tranches.length > 0) {
+      simResult.tranches.forEach(t => {
+        lines.push(`"${t.name}",${t.pct},${t.amount},"${t.trigger.replace(/"/g, '""')}"`);
+      });
+    } else {
+      lines.push('Deployment Disabled,0,0,Execution blocked by quantitative gate');
+    }
+
+    lines.push('');
+    lines.push('# SHAP Factor Attribution Breakdown');
+    lines.push('Factor,Contribution Weight');
+    shapData.forEach(s => {
+      lines.push(`"${s.name}",${s.value}`);
+    });
+
+    const csvContent = lines.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `systematic_sandbox_plan_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   // 5. Simulated Walk-Forward Cumulative Return data
   const backtestChartData = [
@@ -515,22 +560,33 @@ export default function DeepdiveFeatures() {
 
                 {/* Sub Tab inside Output Area: Tranche vs SHAP */}
                 <div className="border-t border-white/[0.06] pt-4">
-                  <div className="flex gap-2 mb-4 bg-white/[0.02] border border-white/[0.06] p-1 rounded-xl w-max">
+                  <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+                    <div className="flex gap-2 bg-white/[0.02] border border-white/[0.06] p-1 rounded-xl w-max">
+                      <button
+                        onClick={() => setSandboxTab('tranches')}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${
+                          sandboxTab === 'tranches' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Tranche Allocation
+                      </button>
+                      <button
+                        onClick={() => setSandboxTab('shap')}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${
+                          sandboxTab === 'shap' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Live SHAP Waterfall Chart
+                      </button>
+                    </div>
+
                     <button
-                      onClick={() => setSandboxTab('tranches')}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${
-                        sandboxTab === 'tranches' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-                      }`}
+                      onClick={handleExportSandboxCSV}
+                      title="Export simulated execution schedule and SHAP values to CSV"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 transition cursor-pointer"
                     >
-                      Tranche Allocation
-                    </button>
-                    <button
-                      onClick={() => setSandboxTab('shap')}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${
-                        sandboxTab === 'shap' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      Live SHAP Waterfall Chart
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Export Simulation CSV</span>
                     </button>
                   </div>
 
