@@ -60,7 +60,17 @@ export default function IntradayTerminal() {
   const searchParams = useSearchParams();
   const urlTicker = searchParams ? searchParams.get('ticker') : null;
 
-  const [ticker, setTicker] = useState(urlTicker ? urlTicker.trim().toUpperCase() : 'RELIANCE.NS');
+  // Initialize ticker safely from searchParams or window.location, defaulting to RELIANCE.NS
+  const [ticker, setTicker] = useState(() => {
+    if (urlTicker && urlTicker.trim()) return urlTicker.trim().toUpperCase();
+    if (typeof window !== 'undefined') {
+      try {
+        const p = new URLSearchParams(window.location.search).get('ticker');
+        if (p && p.trim()) return p.trim().toUpperCase();
+      } catch (_) {}
+    }
+    return 'RELIANCE.NS';
+  });
   const [searchInput, setSearchInput] = useState('');
   const [candleInterval, setCandleInterval] = useState('5m');
   const [period, setPeriod] = useState('1d');
@@ -167,28 +177,39 @@ export default function IntradayTerminal() {
   const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
   const currSym = data?.currency_symbol || (isUS ? '$' : '₹');
 
-  // Sync URL query when urlTicker changes
-  useEffect(() => {
-    if (urlTicker && urlTicker.trim()) {
-      const clean = urlTicker.trim().toUpperCase();
-      if (clean !== ticker) {
-        setTicker(clean);
-      }
-    }
-  }, [urlTicker, ticker]);
+  // Track ticker synced to URL to avoid ping-pong loops
+  const lastSyncedTickerRef = useRef(urlTicker ? urlTicker.trim().toUpperCase() : null);
 
-  // Sync URL in browser history when ticker changes
-  useEffect(() => {
-    if (typeof window !== 'undefined' && ticker) {
+  // Helper to switch active ticker and sync to URL without creating infinite history loops
+  const changeTicker = useCallback((newSym) => {
+    if (!newSym) return;
+    const clean = newSym.trim().toUpperCase();
+    if (clean === ticker) return;
+
+    lastSyncedTickerRef.current = clean;
+    setTicker(clean);
+
+    if (typeof window !== 'undefined') {
       try {
-        const url = new URL(window.location.href);
-        if (url.searchParams.get('ticker') !== ticker) {
-          url.searchParams.set('ticker', ticker);
-          window.history.replaceState({}, '', url.toString());
+        const currentUrl = new URL(window.location.href);
+        if (currentUrl.searchParams.get('ticker') !== clean) {
+          currentUrl.searchParams.set('ticker', clean);
+          window.history.replaceState(window.history.state, '', `${currentUrl.pathname}?${currentUrl.searchParams.toString()}`);
         }
       } catch (_) {}
     }
   }, [ticker]);
+
+  // Sync URL query when urlTicker changes externally (e.g., browser back/forward buttons)
+  useEffect(() => {
+    if (urlTicker && urlTicker.trim()) {
+      const clean = urlTicker.trim().toUpperCase();
+      if (clean !== ticker && clean !== lastSyncedTickerRef.current) {
+        lastSyncedTickerRef.current = clean;
+        setTicker(clean);
+      }
+    }
+  }, [urlTicker, ticker]);
 
   // Load Trader's Scratchpad notes for active ticker
   useEffect(() => {
@@ -208,7 +229,7 @@ export default function IntradayTerminal() {
         if (saved) {
           setPinnedTickers(JSON.parse(saved));
         } else {
-          const defaults = ['RELIANCE.NS', 'HDFCBANK.NS', 'TCS.NS', 'INFY.NS', 'TATAMOTORS.NS'];
+          const defaults = ['RELIANCE.NS', 'HDFCBANK.NS', 'TCS.NS', 'INFY.NS', 'TATASTEEL.NS'];
           setPinnedTickers(defaults);
           localStorage.setItem('stockiq_pinned_tickers', JSON.stringify(defaults));
         }
@@ -265,13 +286,41 @@ export default function IntradayTerminal() {
     }
   };
 
-  // Synthesizer Chime via Native Web Audio API
+  // Synthesizer Chime via Native Web Audio API with shared singleton context
+  const audioCtxRef = useRef(null);
+
+  const getAudioContext = useCallback(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return null;
+      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+        audioCtxRef.current = new AudioCtx();
+      }
+      if (audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+      return audioCtxRef.current;
+    } catch (_) {
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+        try {
+          audioCtxRef.current.close().catch(() => {});
+        } catch (_) {}
+      }
+    };
+  }, []);
+
   const playChime = useCallback((type = 'notification') => {
     if (!soundAlerts || typeof window === 'undefined') return;
     try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
+      const ctx = getAudioContext();
+      if (!ctx || ctx.state !== 'running') return;
       const now = ctx.currentTime;
       if (type === 'warning') {
         const osc = ctx.createOscillator();
@@ -311,7 +360,7 @@ export default function IntradayTerminal() {
         osc.stop(now + 0.2);
       }
     } catch (_) {}
-  }, [soundAlerts]);
+  }, [soundAlerts, getAudioContext]);
 
   // Fetch Main Intraday Data
   const fetchData = useCallback(async (isSilent = false) => {
@@ -776,7 +825,7 @@ export default function IntradayTerminal() {
       if (!sym.includes('.') && scannerMarket === 'IN') {
         sym = `${sym}.NS`;
       }
-      setTicker(sym);
+      changeTicker(sym);
       setSearchInput('');
     }
   };
@@ -905,11 +954,7 @@ export default function IntradayTerminal() {
           currentTicker={ticker}
           onTickerSelect={(sym) => {
             if (!sym) return;
-            const clean = sym.trim().toUpperCase();
-            setTicker(clean);
-            try {
-              window.history.replaceState({}, '', `/intraday?ticker=${encodeURIComponent(clean)}`);
-            } catch (_) {}
+            changeTicker(sym);
           }}
         />
 
@@ -1028,13 +1073,13 @@ export default function IntradayTerminal() {
           <div className="flex flex-wrap items-center gap-2.5">
             <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs font-semibold">
               <button
-                onClick={() => { setScannerMarket('IN'); setTicker('RELIANCE.NS'); }}
+                onClick={() => { setScannerMarket('IN'); changeTicker('RELIANCE.NS'); }}
                 className={`px-2.5 py-1 rounded-md transition ${scannerMarket === 'IN' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-white'}`}
               >
                 🇮🇳 NSE / BSE
               </button>
               <button
-                onClick={() => { setScannerMarket('US'); setTicker('NVDA'); }}
+                onClick={() => { setScannerMarket('US'); changeTicker('NVDA'); }}
                 className={`px-2.5 py-1 rounded-md transition ${scannerMarket === 'US' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-slate-400 hover:text-white'}`}
               >
                 🇺🇸 NYSE / NASDAQ
@@ -1069,9 +1114,8 @@ export default function IntradayTerminal() {
                 setSoundAlerts(next);
                 if (next) {
                   try {
-                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-                    if (AudioCtx) {
-                      const ctx = new AudioCtx();
+                    const ctx = getAudioContext();
+                    if (ctx && ctx.state === 'running') {
                       const now = ctx.currentTime;
                       const osc = ctx.createOscillator();
                       const gain = ctx.createGain();
@@ -1164,7 +1208,7 @@ export default function IntradayTerminal() {
                   }`}
                 >
                   <button
-                    onClick={() => setTicker(sym)}
+                    onClick={() => changeTicker(sym)}
                     className="cursor-pointer font-mono text-[11px]"
                   >
                     {sym.split('.')[0]}
@@ -1189,7 +1233,7 @@ export default function IntradayTerminal() {
               {QUICK_TICKERS.filter(t => t.market === scannerMarket).map(t => (
                 <button
                   key={t.symbol}
-                  onClick={() => setTicker(t.symbol)}
+                  onClick={() => changeTicker(t.symbol)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition flex items-center gap-1.5 ${
                     ticker === t.symbol
                       ? 'bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/10'
@@ -1710,9 +1754,25 @@ export default function IntradayTerminal() {
                 )}
 
                 {error && (
-                  <div className="h-72 flex items-center justify-center p-6 text-rose-400 text-sm">
-                    <AlertCircle className="w-5 h-5 mr-2" />
-                    {error}
+                  <div className="h-72 flex flex-col items-center justify-center p-6 text-center space-y-3">
+                    <div className="flex items-center gap-2 text-rose-400 text-sm font-semibold">
+                      <AlertCircle className="w-5 h-5 shrink-0" />
+                      <span>{error}</span>
+                    </div>
+                    <p className="text-xs text-slate-400 max-w-md">
+                      Intraday chart data may be temporarily unavailable for {ticker} (e.g. market closed, corporate restructuring, or no trades). Select an active liquid stock to continue:
+                    </p>
+                    <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                      {['RELIANCE.NS', 'TCS.NS', 'INFY.NS', 'TATASTEEL.NS', 'NVDA', 'AAPL'].map(sym => (
+                        <button
+                          key={sym}
+                          onClick={() => changeTicker(sym)}
+                          className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-500/50 text-xs font-mono font-bold text-slate-200 hover:text-cyan-400 transition"
+                        >
+                          {sym}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -2949,7 +3009,7 @@ export default function IntradayTerminal() {
                   {scannerData.map((item) => (
                     <div
                       key={item.ticker}
-                      onClick={() => setTicker(item.ticker)}
+                      onClick={() => changeTicker(item.ticker)}
                       className={`flex items-center justify-between p-2.5 rounded-2xl border transition cursor-pointer ${
                         ticker === item.ticker
                           ? 'bg-cyan-500/10 border-cyan-500/40'
@@ -3141,7 +3201,7 @@ export default function IntradayTerminal() {
                    ...(blockDeals.bulk_deals || []).map(d => ({...d, type: 'BULK'}))].slice(0, 15).map((deal, idx) => (
                   <div
                     key={idx}
-                    onClick={() => deal.symbol && setTicker(deal.symbol + '.NS')}
+                    onClick={() => deal.symbol && changeTicker(deal.symbol + '.NS')}
                     className="flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800/60 hover:border-slate-700 cursor-pointer transition text-xs"
                   >
                     <div>

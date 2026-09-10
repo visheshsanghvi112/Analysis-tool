@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import Header from './components/Header';
 import LivePrice from './components/LivePrice';
@@ -251,13 +251,18 @@ export default function Dashboard() {
   }, []);
 
   // Read ?ticker= param on mount (set by /browse page)
+  const urlHandledRef = useRef(false);
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const t = params.get('ticker');
-    if (t) {
-      window.history.replaceState({}, '', '/');
-      handleTickerSelect(t);
-    }
+    if (urlHandledRef.current) return;
+    urlHandledRef.current = true;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const t = params.get('ticker');
+      if (t) {
+        window.history.replaceState(window.history.state, '', '/');
+        handleTickerSelect(t);
+      }
+    } catch (_) {}
   }, [handleTickerSelect]);
 
   // Listen to logo click event to go back to homepage welcome screen
