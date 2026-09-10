@@ -13,7 +13,7 @@ import {
   ReferenceLine,
   Cell
 } from 'recharts';
-import { RefreshCw, AlertTriangle } from 'lucide-react';
+import { RefreshCw, AlertTriangle, Download } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
@@ -196,6 +196,53 @@ export default function StockChart({ ticker }) {
     ? filteredData.reduce((s, d) => s + d.volume, 0) / filteredData.length
     : 0;
 
+  const handleExportChartCSV = () => {
+    if (!filteredData || filteredData.length === 0) return;
+    const cleanTicker = (ticker || 'stock').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const headers = [
+      'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Volume_MA20',
+      'MA_20', 'MA_50', 'MA_100', 'MA_200', 'BB_Upper', 'BB_Lower',
+      'RSI', 'MACD', 'MACD_Signal', 'MACD_Hist', 'ADX', 'ATR', 'OBV'
+    ];
+    const rows = filteredData.map(d => [
+      d.date || '',
+      d.open ?? '',
+      d.high ?? '',
+      d.low ?? '',
+      d.close ?? '',
+      d.volume ?? '',
+      d.volumeMa20 ?? '',
+      d.ma20 ?? '',
+      d.ma50 ?? '',
+      d.ma100 ?? '',
+      d.ma200 ?? '',
+      d.upperBand ?? '',
+      d.lowerBand ?? '',
+      d.rsi ?? '',
+      d.macd ?? '',
+      d.macdSignal ?? '',
+      d.macdHist ?? '',
+      d.adx ?? '',
+      d.atr ?? '',
+      d.obv ?? ''
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(r => r.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${cleanTicker}_technical_history_${activeTimeframe}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const axisProps = {
     stroke: '#475569',
     fontSize: 10,
@@ -241,24 +288,35 @@ export default function StockChart({ ticker }) {
             </div>
           </div>
 
-          {/* Timeframe Buttons */}
-          <div className="flex items-center bg-white/[0.04] rounded-lg p-0.5 border border-white/[0.06] gap-1">
-            {['1D', '1W', '1M', '3M', '6M', '1Y', '5Y', 'Custom'].map((p) => (
-              <button
-                key={p}
-                onClick={() => {
-                  setActiveTimeframe(p);
-                  setHoveredData(null);
-                }}
-                className={`px-2 py-1 text-[11px] font-semibold rounded transition cursor-pointer ${
-                  activeTimeframe === p
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-900/60'
-                }`}
-              >
-                {p}
-              </button>
-            ))}
+          {/* Timeframe & Export Controls */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center bg-white/[0.04] rounded-lg p-0.5 border border-white/[0.06] gap-1">
+              {['1D', '1W', '1M', '3M', '6M', '1Y', '5Y', 'Custom'].map((p) => (
+                <button
+                  key={p}
+                  onClick={() => {
+                    setActiveTimeframe(p);
+                    setHoveredData(null);
+                  }}
+                  className={`px-2 py-1 text-[11px] font-semibold rounded transition cursor-pointer ${
+                    activeTimeframe === p
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-900/60'
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={handleExportChartCSV}
+              title="Export historical OHLCV and technical indicator series to CSV"
+              className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-white/[0.04] hover:bg-emerald-600/20 text-slate-300 hover:text-emerald-400 border border-white/[0.08] hover:border-emerald-500/30 transition-all cursor-pointer shadow-sm"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Export CSV</span>
+            </button>
           </div>
         </div>
 
