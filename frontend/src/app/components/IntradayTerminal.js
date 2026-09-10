@@ -962,78 +962,81 @@ export default function IntradayTerminal() {
 
         {/* ── REAL-TIME MARKET SESSION CLOCK & PHASE BANNER ─────────────────── */}
         {marketPulse && (
-          <div className="bg-gradient-to-r from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800/80 rounded-2xl p-3.5 backdrop-blur-md flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-lg shadow-black/40">
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-xl flex items-center justify-center ${marketPulse.is_open ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'}`}>
-                <Clock className="w-5 h-5 animate-pulse" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    {marketPulse.market === 'IN' ? 'Dalal Street Session' : 'Wall Street Session'} ({marketPulse.local_time})
-                  </span>
-                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase ${marketPulse.is_open ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'}`}>
-                    {marketPulse.is_open ? 'LIVE SESSION' : 'CLOSED'}
-                  </span>
-                  <InfoBadge infoKey="session_phase_clock" />
+          <div className="bg-gradient-to-r from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800/80 rounded-2xl p-3 sm:p-4 backdrop-blur-md flex flex-col gap-3 shadow-xl shadow-black/40">
+            {/* Top row: Clock on left, Benchmark indices on right */}
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 w-full">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-xl flex items-center justify-center shrink-0 ${marketPulse.is_open ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'}`}>
+                  <Clock className="w-5 h-5 animate-pulse" />
                 </div>
-                <p className="text-xs font-bold text-white mt-0.5 flex items-center gap-1.5">
-                  <span>{marketPulse.phase_name}</span>
-                  <span className="text-slate-500">—</span>
-                  <span className="text-slate-300 font-normal">{marketPulse.directive}</span>
-                </p>
-              </div>
-            </div>
-
-            {/* Benchmark Indices Pills */}
-            <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 scrollbar-none">
-              {marketPulse.indices?.map((idx) => {
-                const isVix = idx.name.includes('VIX');
-                return (
-                  <div
-                    key={idx.symbol}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-mono shrink-0 flex items-center gap-1.5 ${
-                      isVix
-                        ? 'bg-purple-950/40 border border-purple-500/40 text-purple-300'
-                        : 'bg-slate-950/80 border border-slate-800 text-white'
-                    }`}
-                  >
-                    <span className="text-slate-400 font-semibold">{idx.name}:</span>
-                    <span className="font-bold">{idx.price?.toLocaleString()}</span>
-                    <span className={`text-[11px] font-bold ${idx.change_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {idx.change_pct >= 0 ? '+' : ''}{idx.change_pct}%
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      {marketPulse.market === 'IN' ? 'Dalal Street Session' : 'Wall Street Session'} ({marketPulse.local_time})
                     </span>
-                    {isVix && marketPulse.vix?.regime && (
-                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${
-                        marketPulse.vix.regime === 'LOW' ? 'bg-emerald-500/20 text-emerald-300' :
-                        marketPulse.vix.regime === 'NORMAL' ? 'bg-cyan-500/20 text-cyan-300' : 'bg-rose-500/20 text-rose-300'
-                      }`}>
-                        {marketPulse.vix.regime}
-                      </span>
-                    )}
+                    <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase ${marketPulse.is_open ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'}`}>
+                      {marketPulse.is_open ? 'LIVE SESSION' : 'CLOSED'}
+                    </span>
+                    <InfoBadge infoKey="session_phase_clock" />
                   </div>
-                );
-              })}
-
-              {marketPulse.mins_to_mis_squareoff > 0 && (
-                <div className="px-3 py-1 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-mono shrink-0 flex items-center gap-1.5 font-bold">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  {scannerMarket === 'IN' ? 'Auto-Square-Off' : 'Market Close'} in: {marketPulse.mins_to_mis_squareoff}m
+                  <p className="text-xs font-bold text-white mt-0.5 flex items-center gap-1.5 flex-wrap">
+                    <span>{marketPulse.phase_name}</span>
+                    <span className="text-slate-500">—</span>
+                    <span className="text-slate-300 font-normal">{marketPulse.directive}</span>
+                  </p>
                 </div>
-              )}
+              </div>
+
+              {/* Benchmark Indices Pills */}
+              <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 scrollbar-none shrink-0">
+                {marketPulse.indices?.map((idx) => {
+                  const isVix = idx.name.includes('VIX');
+                  return (
+                    <div
+                      key={idx.symbol}
+                      className={`px-2.5 py-1 rounded-xl text-xs font-mono shrink-0 flex items-center gap-1.5 ${
+                        isVix
+                          ? 'bg-purple-950/40 border border-purple-500/40 text-purple-300'
+                          : 'bg-slate-950/80 border border-slate-800 text-white'
+                      }`}
+                    >
+                      <span className="text-slate-400 font-semibold">{idx.name}:</span>
+                      <span className="font-bold">{idx.price?.toLocaleString()}</span>
+                      <span className={`text-[11px] font-bold ${idx.change_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {idx.change_pct >= 0 ? '+' : ''}{idx.change_pct}%
+                      </span>
+                      {isVix && marketPulse.vix?.regime && (
+                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${
+                          marketPulse.vix.regime === 'LOW' ? 'bg-emerald-500/20 text-emerald-300' :
+                          marketPulse.vix.regime === 'NORMAL' ? 'bg-cyan-500/20 text-cyan-300' : 'bg-rose-500/20 text-rose-300'
+                        }`}>
+                          {marketPulse.vix.regime}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {marketPulse.mins_to_mis_squareoff > 0 && (
+                  <div className="px-3 py-1 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-mono shrink-0 flex items-center gap-1.5 font-bold">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    {scannerMarket === 'IN' ? 'Auto-Square-Off' : 'Market Close'} in: {marketPulse.mins_to_mis_squareoff}m
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Live Sectoral Heatmap Flow Strip */}
+            {/* Live Sectoral Heatmap Flow Strip (Spanning full width) */}
             {marketPulse.sectors && marketPulse.sectors.length > 0 && (
-              <div className="flex items-center gap-2 overflow-x-auto w-full pt-2 border-t border-slate-800/60 scrollbar-none text-[11px] font-mono">
-                <div className="flex items-center gap-1 text-slate-500 uppercase tracking-wider font-sans font-bold text-[10px] shrink-0">
-                  <Flame className="w-3 h-3 text-amber-400" />
+              <div className="flex items-center gap-2 overflow-x-auto w-full pt-2.5 border-t border-slate-800/60 scrollbar-none text-[11px] font-mono">
+                <div className="flex items-center gap-1.5 text-slate-500 uppercase tracking-wider font-sans font-bold text-[10px] shrink-0 pr-1">
+                  <Flame className="w-3.5 h-3.5 text-amber-400" />
                   <span>Sector Flow:</span>
                 </div>
                 {marketPulse.sectors.map((sec) => (
                   <div
                     key={sec.symbol}
-                    className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-950/60 border border-slate-800/80 shrink-0"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950/70 border border-slate-800/80 shrink-0"
                   >
                     <span className="text-slate-300 font-medium font-sans">{sec.name.replace('NIFTY ', '')}</span>
                     <span className={`font-bold ${sec.change_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -1047,10 +1050,10 @@ export default function IntradayTerminal() {
         )}
 
         {/* ── TOP TERMINAL BAR ────────────────────────────────────────────── */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
           <div>
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-tr from-emerald-500/20 to-cyan-500/20 border border-emerald-500/40 rounded-xl">
+              <div className="p-2.5 bg-gradient-to-tr from-emerald-500/20 to-cyan-500/20 border border-emerald-500/40 rounded-2xl shadow-sm shadow-emerald-500/10">
                 <Activity className="w-6 h-6 text-emerald-400 animate-pulse" />
               </div>
               <div>
@@ -1063,134 +1066,141 @@ export default function IntradayTerminal() {
                   </span>
                 </div>
                 <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-                  Real-world session clocks, gap intelligence, trap detectors & institutional friction calculators
+                  Real-world session clocks, gap intelligence, trap detectors &amp; institutional friction calculators
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Quick controls: Market toggle, Auto-refresh & Search */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs font-semibold">
+          {/* Quick controls: Grouped Segmented Control Pods */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Market Switcher */}
+            <div className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs font-semibold">
               <button
                 onClick={() => { setScannerMarket('IN'); changeTicker('RELIANCE.NS'); }}
-                className={`px-2.5 py-1 rounded-md transition ${scannerMarket === 'IN' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1 ${scannerMarket === 'IN' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm shadow-emerald-500/10 font-bold' : 'text-slate-400 hover:text-white'}`}
               >
-                🇮🇳 NSE / BSE
+                <span>🇮🇳</span>
+                <span>NSE / BSE</span>
               </button>
               <button
                 onClick={() => { setScannerMarket('US'); changeTicker('NVDA'); }}
-                className={`px-2.5 py-1 rounded-md transition ${scannerMarket === 'US' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1 ${scannerMarket === 'US' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 shadow-sm shadow-cyan-500/10 font-bold' : 'text-slate-400 hover:text-white'}`}
               >
-                🇺🇸 NYSE / NASDAQ
+                <span>🇺🇸</span>
+                <span>NYSE / NASDAQ</span>
               </button>
             </div>
 
-            <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-lg text-xs">
-              <RefreshCw className={`w-3.5 h-3.5 text-slate-400 ${isRefreshing ? 'animate-spin text-cyan-400' : ''}`} />
-              <span className="text-slate-400">Refresh:</span>
-              <select
-                value={autoRefreshSecs}
-                onChange={(e) => setAutoRefreshSecs(Number(e.target.value))}
-                className="bg-transparent text-white font-mono text-xs focus:outline-none cursor-pointer"
+            {/* Auto-Refresh Control Pod */}
+            <div className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs">
+              <div className="flex items-center gap-1.5 px-2 py-1 text-slate-400">
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-cyan-400' : 'text-slate-400'}`} />
+                <span className="text-[11px] font-semibold text-slate-400">Auto:</span>
+                <select
+                  value={autoRefreshSecs}
+                  onChange={(e) => setAutoRefreshSecs(Number(e.target.value))}
+                  className="bg-transparent text-white font-mono text-xs focus:outline-none cursor-pointer"
+                >
+                  <option value={10} className="bg-slate-900">10s (Fast)</option>
+                  <option value={15} className="bg-slate-900">15s</option>
+                  <option value={30} className="bg-slate-900">30s</option>
+                  <option value={60} className="bg-slate-900">60s</option>
+                  <option value={0} className="bg-slate-900">Paused</option>
+                </select>
+                {autoRefreshSecs > 0 && (
+                  <span className="text-[10px] font-mono font-bold text-cyan-400 w-5 text-center bg-cyan-500/10 rounded px-1">
+                    {refreshCountdown}s
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => fetchData(false)}
+                disabled={loading}
+                className="p-1.5 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white rounded-lg transition"
+                title="Force Refresh Data Now"
               >
-                <option value={10} className="bg-slate-900">10s (Fast Live)</option>
-                <option value={15} className="bg-slate-900">15s</option>
-                <option value={30} className="bg-slate-900">30s</option>
-                <option value={60} className="bg-slate-900">60s</option>
-                <option value={0} className="bg-slate-900">Paused</option>
-              </select>
-              {autoRefreshSecs > 0 && (
-                <span className="text-[10px] font-mono text-cyan-400 w-4 text-right">
-                  {refreshCountdown}s
-                </span>
-              )}
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
+              </button>
             </div>
 
-            {/* Audio Alerts Toggle */}
-            <button
-              onClick={() => {
-                const next = !soundAlerts;
-                setSoundAlerts(next);
-                if (next) {
-                  try {
-                    const ctx = getAudioContext();
-                    if (ctx && ctx.state === 'running') {
-                      const now = ctx.currentTime;
-                      const osc = ctx.createOscillator();
-                      const gain = ctx.createGain();
-                      osc.type = 'sine';
-                      osc.frequency.setValueAtTime(659.25, now);
-                      gain.gain.setValueAtTime(0.08, now);
-                      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-                      osc.connect(gain);
-                      gain.connect(ctx.destination);
-                      osc.start(now);
-                      osc.stop(now + 0.2);
-                    }
-                  } catch (_) {}
-                }
-              }}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition ${
-                soundAlerts
-                  ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
-                  : 'bg-slate-900/90 text-slate-500 border-slate-800 hover:text-slate-300'
-              }`}
-              title={soundAlerts ? 'Audio Alerts: ACTIVE (Click to Mute)' : 'Audio Alerts: MUTED (Click to Enable Synthesizer Chimes)'}
-            >
-              {soundAlerts ? <Volume2 className="w-3.5 h-3.5 text-cyan-400" /> : <VolumeX className="w-3.5 h-3.5" />}
-              <span className="hidden sm:inline">{soundAlerts ? 'Sound ON' : 'Muted'}</span>
-            </button>
+            {/* Desk Utilities Toolbar */}
+            <div className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs gap-1">
+              {/* Audio Alerts Toggle */}
+              <button
+                onClick={() => {
+                  const next = !soundAlerts;
+                  setSoundAlerts(next);
+                  if (next) {
+                    try {
+                      const ctx = getAudioContext();
+                      if (ctx && ctx.state === 'running') {
+                        const now = ctx.currentTime;
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(659.25, now);
+                        gain.gain.setValueAtTime(0.08, now);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.start(now);
+                        osc.stop(now + 0.2);
+                      }
+                    } catch (_) {}
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition font-medium ${
+                  soundAlerts
+                    ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title={soundAlerts ? 'Audio Alerts: ACTIVE (Click to Mute)' : 'Audio Alerts: MUTED (Click to Enable Synthesizer Chimes)'}
+              >
+                {soundAlerts ? <Volume2 className="w-3.5 h-3.5 text-cyan-400" /> : <VolumeX className="w-3.5 h-3.5" />}
+                <span className="hidden sm:inline">{soundAlerts ? 'Audio' : 'Muted'}</span>
+              </button>
 
-            {/* Trader's Scratchpad Toggle */}
-            <button
-              onClick={() => setScratchpadOpen(!scratchpadOpen)}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition ${
-                scratchpadOpen
-                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                  : 'bg-slate-900/90 text-slate-400 border-slate-800 hover:text-slate-200'
-              }`}
-              title="Open Trader's Real-Time Execution Notepad & Journal"
-            >
-              <Edit3 className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Trader&apos;s Journal</span>
-            </button>
+              {/* Trader's Scratchpad Toggle */}
+              <button
+                onClick={() => setScratchpadOpen(!scratchpadOpen)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition font-medium ${
+                  scratchpadOpen
+                    ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Open Trader's Real-Time Execution Notepad & Journal"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Journal</span>
+              </button>
 
-            {/* Pro Hotkeys Modal Button */}
-            <button
-              onClick={() => setShowHotkeysModal(true)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition bg-slate-900/90 text-slate-400 border-slate-800 hover:text-slate-200"
-              title="Pro Keyboard Shortcuts (Press '?')"
-            >
-              <Keyboard className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">Shortcuts</span>
-              <kbd className="px-1 py-0.2 rounded bg-slate-800 text-[10px] text-cyan-300 font-mono">?</kbd>
-            </button>
+              {/* Pro Hotkeys Modal Button */}
+              <button
+                onClick={() => setShowHotkeysModal(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition font-medium"
+                title="Pro Keyboard Shortcuts (Press '?')"
+              >
+                <Keyboard className="w-3.5 h-3.5 text-cyan-400" />
+                <kbd className="px-1 py-0.2 rounded bg-slate-800 text-[10px] text-cyan-300 font-mono">?</kbd>
+              </button>
 
-            {/* Export Candles & Indicators CSV */}
-            <button
-              onClick={handleExportIntradayCSV}
-              disabled={!data?.candles?.length}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition bg-slate-900/90 hover:bg-cyan-500/10 text-cyan-400 border-slate-800 hover:border-cyan-500/30 disabled:opacity-40 cursor-pointer"
-              title="Download Intraday Candles & Technical Indicators as CSV"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Export CSV</span>
-            </button>
-
-            <button
-              onClick={() => fetchData(false)}
-              disabled={loading}
-              className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300 transition"
-              title="Force Refresh Data"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
-            </button>
+              {/* Export CSV */}
+              <button
+                onClick={handleExportIntradayCSV}
+                disabled={!data?.candles?.length}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-cyan-300 disabled:opacity-40 transition font-medium cursor-pointer"
+                title="Download Intraday Candles & Technical Indicators as CSV"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">CSV</span>
+              </button>
+            </div>
           </div>
         </header>
 
         {/* ── TICKER COMMAND BAR & POPULAR SHORTCUTS ───────────────────────── */}
-        <div className="space-y-2 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 backdrop-blur-md">
+        <div className="space-y-2.5 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 backdrop-blur-md shadow-md shadow-black/20">
           {/* Pinned Watchlist Strip (If Available) */}
           {pinnedTickers.length > 0 && (
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs border-b border-slate-800/60 scrollbar-none">
@@ -1225,19 +1235,19 @@ export default function IntradayTerminal() {
             </div>
           )}
 
-          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider pl-1 pr-1 shrink-0">
-                Active Tickers:
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider pl-1 pr-1 shrink-0 font-mono">
+                Active Desk:
               </span>
               {QUICK_TICKERS.filter(t => t.market === scannerMarket).map(t => (
                 <button
                   key={t.symbol}
                   onClick={() => changeTicker(t.symbol)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition flex items-center gap-1.5 ${
                     ticker === t.symbol
                       ? 'bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/10'
-                      : 'bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/40'
+                      : 'bg-slate-950/70 hover:bg-slate-800/80 text-slate-400 hover:text-slate-200 border border-slate-800/80'
                   }`}
                 >
                   <span>{t.name}</span>
@@ -1246,24 +1256,19 @@ export default function IntradayTerminal() {
               ))}
             </div>
 
-            <form onSubmit={handleSearchSubmit} className="relative min-w-[240px]">
+            <form onSubmit={handleSearchSubmit} className="relative min-w-[260px]">
               <input
                 ref={searchInputRef}
                 type="text"
                 placeholder={`Search ${scannerMarket === 'IN' ? 'NSE stock (e.g. SBIN)' : 'US stock (e.g. AMD)'}... (Press '/')`}
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-8 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition font-mono"
+                className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-14 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition font-mono"
               />
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-              {searchInput && (
-                <button
-                  type="submit"
-                  className="absolute right-2 top-1.5 px-2 py-0.5 text-[10px] font-bold bg-cyan-500/20 text-cyan-300 rounded hover:bg-cyan-500/30 transition"
-                >
-                  Load
-                </button>
-              )}
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <kbd className="absolute right-3 top-2 px-1.5 py-0.5 rounded bg-slate-800/80 text-[10px] text-slate-400 font-mono border border-slate-700">
+                /
+              </kbd>
             </form>
           </div>
         </div>
@@ -1302,17 +1307,17 @@ export default function IntradayTerminal() {
         {/* ── ACTIVE TICKER HEADLINE BAR ──────────────────────────────────── */}
         {data && (
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-            {/* Price & Change — with flash animation on tick update */}
-            <div className={`bg-gradient-to-br from-slate-900/90 to-slate-900/50 rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 ${
+            {/* 1. Price & Change — with flash animation on tick update */}
+            <div className={`bg-gradient-to-br from-slate-900/90 to-slate-900/50 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between transition-all duration-300 shadow-md ${
               priceFlash === 'up'
-                ? 'border border-emerald-400/60 shadow-md shadow-emerald-500/20'
+                ? 'border border-emerald-400/60 shadow-emerald-500/20'
                 : priceFlash === 'down'
-                ? 'border border-rose-400/60 shadow-md shadow-rose-500/20'
-                : 'border border-slate-800/80'
+                ? 'border border-rose-400/60 shadow-rose-500/20'
+                : 'border border-slate-800/80 shadow-black/30'
             }`}>
               <div>
                 <div className="flex items-center justify-between gap-1">
-                  <div className="flex items-center gap-1.5 truncate max-w-[120px]">
+                  <div className="flex items-center gap-1.5 truncate max-w-[125px]">
                     <button
                       onClick={() => togglePinTicker(ticker)}
                       className={`p-0.5 rounded transition ${
@@ -1324,7 +1329,7 @@ export default function IntradayTerminal() {
                     >
                       <Star className={`w-3.5 h-3.5 ${pinnedTickers.includes(ticker) ? 'fill-amber-400 text-amber-400' : ''}`} />
                     </button>
-                    <span className="text-xs font-semibold text-slate-400 truncate" title={data.company_name}>{data.company_name}</span>
+                    <span className="text-xs font-semibold text-slate-300 truncate" title={data.company_name}>{data.company_name}</span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <InfoBadge infoKey="live_prices" />
@@ -1352,8 +1357,8 @@ export default function IntradayTerminal() {
                         return sum + pnl;
                       }, 0);
                       return (
-                        <span className={`text-[9px] font-bold font-mono px-1 py-0.5 rounded border ${
-                          unrealized >= 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
+                          unrealized >= 0 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
                         }`}>
                           {unrealized >= 0 ? '+' : ''}{currSym}{Math.round(unrealized)}
                         </span>
@@ -1362,161 +1367,252 @@ export default function IntradayTerminal() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60 font-mono">
-                <span>O: <strong className="text-slate-200">{currSym}{data.open}</strong></span>
-                <span>H: <strong className="text-emerald-400">{currSym}{data.high}</strong></span>
-                <span>L: <strong className="text-rose-400">{currSym}{data.low}</strong></span>
+
+              {/* Bottom Telemetry: O/H/L & Day Range */}
+              <div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60 font-mono">
+                  <span>O: <strong className="text-slate-200">{currSym}{data.open}</strong></span>
+                  <span>H: <strong className="text-emerald-400">{currSym}{data.high}</strong></span>
+                  <span>L: <strong className="text-rose-400">{currSym}{data.low}</strong></span>
+                </div>
+                {data.high > data.low && data.current_price ? (
+                  <div className="mt-1.5 space-y-0.5">
+                    <div className="w-full bg-slate-800/80 h-1 rounded-full overflow-hidden relative">
+                      <div className="h-full bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-500 w-full" />
+                      <div
+                        className="absolute top-0 bottom-0 w-1.5 bg-white rounded-full shadow-sm ring-1 ring-white/60"
+                        style={{
+                          left: `${Math.max(0, Math.min(97, ((data.current_price - data.low) / (data.high - data.low)) * 100))}%`
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[8px] text-slate-500 font-mono">
+                      <span>LOD</span>
+                      <span className="text-slate-400 font-semibold">
+                        {Math.round(((data.current_price - data.low) / (data.high - data.low)) * 100)}% of Range
+                      </span>
+                      <span>HOD</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-1.5 flex justify-between text-[8px] text-slate-500 font-mono">
+                    <span>Session Open</span>
+                    <span className="text-slate-400">Regular Trading</span>
+                    <span>Close</span>
+                  </div>
+                )}
               </div>
-              {data.high > data.low && data.current_price && (
-                <div className="mt-1.5 space-y-0.5">
-                  <div className="w-full bg-slate-800/80 h-1 rounded-full overflow-hidden relative">
-                    <div className="h-full bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-500 w-full" />
+            </div>
+
+            {/* 2. Session VWAP */}
+            <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between shadow-md shadow-black/30">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
+                    Session VWAP
+                    <InfoBadge infoKey="vwap" />
+                  </span>
+                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                    data.current_price >= data.vwap
+                      ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+                      : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                  }`}>
+                    {data.current_price >= data.vwap ? 'ABOVE' : 'BELOW'}
+                  </span>
+                </div>
+                <div className="mt-1">
+                  <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-cyan-300">
+                    {currSym}{data.vwap?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5 font-mono">
+                    Dev: <span className={`font-bold ${data.current_price >= data.vwap ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {data.current_price >= data.vwap ? '+' : ''}
+                      {(((data.current_price - data.vwap) / data.vwap) * 100).toFixed(2)}%
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Bottom Telemetry: VWAP ±2σ Bands */}
+              <div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60 font-mono">
+                  <span>-2σ: <strong className="text-cyan-400">{currSym}{data.vwap_bands?.lower_2 ? Number(data.vwap_bands.lower_2).toFixed(1) : '—'}</strong></span>
+                  <span>+2σ: <strong className="text-cyan-400">{currSym}{data.vwap_bands?.upper_2 ? Number(data.vwap_bands.upper_2).toFixed(1) : '—'}</strong></span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[8px] text-slate-500 font-mono">
+                  <span>Lower Vol Band</span>
+                  <span className="text-cyan-400/80 font-semibold">Institutional Mean</span>
+                  <span>Upper Vol Band</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Relative Strength vs Benchmark */}
+            <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between shadow-md shadow-black/30">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
+                    Relative Strength
+                    <InfoBadge infoKey="benchmark_relative_strength" />
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400 font-bold px-1.5 py-0.5 bg-slate-950/80 border border-slate-800 rounded">
+                    vs {data.relative_strength?.benchmark_name?.replace('NIFTY ', '') || 'Index'}
+                  </span>
+                </div>
+                <div className="mt-1">
+                  <p className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${data.relative_strength?.alpha_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {data.relative_strength?.alpha_pct >= 0 ? '+' : ''}{data.relative_strength?.alpha_pct}%
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5 truncate font-mono">
+                    Alpha: <span className="font-semibold text-slate-200">{data.relative_strength?.status || 'Neutral'}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Bottom Telemetry: Benchmark Index Move & Regime */}
+              <div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60 font-mono">
+                  <span>Idx: <strong className={data.relative_strength?.benchmark_change_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{data.relative_strength?.benchmark_change_pct >= 0 ? '+' : ''}{data.relative_strength?.benchmark_change_pct}%</strong></span>
+                  <span className="text-slate-300 truncate max-w-[85px]">{data.relative_strength?.regime || 'Tracking'}</span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[8px] text-slate-500 font-mono">
+                  <span>Lagging</span>
+                  <span className={data.relative_strength?.alpha_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                    {data.relative_strength?.alpha_pct >= 0 ? 'Outperforming' : 'Underperforming'}
+                  </span>
+                  <span>Leading</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Pre-Market Gap Intelligence */}
+            <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between shadow-md shadow-black/30">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
+                    Pre-Market Gap
+                    <InfoBadge infoKey="pre_market_gap" />
+                  </span>
+                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                    data.gap_analysis?.gap_pct >= 0 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                  }`}>
+                    {data.gap_analysis?.gap_type?.replace(/_/g, ' ') || 'FLAT'}
+                  </span>
+                </div>
+                <div className="mt-1">
+                  <p className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${data.gap_analysis?.gap_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {data.gap_analysis?.gap_pct >= 0 ? '+' : ''}{data.gap_analysis?.gap_pct}%
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5 font-mono">
+                    Points: <span className="font-semibold text-slate-200">{currSym}{data.gap_analysis?.gap_pts}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Bottom Telemetry: Prev Close & Gap Fill Status */}
+              <div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60 font-mono">
+                  <span>Prev: <strong className="text-slate-300">{currSym}{data.gap_analysis?.prev_close}</strong></span>
+                  <span>Fill: <strong className={data.gap_analysis?.gap_filled ? 'text-emerald-400' : 'text-amber-400'}>
+                    {data.gap_analysis?.gap_filled ? 'FILLED' : `OPEN (${currSym}${data.gap_analysis?.gap_fill_dist})`}
+                  </strong></span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[8px] text-slate-500 font-mono">
+                  <span>Gap Origin</span>
+                  <span className="text-amber-400 truncate max-w-[110px]">{data.gap_analysis?.directive?.split('—')[0] || 'Gap Setup'}</span>
+                  <span>PDC</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 5. Composite Quant Bias Score */}
+            <div className="bg-gradient-to-br from-slate-900/90 to-slate-900/50 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between shadow-md shadow-black/30">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
+                    Quant Bias
+                    <InfoBadge infoKey="intraday_quant_score" />
+                  </span>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                    data.signals.overall_bias.includes('BUY')
+                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                      : data.signals.overall_bias.includes('SELL')
+                      ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                      : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                  }`}>
+                    {data.signals.overall_bias}
+                  </span>
+                </div>
+                <div className="mt-1">
+                  <div className="flex items-baseline gap-1">
+                    <span className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${data.signals.quant_score >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {data.signals.quant_score >= 0 ? '+' : ''}{data.signals.quant_score}
+                    </span>
+                    <span className="text-[11px] text-slate-500 font-mono">/ 100</span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1.5">
                     <div
-                      className="absolute top-0 bottom-0 w-1.5 bg-white rounded-full shadow-sm ring-1 ring-white/60"
-                      style={{
-                        left: `${Math.max(0, Math.min(97, ((data.current_price - data.low) / (data.high - data.low)) * 100))}%`
-                      }}
+                      className={`h-full transition-all duration-500 ${data.signals.quant_score >= 0 ? 'bg-emerald-400' : 'bg-rose-400'}`}
+                      style={{ width: `${Math.abs(data.signals.quant_score)}%` }}
                     />
                   </div>
-                  <div className="flex justify-between text-[8px] text-slate-500 font-mono">
-                    <span>LOD</span>
-                    <span className="text-slate-400">
-                      {Math.round(((data.current_price - data.low) / (data.high - data.low)) * 100)}% of Range
+                </div>
+              </div>
+
+              {/* Bottom Telemetry: Signal Confluence Counter */}
+              <div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60 font-mono">
+                  <span>Bull: <strong className="text-emerald-400">{data.signals?.bullish_count || 0}</strong></span>
+                  <span>Bear: <strong className="text-rose-400">{data.signals?.bearish_count || 0}</strong></span>
+                  <span>Conf: <strong className="text-cyan-300">{Math.round((data.signals?.bullish_count || 0) / Math.max(1, (data.signals?.bullish_count || 0) + (data.signals?.bearish_count || 0)) * 100)}%</strong></span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[8px] text-slate-500 font-mono">
+                  <span>Bearish</span>
+                  <span className="text-slate-400">Multi-Model Engine</span>
+                  <span>Bullish</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 6. Supertrend & Momentum Signal */}
+            <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between shadow-md shadow-black/30">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
+                    Supertrend
+                    <InfoBadge infoKey="supertrend" />
+                  </span>
+                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                    data.supertrend_dir === 1 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                  }`}>
+                    {data.supertrend_dir === 1 ? '▲ BULL' : '▼ BEAR'}
+                  </span>
+                </div>
+                <div className="mt-1">
+                  <p className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${data.supertrend_dir === 1 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {currSym}{data.supertrend?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5 font-mono">
+                    RSI:{' '}
+                    <span className={`font-bold ${data.rsi >= 70 ? 'text-rose-400' : data.rsi <= 30 ? 'text-emerald-400' : 'text-slate-200'}`}>
+                      {data.rsi?.toFixed(1)}
                     </span>
-                    <span>HOD</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Session VWAP */}
-            <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400 flex items-center gap-1">
-                  Session VWAP
-                  <InfoBadge infoKey="vwap" />
-                </span>
-                <span className="text-[10px] font-mono text-cyan-400 font-bold px-1.5 py-0.5 bg-cyan-500/10 rounded">
-                  {data.current_price > data.vwap ? 'ABOVE' : 'BELOW'}
-                </span>
-              </div>
-              <div className="mt-1">
-                <p className="text-xl font-bold font-mono text-cyan-300">
-                  {currSym}{data.vwap?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </p>
-                <p className="text-[11px] text-slate-400 mt-0.5 font-mono">
-                  Diff: <span className={data.current_price >= data.vwap ? 'text-emerald-400' : 'text-rose-400'}>
-                    {data.current_price >= data.vwap ? '+' : ''}
-                    {(((data.current_price - data.vwap) / data.vwap) * 100).toFixed(2)}%
-                  </span>
-                </p>
-              </div>
-            </div>
-
-            {/* Relative Strength vs Benchmark */}
-            <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400 flex items-center gap-1">
-                  Relative Strength
-                  <InfoBadge infoKey="benchmark_relative_strength" />
-                </span>
-                <span className="text-[10px] font-mono text-slate-400 font-bold px-1.5 py-0.5 bg-slate-800 rounded">
-                  vs {data.relative_strength?.benchmark_name}
-                </span>
-              </div>
-              <div className="mt-1">
-                <p className={`text-xl font-bold font-mono ${data.relative_strength?.alpha_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {data.relative_strength?.alpha_pct >= 0 ? '+' : ''}{data.relative_strength?.alpha_pct}% Alpha
-                </p>
-                <p className="text-[11px] text-slate-400 mt-0.5 truncate">
-                  {data.relative_strength?.status}
-                </p>
-              </div>
-            </div>
-
-            {/* Pre-Market Gap Intelligence */}
-            <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400 flex items-center gap-1">
-                  Pre-Market Gap
-                  <InfoBadge infoKey="pre_market_gap" />
-                </span>
-                <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                  data.gap_analysis?.gap_pct >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
-                }`}>
-                  {data.gap_analysis?.gap_type?.replace(/_/g, ' ')}
-                </span>
-              </div>
-              <div className="mt-1">
-                <p className={`text-lg font-bold font-mono ${data.gap_analysis?.gap_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {data.gap_analysis?.gap_pct >= 0 ? '+' : ''}{data.gap_analysis?.gap_pct}% ({currSym}{data.gap_analysis?.gap_pts})
-                </p>
-                <p className="text-[11px] text-slate-400 mt-0.5 font-mono">
-                  Fill: <span className={data.gap_analysis?.gap_filled ? 'text-emerald-400' : 'text-amber-400'}>
-                    {data.gap_analysis?.gap_filled ? 'FILLED' : `OPEN (${currSym}${data.gap_analysis?.gap_fill_dist})`}
-                  </span>
-                </p>
-              </div>
-            </div>
-
-            {/* Composite Bias Score */}
-            <div className="bg-gradient-to-br from-slate-900/90 to-slate-900/50 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400 flex items-center gap-1">
-                  Quant Bias
-                  <InfoBadge infoKey="intraday_quant_score" />
-                </span>
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                  data.signals.overall_bias.includes('BUY')
-                    ? 'bg-emerald-500/10 text-emerald-400'
-                    : data.signals.overall_bias.includes('SELL')
-                    ? 'bg-rose-500/10 text-rose-400'
-                    : 'bg-amber-500/10 text-amber-400'
-                }`}>
-                  {data.signals.overall_bias}
-                </span>
-              </div>
-              <div className="mt-1">
-                <div className="flex items-baseline gap-1">
-                  <span className={`text-xl font-black font-mono ${data.signals.quant_score >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {data.signals.quant_score >= 0 ? '+' : ''}{data.signals.quant_score}
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-mono">/ 100</span>
-                </div>
-                <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1.5">
-                  <div
-                    className={`h-full transition-all duration-500 ${data.signals.quant_score >= 0 ? 'bg-emerald-400' : 'bg-rose-400'}`}
-                    style={{ width: `${Math.abs(data.signals.quant_score)}%` }}
-                  />
+                    {data.rsi >= 70 && <span className="text-rose-400 ml-1 text-[9px] font-bold">OB</span>}
+                    {data.rsi <= 30 && <span className="text-emerald-400 ml-1 text-[9px] font-bold">OS</span>}
+                  </p>
                 </div>
               </div>
-            </div>
 
-            {/* Supertrend Signal — 6th headline card */}
-            <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400 flex items-center gap-1">
-                  Supertrend
-                  <InfoBadge infoKey="supertrend" />
-                </span>
-                <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                  data.supertrend_dir === 1 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
-                }`}>
-                  {data.supertrend_dir === 1 ? '▲ BULL' : '▼ BEAR'}
-                </span>
-              </div>
-              <div className="mt-1">
-                <p className={`text-xl font-bold font-mono ${data.supertrend_dir === 1 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {currSym}{data.supertrend?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </p>
-                <p className="text-[11px] text-slate-400 mt-0.5 font-mono">
-                  RSI{' '}
-                  <span className={`font-bold ${data.rsi >= 70 ? 'text-rose-400' : data.rsi <= 30 ? 'text-emerald-400' : 'text-slate-200'}`}>
-                    {data.rsi?.toFixed(1)}
-                  </span>
-                  {data.rsi >= 70 && <span className="text-rose-400 ml-1 text-[9px]">OB</span>}
-                  {data.rsi <= 30 && <span className="text-emerald-400 ml-1 text-[9px]">OS</span>}
-                </p>
+              {/* Bottom Telemetry: ATR & Moving Average Regime */}
+              <div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60 font-mono">
+                  <span>ATR: <strong className="text-amber-400">{currSym}{data.atr ? Number(data.atr).toFixed(1) : '—'}</strong></span>
+                  <span>EMA: <strong className={data.ema9 > data.ema21 ? 'text-emerald-400' : 'text-rose-400'}>{data.ema9 > data.ema21 ? '9>21 Bull' : '9<21 Bear'}</strong></span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[8px] text-slate-500 font-mono">
+                  <span>Volatility Anchor</span>
+                  <span className="text-slate-400">Trailing Level</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1529,16 +1625,18 @@ export default function IntradayTerminal() {
             fullscreenChart ? 'fixed inset-0 z-[150] bg-slate-950 p-4 overflow-y-auto' : ''
           }`}>
             <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-4 sm:p-6 backdrop-blur-md">
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              {/* Upper Chart Control Ribbon */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-slate-800">
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                  {/* Timeframe Selector Pills */}
+                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800/80">
                     {TIMEFRAMES.map((tf) => (
                       <button
                         key={tf.label}
                         onClick={() => { setCandleInterval(tf.interval); setPeriod(tf.period); }}
                         className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
                           candleInterval === tf.interval
-                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/10'
                             : 'text-slate-400 hover:text-slate-200'
                         }`}
                       >
@@ -1548,19 +1646,19 @@ export default function IntradayTerminal() {
                   </div>
 
                   {/* Viewport Zoom */}
-                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-                    <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 px-1.5">Zoom</span>
+                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800/80">
+                    <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 px-1.5 font-mono">Zoom</span>
                     {[
                       { id: 'all', label: 'All Day' },
-                      { id: '60', label: '60 Bars' },
-                      { id: '30', label: '30 Bars' },
+                      { id: '60', label: '60b' },
+                      { id: '30', label: '30b' },
                     ].map((z) => (
                       <button
                         key={z.id}
                         onClick={() => setCandleSlice(z.id)}
-                        className={`px-2 py-1 text-[11px] font-semibold rounded-lg transition ${
+                        className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition ${
                           candleSlice === z.id
-                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/10'
                             : 'text-slate-400 hover:text-slate-200'
                         }`}
                       >
@@ -1570,22 +1668,22 @@ export default function IntradayTerminal() {
                   </div>
                 </div>
 
-                {/* Fullscreen + Alert button row */}
+                {/* Right controls: Price Alert & Fullscreen */}
                 <div className="flex items-center gap-2">
                   {/* Price Alert mini widget */}
                   {data && (
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs ${
+                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs ${
                       alertTriggered
-                        ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-500'
+                        ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-sm shadow-amber-500/20'
+                        : 'bg-slate-950 border-slate-800 text-slate-400'
                     }`}>
                       {alertTriggered
-                        ? <Bell className="w-3 h-3 text-amber-400 animate-bounce" />
-                        : <BellOff className="w-3 h-3" />}
+                        ? <Bell className="w-3.5 h-3.5 text-amber-400 animate-bounce" />
+                        : <BellOff className="w-3.5 h-3.5 text-slate-500" />}
                       <select
                         value={alertAbove ? 'above' : 'below'}
                         onChange={e => { setAlertAbove(e.target.value === 'above'); setAlertTriggered(false); }}
-                        className="bg-transparent text-[10px] font-mono focus:outline-none cursor-pointer"
+                        className="bg-transparent text-[11px] font-mono focus:outline-none cursor-pointer text-slate-300"
                       >
                         <option value="above" className="bg-slate-900">Alert ≥</option>
                         <option value="below" className="bg-slate-900">Alert ≤</option>
@@ -1595,150 +1693,179 @@ export default function IntradayTerminal() {
                         placeholder={data.current_price?.toFixed(0)}
                         value={alertPrice}
                         onChange={e => { setAlertPrice(e.target.value); setAlertTriggered(false); }}
-                        className="w-16 bg-transparent font-mono text-[10px] text-white placeholder-slate-600 focus:outline-none"
+                        className="w-16 bg-transparent font-mono text-xs text-white placeholder-slate-600 focus:outline-none"
                       />
                     </div>
                   )}
+
                   <button
                     onClick={() => setFullscreenChart(!fullscreenChart)}
-                    className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 hover:text-white transition"
+                    className="p-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 hover:text-white transition"
                     title={fullscreenChart ? 'Exit Fullscreen' : 'Fullscreen Chart'}
                   >
                     {fullscreenChart ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
                   </button>
                 </div>
               </div>
+
+              {/* Dedicated Overlays & Indicators Ribbon */}
+              <div className="my-3 p-2 bg-slate-950/70 border border-slate-800/80 rounded-2xl flex flex-wrap items-center justify-between gap-2.5">
+                {/* Left Group: Technical Indicators */}
                 <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                  {/* ── Price Overlays ── */}
+                  <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-500 pl-1 pr-1">
+                    Overlays:
+                  </span>
                   <button
                     onClick={() => setShowVWAP(!showVWAP)}
-                    className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 ${
-                      showVWAP ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-slate-950 text-slate-500 border border-slate-800'
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showVWAP ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
                     }`}
                   >
-                    <span className="w-2 h-0.5 bg-cyan-400 rounded-full" />
+                    <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full" />
                     VWAP
                   </button>
 
                   <button
                     onClick={() => setShowVWAPBands(!showVWAPBands)}
-                    className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 ${
-                      showVWAPBands ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-slate-950 text-slate-500 border border-slate-800'
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showVWAPBands ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
                     }`}
                   >
-                    <span className="w-2 h-0.5 bg-cyan-300/40 rounded-full" />
+                    <span className="w-1.5 h-1.5 bg-cyan-300/60 rounded-full" />
                     ±2σ Bands
                   </button>
 
                   <button
                     onClick={() => setShowSupertrend(!showSupertrend)}
-                    className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 ${
-                      showSupertrend ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-950 text-slate-500 border border-slate-800'
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showSupertrend ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
                     }`}
                   >
-                    <span className="w-2 h-0.5 bg-emerald-400 rounded-full" />
+                    <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
                     Supertrend
                   </button>
 
                   <button
                     onClick={() => setShowEMA(!showEMA)}
-                    className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 ${
-                      showEMA ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' : 'bg-slate-950 text-slate-500 border border-slate-800'
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showEMA ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
                     }`}
                   >
-                    <span className="w-2 h-0.5 bg-purple-400 rounded-full" />
+                    <span className="w-1.5 h-1.5 bg-purple-400 rounded-full" />
                     EMA 9/21
                   </button>
 
-                  {/* Divider between Price Overlays and Key Levels */}
-                  <div className="w-px h-4 bg-slate-700/60 mx-0.5 self-center" />
-                  <span className="text-[9px] text-slate-600 uppercase tracking-wider font-mono">Levels</span>
+                  <button
+                    onClick={() => setShowEMA200(!showEMA200)}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showEMA200 ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 shadow-sm shadow-amber-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                    }`}
+                    title="200-period Exponential Moving Average (Institutional Anchor)"
+                  >
+                    <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
+                    200 EMA
+                  </button>
+                </div>
 
+                {/* Right Group: Key Levels & Heikin-Ashi */}
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-500 pl-1 pr-1">
+                    Levels:
+                  </span>
                   <button
                     onClick={() => setShowORB(!showORB)}
-                    className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 ${
-                      showORB ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-950 text-slate-500 border border-slate-800'
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showORB ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
                     }`}
                   >
-                    <span className="w-2 h-0.5 bg-amber-400 rounded-full" />
+                    <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
                     ORB 15m
                   </button>
 
                   <button
                     onClick={() => setShowCamarilla(!showCamarilla)}
-                    className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 ${
-                      showCamarilla ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' : 'bg-slate-950 text-slate-500 border border-slate-800'
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showCamarilla ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm shadow-rose-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
                     }`}
                   >
-                    <span className="w-2 h-0.5 bg-rose-400 rounded-full" />
+                    <span className="w-1.5 h-1.5 bg-rose-400 rounded-full" />
                     Camarilla
                   </button>
 
                   <button
                     onClick={() => setShowPDH(!showPDH)}
-                    className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 ${
-                      showPDH ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-950 text-slate-500 border border-slate-800'
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showPDH ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
                     }`}
                   >
-                    <span className="w-2 h-0.5 bg-amber-400 rounded-full" />
+                    <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
                     PDH / PDL
                   </button>
 
                   <button
                     onClick={() => setShowCPR(!showCPR)}
-                    className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 ${
-                      showCPR ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40' : 'bg-slate-950 text-slate-500 border border-slate-800'
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showCPR ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-sm shadow-indigo-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
                     }`}
                   >
-                    <span className="w-2 h-0.5 bg-indigo-400 rounded-full" />
-                    CPR Range
+                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full" />
+                    CPR
                   </button>
 
-                  <button
-                    onClick={() => setShowEMA200(!showEMA200)}
-                    className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 ${
-                      showEMA200 ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40' : 'bg-slate-950 text-slate-500 border border-slate-800'
-                    }`}
-                    title="200-period Exponential Moving Average (Institutional Anchor)"
-                  >
-                    <span className="w-2 h-0.5 bg-amber-400 rounded-full" />
-                    200 EMA
-                  </button>
+                  <div className="w-px h-4 bg-slate-800 mx-1 hidden sm:block" />
 
                   <button
                     onClick={() => setCandleMode(candleMode === 'regular' ? 'heikin_ashi' : 'regular')}
-                    className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 ${
-                      candleMode === 'heikin_ashi' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-slate-950 text-slate-500 border border-slate-800'
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      candleMode === 'heikin_ashi' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
                     }`}
                     title="Toggle Heikin-Ashi Trend-Smoothing Candlesticks (HotKey: 'K')"
                   >
-                    <span className="text-[10px]">🥢</span>
+                    <span className="text-[11px]">🥢</span>
                     {candleMode === 'heikin_ashi' ? 'Heikin-Ashi' : 'Candles'}
                   </button>
                 </div>
+              </div>
 
-              {/* Hover Inspection Bar */}
-              <div className="min-h-6 flex items-center justify-between text-[11px] font-mono text-slate-400 mt-2 px-1 overflow-x-auto">
-                {hoveredCandle ? (
-                  <div className="flex flex-wrap items-center gap-3">
-                    {candleMode === 'heikin_ashi' && (
-                      <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-bold">HA SMOOTHED</span>
-                    )}
-                    <span>Time: <strong className="text-white">{hoveredCandle.time}</strong></span>
-                    <span>O: <strong className="text-slate-200">{hoveredCandle.open}</strong></span>
-                    <span>H: <strong className="text-emerald-400">{hoveredCandle.high}</strong></span>
-                    <span>L: <strong className="text-rose-400">{hoveredCandle.low}</strong></span>
-                    <span>C: <strong className={hoveredCandle.close >= hoveredCandle.open ? 'text-emerald-400' : 'text-rose-400'}>{hoveredCandle.close}</strong></span>
-                    <span>Vol: <strong className="text-cyan-300">{hoveredCandle.volume?.toLocaleString()}</strong></span>
-                    <span>VWAP: <strong className="text-cyan-400">{hoveredCandle.vwap}</strong></span>
-                    {hoveredCandle.ema200 > 0 && <span>EMA200: <strong className="text-amber-400">{hoveredCandle.ema200}</strong></span>}
-                    {hoveredCandle.atr > 0 && <span>ATR: <strong className="text-amber-300">{hoveredCandle.atr}</strong></span>}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-500 italic">Hover over candles to inspect high-frequency metrics</span>
-                    {candleMode === 'heikin_ashi' && <span className="text-cyan-400 text-[10px] font-mono">(Heikin-Ashi active: market noise smoothed)</span>}
-                  </div>
+              {/* Hover Inspection Bar — with fixed height and live default to prevent jitter */}
+              <div className="h-7 flex items-center justify-between text-[11px] font-mono text-slate-400 px-2.5 bg-slate-950/40 rounded-xl border border-slate-800/40 overflow-x-auto scrollbar-none">
+                {hoveredCandle || (candles.length > 0 ? candles[candles.length - 1] : null) ? (() => {
+                  const c = hoveredCandle || candles[candles.length - 1];
+                  const isLive = !hoveredCandle;
+                  return (
+                    <div className="flex items-center gap-3 w-full justify-between shrink-0">
+                      <div className="flex items-center gap-3">
+                        {isLive ? (
+                          <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> LIVE
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-bold">
+                            INSPECT
+                          </span>
+                        )}
+                        {candleMode === 'heikin_ashi' && (
+                          <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 text-[10px] font-bold">
+                            HA SMOOTHED
+                          </span>
+                        )}
+                        <span>Time: <strong className="text-white">{c.time}</strong></span>
+                        <span>O: <strong className="text-slate-200">{c.open}</strong></span>
+                        <span>H: <strong className="text-emerald-400">{c.high}</strong></span>
+                        <span>L: <strong className="text-rose-400">{c.low}</strong></span>
+                        <span>C: <strong className={c.close >= c.open ? 'text-emerald-400' : 'text-rose-400'}>{c.close}</strong></span>
+                        <span>Vol: <strong className="text-cyan-300">{c.volume?.toLocaleString()}</strong></span>
+                        {c.vwap && <span>VWAP: <strong className="text-cyan-400">{c.vwap}</strong></span>}
+                        {c.ema200 > 0 && <span>EMA200: <strong className="text-amber-400">{c.ema200}</strong></span>}
+                        {c.atr > 0 && <span>ATR: <strong className="text-amber-300">{c.atr}</strong></span>}
+                      </div>
+                      <div className="hidden md:flex items-center text-[10px] text-slate-500">
+                        {isLive ? 'Hover candles to inspect' : 'Crosshair active'}
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  <span className="text-slate-500 italic text-[10px]">Awaiting high-frequency market stream...</span>
                 )}
               </div>
 
@@ -2246,22 +2373,73 @@ export default function IntradayTerminal() {
               </div>
 
               {/* Sub-Chart Selector */}
-              <div className="mt-4 pt-4 border-t border-slate-800">
-                <div className="flex items-center justify-between mb-2">
+              <div className="mt-4 pt-4 border-t border-slate-800/80">
+                <div className="flex flex-wrap items-center justify-between gap-2.5 mb-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-400">Sub-Indicator:</span>
-                    <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-xs">
-                      <button onClick={() => setActiveSubChart('volume')} className={`px-2.5 py-1 rounded-md transition ${activeSubChart === 'volume' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400'}`}>Volume & Delta</button>
-                      <button onClick={() => setActiveSubChart('rsi')} className={`px-2.5 py-1 rounded-md transition ${activeSubChart === 'rsi' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400'}`}>RSI (14)</button>
-                      <button onClick={() => setActiveSubChart('macd')} className={`px-2.5 py-1 rounded-md transition ${activeSubChart === 'macd' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400'}`}>MACD (12,26,9)</button>
-                      <button onClick={() => setActiveSubChart('cvd')} className={`px-2.5 py-1 rounded-md transition ${activeSubChart === 'cvd' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400'}`}>Order Flow CVD</button>
-                      <button onClick={() => setActiveSubChart('atr')} className={`px-2.5 py-1 rounded-md transition ${activeSubChart === 'atr' ? 'bg-slate-800 text-amber-300 font-bold' : 'text-slate-400'}`}>ATR Volatility (14)</button>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Sub-Indicator:</span>
+                    <div className="flex flex-wrap items-center bg-slate-950/90 p-1 rounded-xl border border-slate-800/80 text-xs shadow-inner gap-1">
+                      <button
+                        onClick={() => setActiveSubChart('volume')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          activeSubChart === 'volume'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.2)] font-bold'
+                            : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                        }`}
+                      >
+                        Volume &amp; Delta
+                      </button>
+                      <button
+                        onClick={() => setActiveSubChart('rsi')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          activeSubChart === 'rsi'
+                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_12px_rgba(56,189,248,0.2)] font-bold'
+                            : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                        }`}
+                      >
+                        RSI (14)
+                      </button>
+                      <button
+                        onClick={() => setActiveSubChart('macd')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          activeSubChart === 'macd'
+                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-[0_0_12px_rgba(168,85,247,0.2)] font-bold'
+                            : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                        }`}
+                      >
+                        MACD (12,26,9)
+                      </button>
+                      <button
+                        onClick={() => setActiveSubChart('cvd')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          activeSubChart === 'cvd'
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.2)] font-bold'
+                            : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                        }`}
+                      >
+                        Order Flow CVD
+                      </button>
+                      <button
+                        onClick={() => setActiveSubChart('atr')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          activeSubChart === 'atr'
+                            ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40 shadow-[0_0_12px_rgba(249,115,22,0.2)] font-bold'
+                            : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                        }`}
+                      >
+                        ATR Volatility (14)
+                      </button>
                     </div>
-                    <InfoBadge infoKey={activeSubChart === 'cvd' ? 'order_flow_delta' : activeSubChart === 'volume' ? 'order_flow_delta' : 'rsi'} />
+                    <InfoBadge infoKey={activeSubChart === 'cvd' ? 'order_flow_delta' : activeSubChart === 'volume' ? 'order_flow_delta' : activeSubChart === 'macd' ? 'macd_cross' : 'rsi'} />
+                  </div>
+
+                  <div className="hidden sm:flex items-center gap-2 text-[11px] font-mono text-slate-400">
+                    <span className="px-2 py-0.5 rounded-md bg-slate-950 border border-slate-800/80 text-slate-300">
+                      Active: <strong className="text-white uppercase">{activeSubChart}</strong>
+                    </span>
                   </div>
                 </div>
 
-                <div className="h-36 w-full bg-slate-950/60 rounded-xl border border-slate-800/60 p-2 overflow-hidden">
+                <div className="h-44 sm:h-48 w-full bg-gradient-to-b from-slate-950/90 via-slate-950/70 to-slate-950/90 rounded-2xl border border-slate-800/80 p-2.5 overflow-hidden shadow-inner relative">
                   {activeSubChart === 'volume' && (
                     <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full">
                       {(() => {
@@ -2271,29 +2449,38 @@ export default function IntradayTerminal() {
                         const activeCandle = hoveredCandle || lastCandle;
                         return (
                           <>
-                            <text x={padding.left + 4} y={14} fill="#64748b" fontSize="8" fontFamily="monospace">
-                              Vol: {activeCandle?.volume?.toLocaleString() || 0}
-                              {hasDelta && ` | Buyers: ${activeCandle?.buyer_vol?.toLocaleString() || 0} | Sellers: ${activeCandle?.seller_vol?.toLocaleString() || 0}`}
-                              {hoveredCandle && ` (${activeCandle?.time})`}
+                            {/* Horizontal guideline */}
+                            <line x1={padding.left} y1={50} x2={chartWidth - padding.right} y2={50} stroke="#334155" strokeDasharray="3 3" strokeOpacity={0.25} />
+                            <text x={padding.left + 4} y={14} fill="#94a3b8" fontSize="8" fontFamily="monospace" fontWeight="bold">
+                              Vol: <tspan fill="#ffffff">{activeCandle?.volume?.toLocaleString() || 0}</tspan>
+                              {hasDelta && (
+                                <>
+                                  <tspan fill="#64748b"> | </tspan>
+                                  <tspan fill="#10b981">Buyers: {activeCandle?.buyer_vol?.toLocaleString() || 0}</tspan>
+                                  <tspan fill="#64748b"> | </tspan>
+                                  <tspan fill="#f43f5e">Sellers: {activeCandle?.seller_vol?.toLocaleString() || 0}</tspan>
+                                </>
+                              )}
+                              {hoveredCandle && <tspan fill="#38bdf8">{` (${activeCandle?.time})`}</tspan>}
                             </text>
-                            <text x={chartWidth - padding.right + 4} y={14} fill="#475569" fontSize="8" fontFamily="monospace">
+                            <text x={chartWidth - padding.right + 4} y={14} fill="#64748b" fontSize="8" fontFamily="monospace">
                               Max {(maxVol / 1000).toFixed(0)}K
                             </text>
                             {candles.map((c, i) => {
                               const x = xScale(i);
                               if (hasDelta) {
-                                const bH = ((c.buyer_vol || 0) / maxVol) * 85;
-                                const sH = ((c.seller_vol || 0) / maxVol) * 85;
+                                const bH = ((c.buyer_vol || 0) / maxVol) * 82;
+                                const sH = ((c.seller_vol || 0) / maxVol) * 82;
                                 return (
                                   <g key={i}>
-                                    <rect x={x - candleWidth / 2} y={95 - bH} width={candleWidth / 2} height={bH} fill="#10b981" fillOpacity={0.8} />
-                                    <rect x={x} y={95 - sH} width={candleWidth / 2} height={sH} fill="#f43f5e" fillOpacity={0.8} />
+                                    <rect x={x - candleWidth / 2} y={96 - bH} width={candleWidth / 2} height={bH} fill="#10b981" fillOpacity={0.85} rx={0.5} />
+                                    <rect x={x} y={96 - sH} width={candleWidth / 2} height={sH} fill="#f43f5e" fillOpacity={0.85} rx={0.5} />
                                   </g>
                                 );
                               }
-                              const totalH = ((c.volume || 0) / maxVol) * 85;
+                              const totalH = ((c.volume || 0) / maxVol) * 82;
                               const isUp = c.close >= c.open;
-                              return <rect key={i} x={x - candleWidth / 2} y={95 - totalH} width={candleWidth} height={totalH} fill={isUp ? '#10b981' : '#f43f5e'} fillOpacity={0.6} />;
+                              return <rect key={i} x={x - candleWidth / 2} y={96 - totalH} width={candleWidth} height={totalH} fill={isUp ? '#10b981' : '#f43f5e'} fillOpacity={0.7} rx={0.5} />;
                             })}
                           </>
                         );
@@ -2309,12 +2496,21 @@ export default function IntradayTerminal() {
                         const activeRsi = (activeCandle?.rsi !== undefined && activeCandle?.rsi !== null) ? activeCandle.rsi : 50;
                         return (
                           <>
-                            <line x1={padding.left} y1={30} x2={chartWidth - padding.right} y2={30} stroke="#f43f5e" strokeDasharray="3 3" strokeOpacity={0.5} />
-                            <text x={padding.left + 4} y={28} fill="#f43f5e" fontSize="8" fontFamily="monospace" fillOpacity={0.8}>OB 70</text>
-                            <line x1={padding.left} y1={70} x2={chartWidth - padding.right} y2={70} stroke="#10b981" strokeDasharray="3 3" strokeOpacity={0.5} />
-                            <text x={padding.left + 4} y={83} fill="#10b981" fontSize="8" fontFamily="monospace" fillOpacity={0.8}>OS 30</text>
+                            {/* Overbought / Oversold Zones */}
+                            <rect x={padding.left} y={10} width={chartWidth - padding.left - padding.right} height={20} fill="#f43f5e" fillOpacity={0.04} />
+                            <line x1={padding.left} y1={30} x2={chartWidth - padding.right} y2={30} stroke="#f43f5e" strokeDasharray="3 3" strokeOpacity={0.6} />
+                            <text x={padding.left + 4} y={26} fill="#f43f5e" fontSize="8" fontFamily="monospace" fontWeight="bold">OB 70</text>
+
+                            <line x1={padding.left} y1={50} x2={chartWidth - padding.right} y2={50} stroke="#475569" strokeDasharray="2 2" strokeOpacity={0.4} />
+                            <text x={padding.left + 4} y={48} fill="#64748b" fontSize="7" fontFamily="monospace">Mid 50</text>
+
+                            <rect x={padding.left} y={70} width={chartWidth - padding.left - padding.right} height={25} fill="#10b981" fillOpacity={0.04} />
+                            <line x1={padding.left} y1={70} x2={chartWidth - padding.right} y2={70} stroke="#10b981" strokeDasharray="3 3" strokeOpacity={0.6} />
+                            <text x={padding.left + 4} y={82} fill="#10b981" fontSize="8" fontFamily="monospace" fontWeight="bold">OS 30</text>
+
                             <text x={chartWidth - padding.right - 10} y={16} fill="#94a3b8" fontSize="8" fontFamily="monospace" textAnchor="end">
                               RSI (14): <tspan fill={activeRsi >= 70 ? '#f43f5e' : activeRsi <= 30 ? '#10b981' : '#38bdf8'} fontWeight="bold">{activeRsi.toFixed(1)}</tspan>
+                              {activeRsi >= 70 ? ' (Overbought)' : activeRsi <= 30 ? ' (Oversold)' : ' (Neutral)'}
                               {hoveredCandle && ` (${activeCandle?.time})`}
                             </text>
                             <path
@@ -2324,7 +2520,7 @@ export default function IntradayTerminal() {
                               }, '')}
                               fill="none"
                               stroke="#38bdf8"
-                              strokeWidth="1.5"
+                              strokeWidth="1.8"
                             />
                           </>
                         );
@@ -2349,12 +2545,12 @@ export default function IntradayTerminal() {
                         return (
                           <>
                             {/* Top info badge */}
-                            <text x={padding.left + 4} y={14} fill="#64748b" fontSize="8" fontFamily="monospace">
+                            <text x={padding.left + 4} y={14} fill="#94a3b8" fontSize="8" fontFamily="monospace" fontWeight="bold">
                               MACD: <tspan fill="#38bdf8">{(activeCandle?.macd || 0).toFixed(2)}</tspan> | Sig: <tspan fill="#f59e0b">{(activeCandle?.macd_signal || 0).toFixed(2)}</tspan> | Hist: <tspan fill={(activeCandle?.macd_histogram || 0) >= 0 ? '#10b981' : '#f43f5e'}>{(activeCandle?.macd_histogram || 0).toFixed(2)}</tspan>
                               {hoveredCandle && ` (${activeCandle?.time})`}
                             </text>
                             {/* Zero line */}
-                            <line x1={padding.left} y1={zeroY} x2={chartWidth - padding.right} y2={zeroY} stroke="#475569" strokeOpacity={0.6} strokeDasharray="2 2" />
+                            <line x1={padding.left} y1={zeroY} x2={chartWidth - padding.right} y2={zeroY} stroke="#64748b" strokeOpacity={0.6} strokeDasharray="2 2" />
                             {/* 4-color Histogram bars */}
                             {candles.map((c, i) => {
                               const h = c.macd_histogram || 0;
@@ -2362,7 +2558,7 @@ export default function IntradayTerminal() {
                               const isPos = h >= 0;
                               const isGrowing = isPos ? h >= prevH : h <= prevH;
                               const barColor = isPos ? (isGrowing ? '#10b981' : '#34d399') : (isGrowing ? '#f43f5e' : '#fb7185');
-                              const barOpacity = isGrowing ? 0.85 : 0.45;
+                              const barOpacity = isGrowing ? 0.9 : 0.45;
                               const y1 = norm(h);
                               const y2 = zeroY;
                               return (
@@ -2374,18 +2570,19 @@ export default function IntradayTerminal() {
                                   height={Math.max(Math.abs(y1 - y2), 0.5)}
                                   fill={barColor}
                                   fillOpacity={barOpacity}
+                                  rx={0.5}
                                 />
                               );
                             })}
                             {/* MACD Line */}
                             <path
                               d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${norm(c.macd || 0)}`, '')}
-                              fill="none" stroke="#38bdf8" strokeWidth="1.5"
+                              fill="none" stroke="#38bdf8" strokeWidth="1.8"
                             />
                             {/* Signal Line */}
                             <path
                               d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${norm(c.macd_signal || 0)}`, '')}
-                              fill="none" stroke="#f59e0b" strokeWidth="1.2" strokeDasharray="3 2"
+                              fill="none" stroke="#f59e0b" strokeWidth="1.4" strokeDasharray="3 2"
                             />
                           </>
                         );
@@ -2405,16 +2602,16 @@ export default function IntradayTerminal() {
                         const activeCandle = hoveredCandle || lastCandle;
                         return (
                           <>
-                            <text x={padding.left + 4} y={14} fill="#64748b" fontSize="8" fontFamily="monospace">
+                            <text x={padding.left + 4} y={14} fill="#94a3b8" fontSize="8" fontFamily="monospace" fontWeight="bold">
                               CVD Net Cumulative Delta: <tspan fill={(activeCandle?.cum_delta || 0) >= 0 ? '#eab308' : '#f43f5e'} fontWeight="bold">{(activeCandle?.cum_delta || 0) >= 0 ? '+' : ''}{(activeCandle?.cum_delta || 0).toLocaleString()} shares</tspan>
                               {hoveredCandle && ` (${activeCandle?.time})`}
                             </text>
-                            <line x1={padding.left} y1={zeroY} x2={chartWidth - padding.right} y2={zeroY} stroke="#475569" strokeOpacity={0.6} strokeDasharray="2 2" />
+                            <line x1={padding.left} y1={zeroY} x2={chartWidth - padding.right} y2={zeroY} stroke="#64748b" strokeOpacity={0.6} strokeDasharray="2 2" />
                             <path
                               d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${90 - (((c.cum_delta || 0) - minCvd) / cvdRange) * 80}`, '')}
                               fill="none"
                               stroke="#eab308"
-                              strokeWidth="1.8"
+                              strokeWidth="2"
                             />
                           </>
                         );
@@ -2435,22 +2632,22 @@ export default function IntradayTerminal() {
                         const atrPct = data?.current_price > 0 ? ((currentAtr / data.current_price) * 100).toFixed(2) : '0';
                         return (
                           <>
-                            <text x={padding.left + 4} y={14} fill="#64748b" fontSize="8" fontFamily="monospace">
+                            <text x={padding.left + 4} y={14} fill="#94a3b8" fontSize="8" fontFamily="monospace" fontWeight="bold">
                               Average True Range (14): <tspan fill="#f59e0b" fontWeight="bold">{currSym}{currentAtr} ({atrPct}% Volatility)</tspan>
-                              <tspan fill="#94a3b8" dx={8}>Dynamic 1.5× Stop Buffer: ±{currSym}{(currentAtr * 1.5).toFixed(2)}</tspan>
+                              <tspan fill="#cbd5e1" dx={8}>Dynamic 1.5× Stop Buffer: ±{currSym}{(currentAtr * 1.5).toFixed(2)}</tspan>
                               {hoveredCandle && ` (${activeCandle?.time})`}
                             </text>
                             {/* ATR Area */}
                             <path
                               d={`${candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${90 - (((c.atr || 0) - minAtr) / atrRange) * 70}`, '')} L ${xScale(candles.length - 1)} 90 L ${xScale(0)} 90 Z`}
-                              fill="rgba(245, 158, 11, 0.08)"
+                              fill="rgba(245, 158, 11, 0.12)"
                             />
                             {/* ATR Line */}
                             <path
                               d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${90 - (((c.atr || 0) - minAtr) / atrRange) * 70}`, '')}
                               fill="none"
                               stroke="#f59e0b"
-                              strokeWidth="1.8"
+                              strokeWidth="2"
                             />
                           </>
                         );
@@ -2466,61 +2663,107 @@ export default function IntradayTerminal() {
             {data && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Triple-Screen Confluence Matrix */}
-                <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 sm:p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-cyan-400" />
-                      Triple-Screen Confluence Matrix
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-cyan-300">
-                        {data.multi_timeframe?.confluence_score}%
-                      </span>
-                      <InfoBadge infoKey="triple_screen_confluence" />
+                <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 shadow-sm">
+                          <Layers className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-white tracking-wide">
+                            Triple-Screen Confluence Matrix
+                          </h3>
+                          <p className="text-[11px] text-slate-400">Elder 3-tier trend & momentum validation</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="px-2.5 py-1 rounded-xl bg-cyan-500/10 border border-cyan-500/30 font-mono font-bold text-xs text-cyan-300">
+                          {data.multi_timeframe?.confluence_score}% Fit
+                        </div>
+                        <InfoBadge infoKey="triple_screen_confluence" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2.5 text-center mb-4 font-mono text-xs">
+                      {data.multi_timeframe?.screens?.map((s, idx) => (
+                        <div key={idx} className="p-3 bg-slate-950/80 border border-slate-800/80 rounded-2xl hover:border-slate-700 transition">
+                          <span className="text-[10px] text-slate-400 block font-sans uppercase font-bold tracking-wider mb-1">
+                            {s.timeframe}
+                          </span>
+                          <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full my-1 ${
+                            s.trend === 'BULLISH'
+                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${s.trend === 'BULLISH' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400 animate-pulse'}`} />
+                            {s.trend}
+                          </span>
+                          <span className="text-[10px] text-slate-400 block font-mono mt-1">
+                            RSI: <strong className="text-slate-200">{s.rsi}</strong>
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 text-center mb-3 font-mono text-xs">
-                    {data.multi_timeframe?.screens?.map((s, idx) => (
-                      <div key={idx} className="p-2.5 bg-slate-950/70 border border-slate-800 rounded-xl">
-                        <span className="text-[10px] text-slate-400 block font-sans">{s.timeframe}</span>
-                        <span className={`text-xs font-bold block my-1 ${s.trend === 'BULLISH' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {s.trend}
-                        </span>
-                        <span className="text-[10px] text-slate-500 block">RSI: {s.rsi}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800/80 flex items-center justify-between text-xs">
-                    <span className="text-slate-400 font-medium">Confluence Verdict:</span>
-                    <span className={`font-bold font-mono ${data.multi_timeframe?.confluence_score >= 70 ? 'text-emerald-400' : data.multi_timeframe?.confluence_score <= 30 ? 'text-rose-400' : 'text-amber-400'}`}>
+                  <div className="p-3 rounded-2xl bg-slate-950/90 border border-slate-800/80 flex items-center justify-between text-xs">
+                    <span className="text-slate-400 font-medium flex items-center gap-1.5">
+                      <Target className="w-3.5 h-3.5 text-cyan-400" />
+                      Tactical Verdict:
+                    </span>
+                    <span className={`font-bold font-mono px-2.5 py-0.5 rounded-lg border text-xs ${
+                      data.multi_timeframe?.confluence_score >= 70
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                        : data.multi_timeframe?.confluence_score <= 30
+                        ? 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+                        : 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                    }`}>
                       {data.multi_timeframe?.confluence_bias}
                     </span>
                   </div>
                 </div>
 
                 {/* Microstructure Order Pressure */}
-                <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
+                <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
                   <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                        <Flame className="w-4 h-4 text-cyan-400" />
-                        Microstructure Order Pressure
-                      </h3>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shadow-sm">
+                          <Flame className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-white tracking-wide">
+                            Microstructure Order Pressure
+                          </h3>
+                          <p className="text-[11px] text-slate-400">Bid-ask tick volume aggression delta</p>
+                        </div>
+                      </div>
                       <InfoBadge infoKey="order_flow_delta" />
                     </div>
 
-                    <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/60 space-y-3">
+                    <div className="p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800/80 space-y-3">
                       <div className="flex items-center justify-between text-xs font-mono">
-                        <span className="text-emerald-400 font-bold">Buyers: {data.order_flow.buy_pressure_pct}%</span>
-                        <span className="text-rose-400 font-bold">Sellers: {data.order_flow.sell_pressure_pct}%</span>
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold">
+                          Buyers: {data.order_flow.buy_pressure_pct}%
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/20 text-rose-400 font-bold">
+                          Sellers: {data.order_flow.sell_pressure_pct}%
+                        </span>
                       </div>
-                      <div className="w-full bg-slate-800 h-3 rounded-full overflow-hidden flex">
-                        <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${data.order_flow.buy_pressure_pct}%` }} />
-                        <div className="bg-rose-500 h-full transition-all duration-500" style={{ width: `${data.order_flow.sell_pressure_pct}%` }} />
+
+                      <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden flex p-0.5 border border-slate-800">
+                        <div
+                          className="bg-gradient-to-r from-emerald-600 to-emerald-400 h-full rounded-l-full transition-all duration-500"
+                          style={{ width: `${data.order_flow.buy_pressure_pct}%` }}
+                        />
+                        <div
+                          className="bg-gradient-to-r from-rose-500 to-rose-600 h-full rounded-r-full transition-all duration-500"
+                          style={{ width: `${data.order_flow.sell_pressure_pct}%` }}
+                        />
                       </div>
-                      <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono pt-1">
                         <span>Net Delta: <strong className={data.order_flow.net_delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
                           {data.order_flow.net_delta >= 0 ? '+' : ''}{data.order_flow.net_delta?.toLocaleString()} shares
                         </strong></span>
@@ -2529,9 +2772,14 @@ export default function IntradayTerminal() {
                     </div>
                   </div>
 
-                  <div className="mt-3 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
-                    <span>Gap Strategy:</span>
-                    <span className="font-mono text-cyan-300 font-semibold">{data.gap_analysis?.directive}</span>
+                  <div className="mt-3.5 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                    <span className="flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-amber-400" />
+                      Gap Directive:
+                    </span>
+                    <span className="font-mono text-cyan-300 font-bold bg-cyan-500/10 px-2 py-0.5 rounded-lg border border-cyan-500/25">
+                      {data.gap_analysis?.directive}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -2542,146 +2790,205 @@ export default function IntradayTerminal() {
           <div className="space-y-6">
             {/* Volume Profile (VPVR) */}
             {data?.volume_profile && (
-              <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 backdrop-blur-md">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-                    <BarChart2 className="w-4 h-4 text-amber-400" />
-                    Volume Profile (VPVR)
-                  </h3>
+              <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shadow-sm">
+                      <BarChart2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white tracking-wide">
+                        Volume Profile (VPVR)
+                      </h3>
+                      <p className="text-[11px] text-slate-400">Horizontal liquidity & Value Area distribution</p>
+                    </div>
+                  </div>
                   <InfoBadge infoKey="volume_profile" />
                 </div>
 
-                <div className="flex items-center justify-between text-xs font-mono mb-2 p-2 bg-slate-950/80 rounded-xl border border-slate-800/60">
-                  <div>
-                    <span className="text-[10px] text-amber-400 block font-bold">POC PRICE</span>
-                    <span className="text-white font-bold">{currSym}{data.volume_profile.poc_price}</span>
+                <div className="grid grid-cols-3 gap-2 text-xs font-mono mb-3">
+                  <div className="p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+                    <span className="text-[9px] text-amber-400 block font-bold font-sans uppercase tracking-wider">POC Price</span>
+                    <span className="text-sm font-bold text-white block mt-0.5">{currSym}{data.volume_profile.poc_price}</span>
+                    <span className="text-[9px] text-amber-400/80 font-sans block mt-0.5">High Volume Node</span>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-cyan-400 block font-bold">VAL (70%)</span>
-                    <span className="text-slate-300 font-bold">{currSym}{data.volume_profile.val_price}</span>
+                  <div className="p-2.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/30">
+                    <span className="text-[9px] text-cyan-400 block font-bold font-sans uppercase tracking-wider">VAL (70%)</span>
+                    <span className="text-sm font-bold text-slate-200 block mt-0.5">{currSym}{data.volume_profile.val_price}</span>
+                    <span className="text-[9px] text-slate-400 font-sans block mt-0.5">Value Area Floor</span>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-purple-400 block font-bold">VAH (70%)</span>
-                    <span className="text-slate-300 font-bold">{currSym}{data.volume_profile.vah_price}</span>
+                  <div className="p-2.5 rounded-2xl bg-purple-500/10 border border-purple-500/30">
+                    <span className="text-[9px] text-purple-400 block font-bold font-sans uppercase tracking-wider">VAH (70%)</span>
+                    <span className="text-sm font-bold text-slate-200 block mt-0.5">{currSym}{data.volume_profile.vah_price}</span>
+                    <span className="text-[9px] text-slate-400 font-sans block mt-0.5">Value Area Ceiling</span>
                   </div>
                 </div>
 
-                <div className="space-y-1 max-h-56 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+                <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-slate-800">
                   {data.volume_profile.profile.map((b, idx) => (
                     <div
                       key={idx}
-                      className={`flex items-center gap-2 text-[10px] font-mono py-0.5 px-1.5 rounded transition ${
+                      className={`flex items-center gap-2 text-[10px] font-mono py-1 px-2 rounded-xl transition border ${
                         b.is_poc
-                          ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold'
+                          ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 font-bold shadow-[0_0_10px_rgba(245,158,11,0.15)]'
                           : b.in_value_area
-                          ? 'bg-slate-950/80 text-slate-300'
-                          : 'text-slate-500'
+                          ? 'bg-slate-950/70 border-slate-800/80 text-slate-300 hover:border-slate-700'
+                          : 'bg-transparent border-transparent text-slate-500 opacity-60'
                       }`}
                     >
-                      <span className="w-12 shrink-0">{b.price.toFixed(2)}</span>
-                      <div className="flex-1 bg-slate-800/60 h-2 rounded-full overflow-hidden flex">
+                      <span className="w-14 shrink-0 font-bold">{b.price.toFixed(2)}</span>
+                      <div className="flex-1 bg-slate-900/80 h-2 rounded-full overflow-hidden flex p-0.5 border border-slate-800/40">
                         <div
-                          className={`h-full ${b.is_poc ? 'bg-amber-400' : 'bg-cyan-500/70'}`}
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            b.is_poc
+                              ? 'bg-gradient-to-r from-amber-500 to-amber-300 shadow-[0_0_6px_rgba(245,158,11,0.5)]'
+                              : b.in_value_area
+                              ? 'bg-gradient-to-r from-cyan-600 to-cyan-400'
+                              : 'bg-slate-700'
+                          }`}
                           style={{ width: `${Math.min(b.pct_of_total * 4, 100)}%` }}
                         />
                       </div>
-                      {b.is_poc && <span className="text-[9px] text-amber-400 shrink-0">POC</span>}
+                      {b.is_poc ? (
+                        <span className="text-[9px] bg-amber-400 text-black px-1.5 py-0.2 rounded font-black shrink-0 tracking-wider">
+                          POC
+                        </span>
+                      ) : b.in_value_area ? (
+                        <span className="text-[8px] text-cyan-400/70 shrink-0 font-sans">
+                          VA
+                        </span>
+                      ) : (
+                        <span className="w-5 shrink-0" />
+                      )}
                     </div>
                   ))}
+                </div>
+
+                <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Value Area Volume:</span>
+                  <span className="font-mono text-cyan-300 font-semibold">70% Standard Deviation</span>
                 </div>
               </div>
             )}
 
             {/* CPR & Camarilla Inflection Levels */}
             {(data?.pivots?.camarilla || data?.pivots?.cpr) && (
-              <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 backdrop-blur-md">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-                    <Compass className="w-4 h-4 text-cyan-400" />
-                    CPR &amp; Institutional Pivots
-                  </h3>
+              <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 shadow-sm">
+                      <Compass className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white tracking-wide">
+                        CPR &amp; Institutional Pivots
+                      </h3>
+                      <p className="text-[11px] text-slate-400">Floor equilibrium &amp; mean-reversion boundaries</p>
+                    </div>
+                  </div>
                   <InfoBadge infoKey="camarilla_pivots" />
                 </div>
 
                 {/* Central Pivot Range (CPR) Box */}
                 {data.pivots?.cpr && (
-                  <div className="mb-3 p-3 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 space-y-2">
+                  <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-br from-indigo-950/40 via-indigo-950/20 to-slate-950/60 border border-indigo-500/30 space-y-2.5 shadow-inner">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-indigo-300 font-sans flex items-center gap-1">
+                      <span className="text-xs font-bold text-indigo-300 font-sans flex items-center gap-1.5">
                         <Layers className="w-3.5 h-3.5 text-indigo-400" />
                         Central Pivot Range (CPR)
                       </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase ${
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase border ${
                         data.pivots.cpr.classification === 'NARROW'
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.2)]'
                           : data.pivots.cpr.classification === 'WIDE'
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                          : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-[0_0_8px_rgba(245,158,11,0.2)]'
+                          : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
                       }`}>
                         {data.pivots.cpr.classification} CPR ({data.pivots.cpr.width_pct}%)
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-1.5 text-center font-mono text-xs">
-                      <div className="p-1.5 rounded-xl bg-slate-950/70 border border-slate-800">
-                        <span className="text-[9px] text-slate-400 block font-sans">TC (Top)</span>
-                        <span className="font-bold text-indigo-300">{currSym}{data.pivots.cpr.tc}</span>
+                    <div className="grid grid-cols-3 gap-2 text-center font-mono text-xs">
+                      <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800">
+                        <span className="text-[9px] text-slate-400 block font-sans uppercase font-bold">TC (Top)</span>
+                        <span className="font-bold text-indigo-300 mt-0.5 block">{currSym}{data.pivots.cpr.tc}</span>
                       </div>
-                      <div className="p-1.5 rounded-xl bg-slate-950/70 border border-slate-800">
-                        <span className="text-[9px] text-slate-400 block font-sans">Pivot (P)</span>
-                        <span className="font-bold text-white">{currSym}{data.pivots.cpr.pivot}</span>
+                      <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800">
+                        <span className="text-[9px] text-slate-400 block font-sans uppercase font-bold">Pivot (P)</span>
+                        <span className="font-bold text-white mt-0.5 block">{currSym}{data.pivots.cpr.pivot}</span>
                       </div>
-                      <div className="p-1.5 rounded-xl bg-slate-950/70 border border-slate-800">
-                        <span className="text-[9px] text-slate-400 block font-sans">BC (Bottom)</span>
-                        <span className="font-bold text-purple-300">{currSym}{data.pivots.cpr.bc}</span>
+                      <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800">
+                        <span className="text-[9px] text-slate-400 block font-sans uppercase font-bold">BC (Bottom)</span>
+                        <span className="font-bold text-purple-300 mt-0.5 block">{currSym}{data.pivots.cpr.bc}</span>
                       </div>
                     </div>
 
-                    <p className="text-[10px] text-slate-400 leading-tight">
-                      {data.pivots.cpr.description}
+                    <p className="text-[11px] text-slate-300 leading-snug bg-slate-950/60 p-2 rounded-xl border border-slate-800/60">
+                      💡 {data.pivots.cpr.description}
                     </p>
                   </div>
                 )}
 
+                {/* Camarilla Pivots Stack */}
                 <div className="space-y-2 text-xs font-mono">
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  {/* H4 Breakout */}
+                  <div className="flex items-center justify-between p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 hover:border-emerald-500/40 transition">
                     <div>
-                      <span className="font-bold text-emerald-400">H4 Breakout Target</span>
-                      <p className="text-[10px] text-slate-400">Bullish acceleration level</p>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-emerald-400">H4 Breakout Target</span>
+                        <span className="text-[9px] font-sans px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold uppercase">Acceleration</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Bullish continuation trigger</p>
                     </div>
-                    <span className="font-bold text-white">{currSym}{data.pivots.camarilla.h4}</span>
+                    <span className="text-sm font-bold text-white">{currSym}{data.pivots.camarilla.h4}</span>
                   </div>
 
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-rose-500/10 border border-rose-500/20">
+                  {/* H3 Resistance */}
+                  <div className="flex items-center justify-between p-2.5 rounded-2xl bg-rose-500/10 border border-rose-500/25 hover:border-rose-500/40 transition">
                     <div>
-                      <span className="font-bold text-rose-400">H3 Short Resistance</span>
-                      <p className="text-[10px] text-slate-400">Mean-reversion ceiling</p>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-rose-400">H3 Short Resistance</span>
+                        <span className="text-[9px] font-sans px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 font-bold uppercase">Reversal</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Mean-reversion ceiling</p>
                     </div>
-                    <span className="font-bold text-white">{currSym}{data.pivots.camarilla.h3}</span>
+                    <span className="text-sm font-bold text-white">{currSym}{data.pivots.camarilla.h3}</span>
                   </div>
 
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-slate-950/80 border border-slate-800">
+                  {/* Central Floor Pivot (P) */}
+                  <div className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-950/90 border border-slate-800 hover:border-slate-700 transition">
                     <div>
-                      <span className="font-bold text-slate-300">Central Floor Pivot (P)</span>
-                      <p className="text-[10px] text-slate-400">Session equilibrium</p>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-slate-200">Central Floor Pivot (P)</span>
+                        <span className="text-[9px] font-sans px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-bold uppercase">Equilibrium</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Session baseline balance point</p>
                     </div>
-                    <span className="font-bold text-white">{currSym}{data.pivots.floor.p}</span>
+                    <span className="text-sm font-bold text-cyan-300">{currSym}{data.pivots.floor.p}</span>
                   </div>
 
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  {/* L3 Support */}
+                  <div className="flex items-center justify-between p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 hover:border-emerald-500/40 transition">
                     <div>
-                      <span className="font-bold text-emerald-400">L3 Long Support</span>
-                      <p className="text-[10px] text-slate-400">Mean-reversion floor</p>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-emerald-400">L3 Long Support</span>
+                        <span className="text-[9px] font-sans px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold uppercase">Reversal</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Mean-reversion floor</p>
                     </div>
-                    <span className="font-bold text-white">{currSym}{data.pivots.camarilla.l3}</span>
+                    <span className="text-sm font-bold text-white">{currSym}{data.pivots.camarilla.l3}</span>
                   </div>
 
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-rose-500/10 border border-rose-500/20">
+                  {/* L4 Breakdown */}
+                  <div className="flex items-center justify-between p-2.5 rounded-2xl bg-rose-500/10 border border-rose-500/25 hover:border-rose-500/40 transition">
                     <div>
-                      <span className="font-bold text-rose-400">L4 Breakdown Target</span>
-                      <p className="text-[10px] text-slate-400">Bearish acceleration level</p>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-rose-400">L4 Breakdown Target</span>
+                        <span className="text-[9px] font-sans px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 font-bold uppercase">Acceleration</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Bearish expansion trigger</p>
                     </div>
-                    <span className="font-bold text-white">{currSym}{data.pivots.camarilla.l4}</span>
+                    <span className="text-sm font-bold text-white">{currSym}{data.pivots.camarilla.l4}</span>
                   </div>
                 </div>
               </div>
@@ -2691,16 +2998,16 @@ export default function IntradayTerminal() {
 
         {/* ── REAL-WORLD INTRADAY BATTLE PLAN CARD & EXECUTION ────────────── */}
         {data?.battle_plan?.entry_price && (
-          <div className="bg-gradient-to-r from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl">
+          <div className="bg-gradient-to-r from-slate-900 via-slate-900/95 to-slate-950 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800/80">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-gradient-to-tr from-cyan-500/20 to-purple-500/20 border border-cyan-500/30 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-gradient-to-tr from-cyan-500/20 to-purple-500/20 border border-cyan-500/30 rounded-2xl shadow-sm">
                   <Target className="w-5 h-5 text-cyan-400" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-white">
-                      Actionable Intraday Battle Plan: {data.battle_plan.setup_name}
+                    <h3 className="text-base font-bold text-white tracking-wide">
+                      Actionable Intraday Battle Plan: <span className="text-cyan-300">{data.battle_plan.setup_name}</span>
                     </h3>
                     <InfoBadge infoKey="intraday_battle_plan" />
                   </div>
@@ -2712,37 +3019,65 @@ export default function IntradayTerminal() {
 
               <button
                 onClick={handleCopyPlan}
-                className="px-4 py-2 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 rounded-xl text-xs font-semibold transition flex items-center gap-2 shrink-0 self-start sm:self-auto"
+                className="px-4 py-2 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 rounded-xl text-xs font-semibold transition flex items-center gap-2 shrink-0 self-start sm:self-auto shadow-sm"
               >
                 {planCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                 {planCopied ? 'Copied to Clipboard!' : 'Copy Plan for Broker / Journal'}
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-xs font-mono">
-              <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl">
-                <span className="text-[10px] text-slate-400 block font-sans">ENTRY TRIGGER</span>
-                <span className="text-base font-bold text-white">{currSym}{data.battle_plan.entry_price}</span>
-                <p className="text-[10px] text-slate-500 mt-1 font-sans truncate">{data.battle_plan.trigger_rule}</p>
+            {/* 4 Core Execution Pods */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 mt-4 text-xs font-mono">
+              {/* Entry */}
+              <div className="p-3.5 bg-gradient-to-b from-slate-950 to-slate-950/80 border border-cyan-500/30 rounded-2xl shadow-[0_0_12px_rgba(56,189,248,0.06)] hover:border-cyan-500/50 transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-cyan-400 font-bold font-sans uppercase tracking-wider">ENTRY TRIGGER</span>
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                </div>
+                <span className="text-lg font-bold text-white block mt-1">{currSym}{data.battle_plan.entry_price}</span>
+                <p className="text-[10px] text-slate-400 mt-1 font-sans truncate">{data.battle_plan.trigger_rule}</p>
               </div>
 
-              <div className="p-3 bg-slate-950/80 border border-rose-500/30 rounded-xl">
-                <span className="text-[10px] text-rose-400 block font-sans">HARD STOP LOSS</span>
-                <span className="text-base font-bold text-rose-400">{currSym}{data.battle_plan.stop_loss}</span>
-                <p className="text-[10px] text-slate-500 mt-1 font-sans">Risk: {currSym}{data.battle_plan.risk_per_share} / share</p>
+              {/* Stop Loss */}
+              <div className="p-3.5 bg-gradient-to-b from-slate-950 to-slate-950/80 border border-rose-500/40 rounded-2xl shadow-[0_0_12px_rgba(244,63,94,0.06)] hover:border-rose-500/60 transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-rose-400 font-bold font-sans uppercase tracking-wider">HARD STOP LOSS</span>
+                  <span className="w-2 h-2 rounded-full bg-rose-400" />
+                </div>
+                <span className="text-lg font-bold text-rose-400 block mt-1">{currSym}{data.battle_plan.stop_loss}</span>
+                <p className="text-[10px] text-slate-400 mt-1 font-sans">Risk: {currSym}{data.battle_plan.risk_per_share} / share</p>
               </div>
 
-              <div className="p-3 bg-slate-950/80 border border-emerald-500/30 rounded-xl">
-                <span className="text-[10px] text-emerald-400 block font-sans">TARGET 1 (1.5R)</span>
-                <span className="text-base font-bold text-emerald-400">{currSym}{data.battle_plan.target_1}</span>
-                <p className="text-[10px] text-slate-500 mt-1 font-sans">Scale out 50% & trail stop</p>
+              {/* Target 1 */}
+              <div className="p-3.5 bg-gradient-to-b from-slate-950 to-slate-950/80 border border-emerald-500/40 rounded-2xl shadow-[0_0_12px_rgba(16,185,129,0.06)] hover:border-emerald-500/60 transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-emerald-400 font-bold font-sans uppercase tracking-wider">TARGET 1 (1.5R)</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                </div>
+                <span className="text-lg font-bold text-emerald-400 block mt-1">{currSym}{data.battle_plan.target_1}</span>
+                <p className="text-[10px] text-slate-400 mt-1 font-sans">Scale out 50% & trail stop</p>
               </div>
 
-              <div className="p-3 bg-slate-950/80 border border-cyan-500/30 rounded-xl">
-                <span className="text-[10px] text-cyan-400 block font-sans">TARGET 2 (2.5R)</span>
-                <span className="text-base font-bold text-cyan-300">{currSym}{data.battle_plan.target_2}</span>
-                <p className="text-[10px] text-slate-500 mt-1 font-sans">Full runner exit target</p>
+              {/* Target 2 */}
+              <div className="p-3.5 bg-gradient-to-b from-slate-950 to-slate-950/80 border border-purple-500/40 rounded-2xl shadow-[0_0_12px_rgba(168,85,247,0.06)] hover:border-purple-500/60 transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-purple-400 font-bold font-sans uppercase tracking-wider">TARGET 2 (2.5R)</span>
+                  <span className="w-2 h-2 rounded-full bg-purple-400" />
+                </div>
+                <span className="text-lg font-bold text-purple-300 block mt-1">{currSym}{data.battle_plan.target_2}</span>
+                <p className="text-[10px] text-slate-400 mt-1 font-sans">Full runner exit target</p>
               </div>
+            </div>
+
+            {/* Visual Risk:Reward Road Map Strip */}
+            <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[11px] font-mono text-slate-400">
+              <span className="text-rose-400 font-semibold">🛑 Stop: {currSym}{data.battle_plan.stop_loss}</span>
+              <div className="flex-1 mx-4 h-1.5 bg-slate-800 rounded-full overflow-hidden flex">
+                <div className="w-1/4 bg-rose-500/60" />
+                <div className="w-2/4 bg-emerald-500/60" />
+                <div className="w-1/4 bg-purple-500/60" />
+              </div>
+              <span className="text-emerald-400 font-semibold">🎯 Target: {currSym}{data.battle_plan.target_2}</span>
             </div>
           </div>
         )}
@@ -2750,9 +3085,9 @@ export default function IntradayTerminal() {
         {/* ── TRADER'S EXECUTION SCRATCHPAD & JOURNAL ─────────────────────── */}
         {scratchpadOpen && (
           <div className="bg-slate-900/90 border border-amber-500/30 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl shadow-amber-950/10">
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shadow-sm">
                   <Edit3 className="w-4 h-4 text-amber-400" />
                 </div>
                 <div>
@@ -2770,13 +3105,13 @@ export default function IntradayTerminal() {
 
               <div className="flex items-center gap-2">
                 {notesSaved && (
-                  <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                  <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
                     <CheckCircle2 className="w-3 h-3" /> Saved
                   </span>
                 )}
                 <button
                   onClick={addTimestampToNotes}
-                  className="px-2.5 py-1 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 flex items-center gap-1 transition"
+                  className="px-2.5 py-1 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 flex items-center gap-1 transition shadow-sm"
                   title="Insert current local time into journal"
                 >
                   <Clock className="w-3 h-3 text-cyan-400" />
@@ -2788,7 +3123,7 @@ export default function IntradayTerminal() {
                     setNotesCopied(true);
                     setTimeout(() => setNotesCopied(false), 2500);
                   }}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg border flex items-center gap-1 transition ${notesCopied ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'}`}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg border flex items-center gap-1 transition shadow-sm ${notesCopied ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'}`}
                 >
                   {notesCopied ? <CheckCircle2 className="w-3 h-3" /> : <Copy className="w-3 h-3 text-slate-400" />}
                   <span>{notesCopied ? 'Copied ✓' : 'Copy'}</span>
@@ -2800,7 +3135,7 @@ export default function IntradayTerminal() {
                       try { localStorage.removeItem('stockiq_intraday_notes_' + ticker); } catch (_) {}
                       setClearNotesConfirm(false);
                     }}
-                    className="px-2.5 py-1 text-xs font-bold bg-rose-500/15 text-rose-400 rounded-lg border border-rose-500/30 transition"
+                    className="px-2.5 py-1 text-xs font-bold bg-rose-500/15 text-rose-400 rounded-lg border border-rose-500/30 transition shadow-sm"
                   >
                     Confirm?
                   </button>
@@ -2819,18 +3154,18 @@ export default function IntradayTerminal() {
 
             {/* Quick Discipline Tags */}
             <div className="flex flex-wrap items-center gap-1.5 pt-3 pb-2 text-[11px]">
-              <span className="text-slate-500 font-mono text-[10px] uppercase">Discipline Tags:</span>
+              <span className="text-slate-500 font-mono text-[10px] uppercase font-bold">Discipline Tags:</span>
               {[
-                { tag: '📌 [VWAP Retest Entry]', color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
-                { tag: '🛑 [Hard Stop Violation Risk]', color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
-                { tag: '🎯 [Camarilla Target Achieved]', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
-                { tag: '⚠️ [Lunch Chop Slump - No Trade]', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
-                { tag: '⚡ [MIS Square-Off Approaching]', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+                { tag: '📌 [VWAP Retest Entry]', color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/25' },
+                { tag: '🛑 [Hard Stop Violation Risk]', color: 'text-rose-400 bg-rose-500/10 border-rose-500/25' },
+                { tag: '🎯 [Camarilla Target Achieved]', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25' },
+                { tag: '⚠️ [Lunch Chop Slump - No Trade]', color: 'text-amber-400 bg-amber-500/10 border-amber-500/25' },
+                { tag: '⚡ [MIS Square-Off Approaching]', color: 'text-purple-400 bg-purple-500/10 border-purple-500/25' },
               ].map((chip) => (
                 <button
                   key={chip.tag}
                   onClick={() => addTemplateTag(chip.tag)}
-                  className={`px-2 py-0.5 rounded border text-[11px] font-mono transition hover:scale-105 active:scale-95 ${chip.color}`}
+                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-mono transition hover:scale-105 active:scale-95 ${chip.color}`}
                 >
                   {chip.tag}
                 </button>
@@ -2842,7 +3177,7 @@ export default function IntradayTerminal() {
               value={notes}
               onChange={handleNotesChange}
               placeholder={`Write your trade hypothesis for ${ticker}...\nExample:\n- 10:15 AM: Bullish reclaim of VWAP with positive CVD (+15,000 delta).\n- Entry: At VWAP retest.\n- Stop Loss: 5m close below Supertrend.\n- Target: Camarilla H3 resistance.`}
-              className="w-full h-28 sm:h-32 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs sm:text-sm font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500/50 resize-y"
+              className="w-full h-28 sm:h-32 bg-slate-950/90 border border-slate-800 rounded-2xl p-3.5 text-xs sm:text-sm font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500/60 shadow-inner resize-y leading-relaxed"
             />
           </div>
         )}
@@ -2850,534 +3185,623 @@ export default function IntradayTerminal() {
         {/* ── REAL-LIFE FRICTION & SEBI BREAKEVEN CALCULATOR ────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Position Sizing & Friction Calculator */}
-          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Scale className="w-5 h-5 text-cyan-400" />
-                  Real-Life Brokerage, STT & Friction Calculator
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Calculates exact statutory charges & breakeven spread (The SEBI Reality Check)
-                </p>
-              </div>
-              <InfoBadge infoKey="brokerage_friction_breakeven" />
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs mb-4">
-              <div>
-                <label className="text-slate-400 block mb-1">Trading Capital ({currSym})</label>
-                <input
-                  type="number"
-                  value={calcCapital}
-                  onChange={(e) => setCalcCapital(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-slate-400 block mb-1">Risk % Per Trade</label>
-                <select
-                  value={calcRiskPct}
-                  onChange={(e) => setCalcRiskPct(Number(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500"
-                >
-                  <option value={0.5}>0.5% (Conservative)</option>
-                  <option value={1.0}>1.0% (Institutional Standard)</option>
-                  <option value={2.0}>2.0% (Aggressive)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-slate-400 block mb-1">Margin Leverage</label>
-                <select
-                  value={calcLeverage}
-                  onChange={(e) => setCalcLeverage(Number(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500"
-                >
-                  <option value={1}>1× (Cash CNC)</option>
-                  <option value={3}>3× (Conservative Margin)</option>
-                  <option value={5}>5× (MIS Intraday)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-slate-400 block mb-1">Entry Price ({currSym})</label>
-                <input
-                  type="number"
-                  step="0.05"
-                  value={calcEntry}
-                  onChange={(e) => setCalcEntry(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-slate-400 block mb-1">Stop Loss ({currSym})</label>
-                <input
-                  type="number"
-                  step="0.05"
-                  value={calcStop}
-                  onChange={(e) => setCalcStop(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div className="flex items-end">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (data?.current_price) {
-                      setCalcEntry(data.current_price.toString());
-                      setCalcStop(data.supertrend?.toString() || (data.current_price * 0.99).toFixed(2));
-                    }
-                  }}
-                  className="w-full py-2 px-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-semibold rounded-xl text-xs transition border border-slate-700/60"
-                >
-                  Sync to Current
-                </button>
-              </div>
-            </div>
-
-            {sizingResults ? (
-              <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-3">
-                <div className="grid grid-cols-3 gap-2 text-center font-mono">
-                  <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block font-sans">EXACT SHARES</span>
-                    <span className="text-lg font-bold text-cyan-300">{sizingResults.exactShares}</span>
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 shadow-sm">
+                    <Scale className="w-4 h-4" />
                   </div>
-                  <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block font-sans">MARGIN NEEDED</span>
-                    <span className="text-lg font-bold text-white">{currSym}{sizingResults.marginRequired?.toLocaleString()}</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block font-sans">TOTAL FRICTION</span>
-                    <span className="text-lg font-bold text-amber-400">{currSym}{sizingResults.totalCharges}</span>
+                  <div>
+                    <h3 className="text-base font-bold text-white tracking-wide">
+                      Real-Life Brokerage, STT &amp; Friction Calculator
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Statutory charges, exact position sizing &amp; SEBI breakeven spread check
+                    </p>
                   </div>
                 </div>
+                <InfoBadge infoKey="brokerage_friction_breakeven" />
+              </div>
 
-                {/* Breakeven Spread Alert */}
-                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs font-mono">
-                  <span className="text-slate-300 font-sans">Breakeven Tick Spread Needed:</span>
-                  <span className="text-amber-400 font-bold">
-                    +{currSym}{sizingResults.breakevenMovePts} (+{sizingResults.breakevenMovePct}%)
-                  </span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs mb-4">
+                <div>
+                  <label className="text-slate-400 block mb-1 font-medium">Trading Capital ({currSym})</label>
+                  <input
+                    type="number"
+                    value={calcCapital}
+                    onChange={(e) => setCalcCapital(e.target.value)}
+                    className="w-full bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500 transition shadow-inner"
+                  />
                 </div>
 
-                {/* Net Profit Table */}
-                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800 text-xs font-mono">
-                  {sizingResults.riskRewardTargets.map((t, idx) => (
-                    <div key={idx} className="p-2 bg-emerald-500/5 border border-emerald-500/20 rounded-xl">
-                      <span className="text-[10px] text-emerald-400 block font-bold font-sans">{t.label}</span>
-                      <p className="text-white font-bold">{currSym}{t.price}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Gross: +{currSym}{t.gross?.toLocaleString()}</p>
-                      <p className={`text-[10px] font-bold ${t.net >= 0 ? 'text-emerald-300' : 'text-rose-400'}`}>Net: {t.net >= 0 ? '+' : ''}{currSym}{t.net?.toLocaleString()}</p>
+                <div>
+                  <label className="text-slate-400 block mb-1 font-medium">Risk % Per Trade</label>
+                  <select
+                    value={calcRiskPct}
+                    onChange={(e) => setCalcRiskPct(Number(e.target.value))}
+                    className="w-full bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500 transition shadow-inner"
+                  >
+                    <option value={0.5}>0.5% (Conservative)</option>
+                    <option value={1.0}>1.0% (Institutional Standard)</option>
+                    <option value={2.0}>2.0% (Aggressive)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block mb-1 font-medium">Margin Leverage</label>
+                  <select
+                    value={calcLeverage}
+                    onChange={(e) => setCalcLeverage(Number(e.target.value))}
+                    className="w-full bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500 transition shadow-inner"
+                  >
+                    <option value={1}>1× (Cash CNC)</option>
+                    <option value={3}>3× (Conservative Margin)</option>
+                    <option value={5}>5× (MIS Intraday)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block mb-1 font-medium">Entry Price ({currSym})</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    value={calcEntry}
+                    onChange={(e) => setCalcEntry(e.target.value)}
+                    className="w-full bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500 transition shadow-inner"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block mb-1 font-medium">Stop Loss ({currSym})</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    value={calcStop}
+                    onChange={(e) => setCalcStop(e.target.value)}
+                    className="w-full bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500 transition shadow-inner"
+                  />
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (data?.current_price) {
+                        setCalcEntry(data.current_price.toString());
+                        setCalcStop(data.supertrend?.toString() || (data.current_price * 0.99).toFixed(2));
+                      }
+                    }}
+                    className="w-full py-2 px-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-semibold rounded-xl text-xs transition border border-slate-700 shadow-sm flex items-center justify-center gap-1.5"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Sync Live Price</span>
+                  </button>
+                </div>
+              </div>
+
+              {sizingResults ? (
+                <div className="p-4 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-3.5 shadow-inner">
+                  <div className="grid grid-cols-3 gap-2.5 text-center font-mono">
+                    <div className="p-3 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 hover:border-slate-700 transition">
+                      <span className="text-[10px] text-slate-400 block font-sans uppercase font-bold tracking-wider">EXACT SHARES</span>
+                      <span className="text-xl font-bold text-cyan-300 block mt-1">{sizingResults.exactShares}</span>
                     </div>
-                  ))}
+                    <div className="p-3 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 hover:border-slate-700 transition">
+                      <span className="text-[10px] text-slate-400 block font-sans uppercase font-bold tracking-wider">MARGIN NEEDED</span>
+                      <span className="text-xl font-bold text-white block mt-1">{currSym}{sizingResults.marginRequired?.toLocaleString()}</span>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 hover:border-slate-700 transition">
+                      <span className="text-[10px] text-slate-400 block font-sans uppercase font-bold tracking-wider">TOTAL FRICTION</span>
+                      <span className="text-xl font-bold text-amber-400 block mt-1">{currSym}{sizingResults.totalCharges}</span>
+                    </div>
+                  </div>
+
+                  {/* Breakeven Spread Alert */}
+                  <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs font-mono">
+                    <span className="text-slate-300 font-sans flex items-center gap-1.5 font-medium">
+                      ⚠️ Breakeven Spread Needed:
+                    </span>
+                    <span className="text-amber-400 font-bold bg-amber-500/15 px-2.5 py-0.5 rounded-lg border border-amber-500/30">
+                      +{currSym}{sizingResults.breakevenMovePts} (+{sizingResults.breakevenMovePct}%)
+                    </span>
+                  </div>
+
+                  {/* Net Profit Table */}
+                  <div className="grid grid-cols-3 gap-2.5 pt-1 border-t border-slate-800/80 text-xs font-mono">
+                    {sizingResults.riskRewardTargets.map((t, idx) => (
+                      <div key={idx} className="p-2.5 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl hover:border-emerald-500/40 transition">
+                        <span className="text-[10px] text-emerald-400 block font-bold font-sans uppercase tracking-wider">{t.label}</span>
+                        <p className="text-sm font-bold text-white mt-0.5">{currSym}{t.price}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Gross: +{currSym}{t.gross?.toLocaleString()}</p>
+                        <p className={`text-[10px] font-bold mt-0.5 ${t.net >= 0 ? 'text-emerald-300' : 'text-rose-400'}`}>
+                          Net: {t.net >= 0 ? '+' : ''}{currSym}{t.net?.toLocaleString()}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="p-6 text-center text-slate-500 text-xs bg-slate-950/40 rounded-xl border border-slate-800/60">
-                Enter valid Entry and Stop Loss prices above to view net in-pocket profit after brokerage & STT.
-              </div>
-            )}
+              ) : (
+                <div className="p-8 text-center text-slate-400 text-xs bg-slate-950/50 rounded-2xl border border-slate-800/80 leading-relaxed">
+                  Enter valid Entry and Stop Loss prices above to calculate exact position sizing, SEBI statutory friction, and in-pocket net profit.
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Real-Time Intraday Radar Scanner */}
-          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md flex flex-col justify-between">
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    <Zap className="w-5 h-5 text-amber-400" />
-                    Intraday Radar Scanner ({scannerMarket})
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Real-time detection of high momentum, ORB breakouts, and VWAP deviations
-                  </p>
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shadow-sm">
+                    <Zap className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white tracking-wide">
+                      Intraday Radar Scanner ({scannerMarket})
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Real-time momentum, ORB breakouts, and VWAP deviations
+                    </p>
+                  </div>
                 </div>
                 <InfoBadge infoKey="intraday_rvol" />
               </div>
 
               {scannerLoading ? (
-                <div className="h-48 flex items-center justify-center text-xs text-slate-400">
-                  <RefreshCw className="w-4 h-4 animate-spin mr-2 text-cyan-400" />
-                  Scanning high-liquidity universe...
+                <div className="h-48 flex flex-col items-center justify-center text-xs text-slate-400 gap-2">
+                  <RefreshCw className="w-5 h-5 animate-spin text-cyan-400" />
+                  <span>Scanning high-liquidity universe...</span>
                 </div>
               ) : (
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-slate-800">
                   {scannerData.map((item) => (
                     <div
                       key={item.ticker}
                       onClick={() => changeTicker(item.ticker)}
-                      className={`flex items-center justify-between p-2.5 rounded-2xl border transition cursor-pointer ${
+                      className={`flex items-center justify-between p-3 rounded-2xl border transition cursor-pointer ${
                         ticker === item.ticker
-                          ? 'bg-cyan-500/10 border-cyan-500/40'
-                          : 'bg-slate-950/60 hover:bg-slate-950 border-slate-800/60'
+                          ? 'bg-cyan-500/15 border-cyan-500/50 shadow-[0_0_12px_rgba(56,189,248,0.15)]'
+                          : 'bg-slate-950/70 hover:bg-slate-950 border-slate-800/80 hover:border-slate-700'
                       }`}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <div className={`p-1.5 rounded-xl ${item.change_pct >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-xl ${item.change_pct >= 0 ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'}`}>
                           {item.change_pct >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs text-white">{item.ticker.split('.')[0]}</span>
-                            <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${
-                              item.orb_status === 'BREAKOUT' ? 'bg-emerald-500/20 text-emerald-400' :
-                              item.orb_status === 'BREAKDOWN' ? 'bg-rose-500/20 text-rose-400' :
-                              'bg-slate-800 text-slate-400'
+                            <span className="font-bold text-sm text-white">{item.ticker.split('.')[0]}</span>
+                            <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full border ${
+                              item.orb_status === 'BREAKOUT' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' :
+                              item.orb_status === 'BREAKDOWN' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
+                              'bg-slate-800/80 text-slate-400 border-slate-700'
                             }`}>
                               {item.orb_status}
                             </span>
                           </div>
-                          <p className="text-[10px] text-slate-400 font-mono">
+                          <p className="text-[11px] text-slate-400 font-mono mt-0.5">
                             VWAP Dist: <strong className={item.vwap_dist_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
                               {item.vwap_dist_pct >= 0 ? '+' : ''}{item.vwap_dist_pct}%
                             </strong>
-                            {item.rvol && <span className={`ml-2 ${item.rvol >= 2 ? 'text-amber-400' : item.rvol >= 1.5 ? 'text-cyan-400' : 'text-slate-500'}`}>
-                              RVOL {item.rvol}×
-                            </span>}
+                            {item.rvol && (
+                              <span className={`ml-2 px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                                item.rvol >= 2
+                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                  : item.rvol >= 1.5
+                                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                                  : 'text-slate-500'
+                              }`}>
+                                RVOL {item.rvol}×
+                              </span>
+                            )}
                           </p>
                         </div>
                       </div>
 
                       <div className="text-right font-mono">
-                        <span className="text-xs font-bold text-white">
+                        <span className="text-sm font-bold text-white block">
                           {item.currency_symbol}{item.price}
                         </span>
-                        <span className={`block text-[11px] font-semibold ${item.change_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-md mt-0.5 ${
+                          item.change_pct >= 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'
+                        }`}>
                           {item.change_pct >= 0 ? '+' : ''}{item.change_pct}%
                         </span>
                       </div>
                     </div>
                   ))}
                   {scannerData.length === 0 && (
-                    <div className="h-28 flex flex-col items-center justify-center text-xs text-slate-500 gap-2">
+                    <div className="h-32 flex flex-col items-center justify-center text-xs text-slate-500 gap-2 bg-slate-950/40 rounded-2xl border border-slate-800/60">
                       <Zap className="w-5 h-5 text-slate-700" />
-                      No high-momentum setups detected in current session.
+                      <span>No high-momentum setups detected in current session.</span>
                     </div>
                   )}
                 </div>
               )}
             </div>
 
-            <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+            <div className="mt-4 pt-3.5 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
               <span>Click any opportunity to load into terminal</span>
               <button
                 onClick={fetchScanner}
-                className="text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1 text-xs"
+                className="text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1.5 text-xs bg-cyan-500/10 hover:bg-cyan-500/20 px-3 py-1 rounded-xl border border-cyan-500/30 transition"
               >
-                <RefreshCw className="w-3 h-3" /> Rescan Now
+                <RefreshCw className="w-3.5 h-3.5" /> Rescan Now
               </button>
             </div>
           </div>
         </div>
 
         {/* ── OPTIONS PCR + BLOCK DEALS + TRADE LOG ROW ──────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* Options Put-Call Ratio Widget */}
-          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 backdrop-blur-md">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-1.5">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Scale className="w-4 h-4 text-purple-400" />
-                  Options Put-Call Ratio
-                </h3>
-                <InfoBadge infoKey="options_pcr" />
-              </div>
-              <div className="flex items-center gap-2">
-                {pcrLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />}
-                <button onClick={fetchPCR} className="text-slate-500 hover:text-slate-300 transition">
-                  <RefreshCw className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
-
-            {pcrData ? (
-              pcrData.available === false ? (
-                <div className="h-36 flex flex-col items-center justify-center p-3 text-center bg-slate-950/40 rounded-2xl border border-slate-800/60">
-                  <Scale className="w-6 h-6 text-slate-600 mb-2" />
-                  <span className="text-xs font-semibold text-slate-300 mb-1">Derivatives Unavailable</span>
-                  <p className="text-[11px] text-slate-500 max-w-[220px] leading-relaxed">
-                    {pcrData.message || 'Options chain data is available for US securities and select F&O listings.'}
-                  </p>
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 shadow-sm">
+                    <Scale className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white tracking-wide">
+                      Options Put-Call Ratio
+                    </h3>
+                    <p className="text-[11px] text-slate-400">Macro derivatives sentiment &amp; pain</p>
+                  </div>
                 </div>
+                <div className="flex items-center gap-2">
+                  <InfoBadge infoKey="options_pcr" />
+                  <button
+                    onClick={fetchPCR}
+                    className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition border border-slate-700/60"
+                    title="Refresh PCR data"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${pcrLoading ? 'animate-spin text-cyan-400' : ''}`} />
+                  </button>
+                </div>
+              </div>
+
+              {pcrData ? (
+                pcrData.available === false ? (
+                  <div className="h-44 flex flex-col items-center justify-center p-4 text-center bg-slate-950/50 rounded-2xl border border-slate-800/80">
+                    <Scale className="w-7 h-7 text-slate-600 mb-2" />
+                    <span className="text-xs font-bold text-slate-300 mb-1">Derivatives Unavailable</span>
+                    <p className="text-[11px] text-slate-400 max-w-[220px] leading-relaxed">
+                      {pcrData.message || 'Options chain data is available for US securities and select NSE F&O listings.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3.5">
+                    {pcrData.is_index_benchmark && (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-purple-500/10 border border-purple-500/30 text-[10px] text-purple-300 font-mono">
+                        <Scale className="w-3 h-3 text-purple-400" />
+                        <span>{pcrData.benchmark_name} Macro Derivatives Sentiment</span>
+                      </div>
+                    )}
+
+                    <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800/80 flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-sans uppercase font-bold tracking-wider block">PCR OI Ratio</span>
+                        <div className="flex items-baseline gap-1.5 mt-0.5">
+                          <span className={`text-2xl font-black font-mono ${
+                            pcrData.color === 'bearish' ? 'text-rose-400' :
+                            pcrData.color === 'bullish' ? 'text-emerald-400' : 'text-amber-400'
+                          }`}>
+                            {pcrData.pcr_oi}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono">OI</span>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <span className={`inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase ${
+                          pcrData.color === 'bearish' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-[0_0_8px_rgba(244,63,94,0.2)]' :
+                          pcrData.color === 'bullish' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.2)]' :
+                          'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-[0_0_8px_rgba(245,158,11,0.2)]'
+                        }`}>
+                          {pcrData.sentiment?.replace('_', ' ')}
+                        </span>
+                        <p className="text-[10px] text-slate-400 mt-1 font-mono">{pcrData.expiry_date}</p>
+                      </div>
+                    </div>
+
+                    {/* Put vs Call OI distribution bar */}
+                    <div className="space-y-1.5 p-3 rounded-2xl bg-slate-950/60 border border-slate-800/60">
+                      <div className="flex justify-between text-[10px] font-mono">
+                        <span className="text-emerald-400 font-bold">Calls: {(pcrData.call_oi / 1000).toFixed(0)}K OI</span>
+                        <span className="text-rose-400 font-bold">Puts: {(pcrData.put_oi / 1000).toFixed(0)}K OI</span>
+                      </div>
+                      <div className="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden flex p-0.5 border border-slate-800">
+                        {(() => {
+                          const total = (pcrData.call_oi || 0) + (pcrData.put_oi || 0) || 1;
+                          const callPct = Math.round((pcrData.call_oi / total) * 100);
+                          return (
+                            <>
+                              <div className="bg-gradient-to-r from-emerald-600 to-emerald-400 h-full rounded-l-full transition-all duration-500" style={{ width: `${callPct}%` }} />
+                              <div className="bg-gradient-to-r from-rose-500 to-rose-600 h-full rounded-r-full transition-all duration-500" style={{ width: `${100 - callPct}%` }} />
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    {pcrData.max_pain_strike && (
+                      <div className="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
+                        <span className="text-slate-400 font-medium">Max Pain Strike:</span>
+                        <span className="font-bold font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/25">
+                          {currSym}{pcrData.max_pain_strike}
+                        </span>
+                      </div>
+                    )}
+
+                    <p className="text-[11px] text-slate-400 leading-snug pt-1">
+                      💡 {pcrData.sentiment_label}
+                    </p>
+                  </div>
+                )
               ) : (
-                <div className="space-y-3">
-                  {pcrData.is_index_benchmark && (
-                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-purple-500/10 border border-purple-500/30 text-[10px] text-purple-300 font-mono">
-                      <Scale className="w-3 h-3 text-purple-400" />
-                      <span>{pcrData.benchmark_name} Macro Derivatives Sentiment</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className={`text-2xl font-black font-mono ${
-                        pcrData.color === 'bearish' ? 'text-rose-400' :
-                        pcrData.color === 'bullish' ? 'text-emerald-400' : 'text-amber-400'
-                      }`}>{pcrData.pcr_oi}</span>
-                      <span className="text-slate-500 text-xs ml-1">PCR OI</span>
-                    </div>
-                    <div className="text-right">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        pcrData.color === 'bearish' ? 'bg-rose-500/20 text-rose-400' :
-                        pcrData.color === 'bullish' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                      }`}>{pcrData.sentiment?.replace('_', ' ')}</span>
-                      <p className="text-[10px] text-slate-400 mt-0.5">{pcrData.expiry_date}</p>
-                    </div>
-                  </div>
-
-                  {/* Put vs Call OI bar */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-[10px] font-mono">
-                      <span className="text-emerald-400">Calls: {(pcrData.call_oi / 1000).toFixed(0)}K OI</span>
-                      <span className="text-rose-400">Puts: {(pcrData.put_oi / 1000).toFixed(0)}K OI</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden flex">
-                      {(() => {
-                        const total = (pcrData.call_oi || 0) + (pcrData.put_oi || 0) || 1;
-                        const callPct = Math.round((pcrData.call_oi / total) * 100);
-                        return (
-                          <>
-                            <div className="bg-emerald-500 h-full transition-all" style={{ width: `${callPct}%` }} />
-                            <div className="bg-rose-500 h-full transition-all" style={{ width: `${100 - callPct}%` }} />
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
-
-                  {pcrData.max_pain_strike && (
-                    <div className="p-2 bg-slate-950/60 rounded-xl border border-slate-800 flex justify-between text-xs">
-                      <span className="text-slate-400">Max Pain Strike:</span>
-                      <span className="font-bold font-mono text-amber-400">{currSym}{pcrData.max_pain_strike}</span>
-                    </div>
-                  )}
-
-                  <p className="text-[10px] text-slate-500 leading-snug">{pcrData.sentiment_label}</p>
+                <div className="h-44 flex items-center justify-center text-xs text-slate-500">
+                  {pcrLoading ? 'Loading options chain...' : 'No options data available for this ticker'}
                 </div>
-              )
-            ) : (
-              <div className="h-32 flex items-center justify-center text-xs text-slate-500">
-                {pcrLoading ? 'Loading options chain...' : 'No options data available for this ticker'}
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {/* NSE Block / Bulk Deals */}
-          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 backdrop-blur-md">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-1.5">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Flame className="w-4 h-4 text-orange-400" />
-                  NSE Block &amp; Bulk Deals
-                </h3>
-                <InfoBadge infoKey="block_deals" />
-              </div>
-              <div className="flex items-center gap-2">
-                {blockDeals && ((blockDeals.block_deals?.length || 0) > 0 || (blockDeals.bulk_deals?.length || 0) > 0) && (
-                  <button
-                    onClick={exportBlockDealsCSV}
-                    title="Export NSE Block & Bulk Deals to CSV"
-                    className="text-xs font-semibold px-2 py-0.5 rounded-lg border bg-slate-800 text-slate-300 border-slate-700 hover:text-orange-400 hover:border-orange-500/40 transition flex items-center gap-1 cursor-pointer"
-                  >
-                    <Download className="w-3 h-3" />
-                    <span className="hidden sm:inline">CSV</span>
-                  </button>
-                )}
-                {blockDealsLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />}
-              </div>
-            </div>
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-400 shadow-sm">
+                    <Flame className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white tracking-wide">
+                      NSE Block &amp; Bulk Deals
+                    </h3>
+                    <p className="text-[11px] text-slate-400">Institutional smart-money prints</p>
+                  </div>
+                </div>
 
-            {scannerMarket !== 'IN' ? (
-              <div className="h-32 flex items-center justify-center text-xs text-slate-500 text-center">
-                Block/Bulk deal feed is available for NSE (Indian market) only.
+                <div className="flex items-center gap-2">
+                  <InfoBadge infoKey="block_deals" />
+                  {blockDeals && ((blockDeals.block_deals?.length || 0) > 0 || (blockDeals.bulk_deals?.length || 0) > 0) && (
+                    <button
+                      onClick={exportBlockDealsCSV}
+                      title="Export NSE Block & Bulk Deals to CSV"
+                      className="text-xs font-semibold px-2.5 py-1 rounded-lg border bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700 hover:text-orange-400 hover:border-orange-500/40 transition flex items-center gap-1 cursor-pointer shadow-sm"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span className="hidden sm:inline">CSV</span>
+                    </button>
+                  )}
+                  {blockDealsLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />}
+                </div>
               </div>
-            ) : blockDeals ? (
-              <div className="space-y-2 max-h-52 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
-                {[...(blockDeals.block_deals || []).map(d => ({...d, type: 'BLOCK'})),
-                   ...(blockDeals.bulk_deals || []).map(d => ({...d, type: 'BULK'}))].slice(0, 15).map((deal, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => deal.symbol && changeTicker(deal.symbol + '.NS')}
-                    className="flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800/60 hover:border-slate-700 cursor-pointer transition text-xs"
-                  >
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-white">{deal.symbol}</span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                          deal.type === 'BLOCK' ? 'bg-purple-500/20 text-purple-400' : 'bg-orange-500/20 text-orange-400'
-                        }`}>{deal.type}</span>
-                        <span className={`text-[9px] font-semibold ${
-                          deal.trade_type === 'B' || deal.trade_type === 'BUY' ? 'text-emerald-400' : 'text-rose-400'
-                        }`}>{deal.trade_type === 'B' || deal.trade_type === 'BUY' ? 'BUY' : 'SELL'}</span>
+
+              {scannerMarket !== 'IN' ? (
+                <div className="h-44 flex items-center justify-center text-xs text-slate-500 text-center p-4 bg-slate-950/40 rounded-2xl border border-slate-800/60">
+                  Block/Bulk deal feed is available for NSE (Indian market) securities only.
+                </div>
+              ) : blockDeals ? (
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-slate-800">
+                  {[...(blockDeals.block_deals || []).map(d => ({...d, type: 'BLOCK'})),
+                     ...(blockDeals.bulk_deals || []).map(d => ({...d, type: 'BULK'}))].slice(0, 15).map((deal, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => deal.symbol && changeTicker(deal.symbol + '.NS')}
+                      className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-950/70 border border-slate-800/70 hover:border-slate-700 cursor-pointer transition text-xs hover:bg-slate-950"
+                    >
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-white text-xs">{deal.symbol}</span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border uppercase ${
+                            deal.type === 'BLOCK'
+                              ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                              : 'bg-orange-500/20 text-orange-300 border-orange-500/40'
+                          }`}>
+                            {deal.type}
+                          </span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${
+                            deal.trade_type === 'B' || deal.trade_type === 'BUY'
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                              : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                          }`}>
+                            {deal.trade_type === 'B' || deal.trade_type === 'BUY' ? 'BUY' : 'SELL'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1 truncate max-w-[130px] font-sans">
+                          {deal.client || 'Undisclosed'}
+                        </p>
                       </div>
-                      <p className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[120px]">{deal.client || 'Undisclosed'}</p>
+
+                      <div className="text-right font-mono">
+                        <span className="text-slate-200 font-bold block">{deal.quantity?.toLocaleString() || '—'}</span>
+                        <p className="text-[10px] text-slate-400 mt-0.5">@ ₹{deal.price || deal.avg_price || '—'}</p>
+                      </div>
                     </div>
-                    <div className="text-right font-mono">
-                      <span className="text-slate-300 font-semibold">{deal.quantity?.toLocaleString() || '—'}</span>
-                      <p className="text-[10px] text-slate-500">@ ₹{deal.price || deal.avg_price || '—'}</p>
+                  ))}
+                  {blockDeals.block_count === 0 && blockDeals.bulk_count === 0 && (
+                    <div className="h-44 flex flex-col items-center justify-center text-xs text-slate-400 p-4 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center gap-2">
+                      <span className="font-bold text-slate-300">Dedicated Window Schedule</span>
+                      <p className="text-[11px] text-slate-400 max-w-[230px] leading-relaxed">
+                        {blockDeals.next_window || 'Block Deals execute in two windows (08:45 AM & 02:05 PM IST). Bulk deals report at EOD.'}
+                      </p>
+                      <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-cyan-400 font-semibold mt-0.5">
+                        Status: {blockDeals.window_status || 'STANDBY'}
+                      </span>
                     </div>
-                  </div>
-                ))}
-                {blockDeals.block_count === 0 && blockDeals.bulk_count === 0 && (
-                  <div className="h-32 flex flex-col items-center justify-center text-xs text-slate-400 p-3 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center gap-1.5">
-                    <span className="font-bold text-slate-300">Dedicated Window Schedule</span>
-                    <p className="text-[11px] text-slate-500 max-w-[230px] leading-relaxed">
-                      {blockDeals.next_window || 'Block Deals execute in two windows (08:45 AM & 02:05 PM IST). Bulk deals report at EOD.'}
-                    </p>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-cyan-400 font-semibold mt-0.5">
-                      Status: {blockDeals.window_status || 'STANDBY'}
-                    </span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="h-32 flex items-center justify-center text-xs text-slate-500">
-                Loading NSE deal feed...
-              </div>
-            )}
+                  )}
+                </div>
+              ) : (
+                <div className="h-44 flex items-center justify-center text-xs text-slate-500">
+                  Loading NSE deal feed...
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Trade Log with Live P&L */}
-          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 backdrop-blur-md">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-1.5">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <BarChart2 className="w-4 h-4 text-cyan-400" />
-                  Trade Log & P&L Tracker
-                </h3>
-                <InfoBadge infoKey="trade_log" />
-              </div>
-              <div className="flex items-center gap-1.5">
-                {tradeLog.length > 0 && (
-                  <button
-                    onClick={exportTradeLogCSV}
-                    className="text-xs font-semibold px-2 py-1 rounded-lg border bg-slate-800 text-slate-300 border-slate-700 hover:text-emerald-400 hover:border-emerald-500/40 transition flex items-center gap-1"
-                    title="Export logged trades as CSV spreadsheet"
-                  >
-                    <Download className="w-3 h-3" />
-                    <span className="hidden sm:inline">CSV</span>
-                  </button>
-                )}
-                <button
-                  onClick={() => setTradeLogOpen(!tradeLogOpen)}
-                  className={`text-xs font-semibold px-2 py-1 rounded-lg border transition ${
-                    tradeLogOpen ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'
-                  }`}
-                >
-                  {tradeLogOpen ? 'Hide Form' : '+ Log Trade'}
-                </button>
-              </div>
-            </div>
-
-            {tradeLogOpen && (
-              <div className="mb-3 p-3 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    value={newTrade.ticker}
-                    onChange={e => setNewTrade(p => ({...p, ticker: e.target.value}))}
-                    placeholder="Ticker (e.g. SBIN)"
-                    className="col-span-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-                  />
-                  <select
-                    value={newTrade.direction}
-                    onChange={e => setNewTrade(p => ({...p, direction: e.target.value}))}
-                    className="col-span-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none"
-                  >
-                    <option value="LONG">LONG</option>
-                    <option value="SHORT">SHORT</option>
-                  </select>
-                  <input
-                    type="number" step="0.05"
-                    value={newTrade.entry}
-                    onChange={e => setNewTrade(p => ({...p, entry: e.target.value}))}
-                    placeholder="Entry price"
-                    className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-                  />
-                  <input
-                    type="number" step="0.05"
-                    value={newTrade.exit}
-                    onChange={e => setNewTrade(p => ({...p, exit: e.target.value}))}
-                    placeholder="Exit price (optional)"
-                    className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-                  />
-                  <input
-                    type="number"
-                    value={newTrade.qty}
-                    onChange={e => setNewTrade(p => ({...p, qty: e.target.value}))}
-                    placeholder="Qty / Shares"
-                    className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none"
-                  />
-                  <button
-                    onClick={() => setNewTrade(p => ({...p, ticker: ticker.split('.')[0], entry: data?.current_price?.toString() || ''}))}
-                    className="bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg px-2 py-1.5 text-xs font-semibold transition"
-                  >
-                    Sync Live
-                  </button>
-                </div>
-                <button
-                  onClick={addTradeEntry}
-                  className="w-full py-2 bg-gradient-to-r from-cyan-500/20 to-emerald-500/20 hover:from-cyan-500/30 border border-cyan-500/30 text-cyan-300 font-bold rounded-xl text-xs transition"
-                >
-                  Add to Trade Log
-                </button>
-              </div>
-            )}
-
-            {/* Trade Log Summary */}
-            {tradeLog.length > 0 && (() => {
-              const closed = tradeLog.filter(t => t.status !== 'OPEN');
-              const totalPnl = closed.reduce((s, t) => s + (t.grossPnl || 0), 0);
-              const wins = closed.filter(t => t.status === 'WIN').length;
-              const winRate = closed.length ? Math.round((wins / closed.length) * 100) : 0;
-              return (
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <span className="text-[10px] text-slate-400">{closed.length} closed · {winRate}% W/R</span>
-                  <span className={`text-xs font-bold font-mono ${totalPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    Net P&L: {totalPnl >= 0 ? '+' : ''}{currSym}{totalPnl.toLocaleString()}
-                  </span>
-                </div>
-              );
-            })()}
-
-            <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
-              {tradeLog.slice(0, 20).map(t => (
-                <div key={t.id} className={`flex items-center justify-between p-2 rounded-xl border text-xs ${
-                  t.status === 'WIN' ? 'bg-emerald-500/5 border-emerald-500/20' :
-                  t.status === 'LOSS' ? 'bg-rose-500/5 border-rose-500/20' :
-                  'bg-slate-950/60 border-slate-800'
-                }`}>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${
-                      t.direction === 'LONG' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
-                    }`}>{t.direction}</span>
-                    <div>
-                      <span className="font-bold text-white">{t.ticker}</span>
-                      <span className="text-slate-500 ml-1 font-mono">{t.time}</span>
-                      {t.note && <p className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[110px]">{t.note}</p>}
-                    </div>
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 shadow-sm">
+                    <BarChart2 className="w-4 h-4" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`font-bold font-mono ${
-                      t.status === 'WIN' ? 'text-emerald-400' :
-                      t.status === 'LOSS' ? 'text-rose-400' : 'text-slate-400'
-                    }`}>
-                      {t.grossPnl !== null ? `${t.grossPnl >= 0 ? '+' : ''}${currSym}${t.grossPnl}` : 'OPEN'}
-                    </span>
-                    <button onClick={() => removeTrade(t.id)} className="text-slate-600 hover:text-rose-400 transition">
-                      <Trash2 className="w-3 h-3" />
+                  <div>
+                    <h3 className="text-sm font-bold text-white tracking-wide">
+                      Trade Log &amp; P&amp;L Tracker
+                    </h3>
+                    <p className="text-[11px] text-slate-400">Position ledger &amp; win rate telemetry</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <InfoBadge infoKey="trade_log" />
+                  {tradeLog.length > 0 && (
+                    <button
+                      onClick={exportTradeLogCSV}
+                      className="text-xs font-semibold px-2.5 py-1 rounded-lg border bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700 hover:text-emerald-400 hover:border-emerald-500/40 transition flex items-center gap-1 shadow-sm"
+                      title="Export logged trades as CSV spreadsheet"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span className="hidden sm:inline">CSV</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setTradeLogOpen(!tradeLogOpen)}
+                    className={`text-xs font-semibold px-3 py-1 rounded-xl border transition shadow-sm ${
+                      tradeLogOpen
+                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-[0_0_8px_rgba(56,189,248,0.2)] font-bold'
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                    }`}
+                  >
+                    {tradeLogOpen ? 'Hide Form' : '+ Log Trade'}
+                  </button>
+                </div>
+              </div>
+
+              {tradeLogOpen && (
+                <div className="mb-3.5 p-3.5 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-2.5 shadow-inner">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      value={newTrade.ticker}
+                      onChange={e => setNewTrade(p => ({...p, ticker: e.target.value}))}
+                      placeholder="Ticker (e.g. SBIN)"
+                      className="col-span-1 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 shadow-inner"
+                    />
+                    <select
+                      value={newTrade.direction}
+                      onChange={e => setNewTrade(p => ({...p, direction: e.target.value}))}
+                      className="col-span-1 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 shadow-inner"
+                    >
+                      <option value="LONG">LONG</option>
+                      <option value="SHORT">SHORT</option>
+                    </select>
+                    <input
+                      type="number" step="0.05"
+                      value={newTrade.entry}
+                      onChange={e => setNewTrade(p => ({...p, entry: e.target.value}))}
+                      placeholder="Entry price"
+                      className="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 shadow-inner"
+                    />
+                    <input
+                      type="number" step="0.05"
+                      value={newTrade.exit}
+                      onChange={e => setNewTrade(p => ({...p, exit: e.target.value}))}
+                      placeholder="Exit price (optional)"
+                      className="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 shadow-inner"
+                    />
+                    <input
+                      type="number"
+                      value={newTrade.qty}
+                      onChange={e => setNewTrade(p => ({...p, qty: e.target.value}))}
+                      placeholder="Qty / Shares"
+                      className="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 shadow-inner"
+                    />
+                    <button
+                      onClick={() => setNewTrade(p => ({...p, ticker: ticker.split('.')[0], entry: data?.current_price?.toString() || ''}))}
+                      className="bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl px-2 py-1.5 text-xs font-semibold transition border border-slate-700 shadow-sm"
+                    >
+                      Sync Live
                     </button>
                   </div>
-                </div>
-              ))}
-              {tradeLog.length === 0 && !tradeLogOpen && (
-                <div className="h-24 flex items-center justify-center text-xs text-slate-500">
-                  No trades logged yet. Click &quot;+ Log Trade&quot; above to start tracking positions.
+                  <button
+                    onClick={addTradeEntry}
+                    className="w-full py-2 bg-gradient-to-r from-cyan-500/20 to-emerald-500/20 hover:from-cyan-500/30 border border-cyan-500/40 text-cyan-300 font-bold rounded-xl text-xs transition shadow-sm"
+                  >
+                    Add to Trade Log
+                  </button>
                 </div>
               )}
+
+              {/* Trade Log Summary */}
+              {tradeLog.length > 0 && (() => {
+                const closed = tradeLog.filter(t => t.status !== 'OPEN');
+                const totalPnl = closed.reduce((s, t) => s + (t.grossPnl || 0), 0);
+                const wins = closed.filter(t => t.status === 'WIN').length;
+                const winRate = closed.length ? Math.round((wins / closed.length) * 100) : 0;
+                return (
+                  <div className="flex items-center justify-between mb-3 px-2 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800/80">
+                    <span className="text-[11px] font-mono text-slate-400">
+                      {closed.length} closed · <strong className="text-white">{winRate}%</strong> W/R
+                    </span>
+                    <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded-lg border ${
+                      totalPnl >= 0
+                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                        : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                    }`}>
+                      Net P&amp;L: {totalPnl >= 0 ? '+' : ''}{currSym}{totalPnl.toLocaleString()}
+                    </span>
+                  </div>
+                );
+              })()}
+
+              <div className="space-y-2 max-h-52 overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-slate-800">
+                {tradeLog.slice(0, 20).map(t => (
+                  <div key={t.id} className={`flex items-center justify-between p-2.5 rounded-2xl border text-xs transition ${
+                    t.status === 'WIN' ? 'bg-emerald-500/10 border-emerald-500/30' :
+                    t.status === 'LOSS' ? 'bg-rose-500/10 border-rose-500/30' :
+                    'bg-slate-950/70 border-slate-800/80'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase ${
+                        t.direction === 'LONG'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                      }`}>{t.direction}</span>
+                      <div>
+                        <span className="font-bold text-white text-xs">{t.ticker}</span>
+                        <span className="text-slate-500 ml-1.5 font-mono text-[10px]">{t.time}</span>
+                        {t.note && <p className="text-[10px] text-slate-400 mt-0.5 truncate max-w-[110px] font-sans">{t.note}</p>}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5">
+                      <span className={`font-bold font-mono text-xs ${
+                        t.status === 'WIN' ? 'text-emerald-400' :
+                        t.status === 'LOSS' ? 'text-rose-400' : 'text-slate-400'
+                      }`}>
+                        {t.grossPnl !== null ? `${t.grossPnl >= 0 ? '+' : ''}${currSym}{t.grossPnl}` : 'OPEN'}
+                      </span>
+                      <button onClick={() => removeTrade(t.id)} className="text-slate-600 hover:text-rose-400 transition p-1">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {tradeLog.length === 0 && !tradeLogOpen && (
+                  <div className="h-32 flex flex-col items-center justify-center text-xs text-slate-400 p-4 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center gap-1">
+                    <BarChart2 className="w-6 h-6 text-slate-600 mb-1" />
+                    <span>No trades logged in current session.</span>
+                    <span className="text-[11px] text-slate-500">Click &quot;+ Log Trade&quot; to track your live setups.</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -3385,10 +3809,10 @@ export default function IntradayTerminal() {
         {/* ── PRO KEYBOARD SHORTCUTS MODAL ─────────────────────────────────── */}
         {showHotkeysModal && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-slate-900 border border-slate-700/80 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-cyan-500/15 border border-cyan-500/30 rounded-2xl shadow-sm">
                     <Keyboard className="w-5 h-5 text-cyan-400" />
                   </div>
                   <div>
@@ -3398,13 +3822,13 @@ export default function IntradayTerminal() {
                 </div>
                 <button
                   onClick={() => setShowHotkeysModal(false)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-white bg-slate-800/80 transition"
+                  className="p-2 rounded-xl text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 transition border border-slate-700/60"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 text-xs max-h-[60vh] overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-2 text-xs max-h-[60vh] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-slate-800">
                 {[
                   { key: '/', desc: 'Focus Ticker Search' },
                   { key: '1, 2, 3, 5', desc: '1m, 2m, 3m, 5m Timeframe' },
@@ -3420,19 +3844,19 @@ export default function IntradayTerminal() {
                   { key: '?', desc: 'Open this Shortcuts HUD' },
                   { key: 'ESC', desc: 'Close Modals & Blur Input' },
                 ].map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 border border-slate-800">
-                    <span className="text-slate-300">{item.desc}</span>
-                    <kbd className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-cyan-400 font-mono font-bold text-[11px]">
+                  <div key={idx} className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-950/80 border border-slate-800/80 hover:border-slate-700 transition">
+                    <span className="text-slate-300 font-medium">{item.desc}</span>
+                    <kbd className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-cyan-300 font-mono font-bold text-[11px] shadow-sm">
                       {item.key}
                     </kbd>
                   </div>
                 ))}
               </div>
 
-              <div className="pt-2 border-t border-slate-800 flex justify-end">
+              <div className="pt-3 border-t border-slate-800 flex justify-end">
                 <button
                   onClick={() => setShowHotkeysModal(false)}
-                  className="px-4 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-bold text-xs transition border border-cyan-500/40"
+                  className="px-5 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-bold text-xs transition border border-cyan-500/40 shadow-sm"
                 >
                   Got it (Esc)
                 </button>
