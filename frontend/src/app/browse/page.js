@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Search, X, TrendingUp, TrendingDown,
-  ChevronRight, Sparkles, Filter, RefreshCw, Flame, Award, ShieldAlert, Activity
+  ChevronRight, Sparkles, Filter, RefreshCw, Flame, Award, ShieldAlert, Activity, Download
 } from 'lucide-react';
 import { smartSearch } from '../utils/smartSearch';
 
@@ -444,6 +444,69 @@ export default function BrowsePage() {
     }
   }, [activeTab]);
 
+  const handleExportScreenerCSV = () => {
+    const list = screenerData?.[activeTab];
+    if (!list || list.length === 0) return;
+
+    const headers = [
+      'Ticker', 'Company Name', 'Price', 'Change %', 'Volume',
+      '52W High', '52W Low', '% From 52W High', '% From 52W Low', 'Volume Shock'
+    ];
+    const rows = list.map(s => [
+      `"${s.ticker || ''}"`,
+      `"${(s.longName || '').replace(/"/g, '""')}"`,
+      s.price ?? '',
+      s.changePct ?? '',
+      s.volume ?? '',
+      s.fiftyTwoWeekHigh ?? '',
+      s.fiftyTwoWeekLow ?? '',
+      s.pct_from_52w_high ?? '',
+      s.pct_from_52w_low ?? '',
+      s.volumeShock ?? ''
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(r => r.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `market_screener_${activeTab}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCategoryCSV = () => {
+    if (!filteredTickers || filteredTickers.length === 0) return;
+    const cleanSector = (activeSector || 'Category').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const headers = ['Symbol', 'Company Name', 'Sector'];
+    const rows = filteredTickers.map(s => [
+      `"${s.symbol || ''}"`,
+      `"${(s.name || s.symbol || '').replace(/"/g, '""')}"`,
+      `"${s.sector || activeSector || ''}"`
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(r => r.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `stocks_${cleanSector}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -677,22 +740,48 @@ export default function BrowsePage() {
               })}
             </div>
 
-            {/* Index Selector Dropdown */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '6px 16px',
-              background: 'transparent',
-              border: '1px solid #2d3748',
-              borderRadius: '9999px',
-              color: '#cbd5e1',
-              fontSize: '12px',
-              fontWeight: 600,
-              cursor: 'pointer'
-            }}>
-              <span>Nifty Total Market</span>
-              <span style={{ fontSize: '8px', opacity: 0.6 }}>▼</span>
+            {/* Index Selector & Export Controls */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 16px',
+                background: 'transparent',
+                border: '1px solid #2d3748',
+                borderRadius: '9999px',
+                color: '#cbd5e1',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}>
+                <span>Nifty Total Market</span>
+                <span style={{ fontSize: '8px', opacity: 0.6 }}>▼</span>
+              </div>
+
+              {screenerData && screenerData[activeTab]?.length > 0 && (
+                <button
+                  onClick={handleExportScreenerCSV}
+                  title={`Export ${tabTitle} to CSV`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 14px',
+                    background: 'rgba(59,130,246,0.1)',
+                    border: '1px solid rgba(59,130,246,0.3)',
+                    borderRadius: '9999px',
+                    color: '#60a5fa',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.12s ease',
+                  }}
+                >
+                  <Download style={{ width: '13px', height: '13px' }} />
+                  <span>Export CSV</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -834,30 +923,58 @@ export default function BrowsePage() {
           <div style={{
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'space-between',
             gap: '12px',
             marginBottom: '20px',
             paddingBottom: '16px',
-            borderBottom: '1px solid #282828'
+            borderBottom: '1px solid #282828',
+            flexWrap: 'wrap'
           }}>
-            <div style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '8px',
-              background: activeMeta.color + '20',
-              border: `1px solid ${activeMeta.color}40`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '20px'
-            }}>
-              {activeMeta.emoji}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '8px',
+                background: activeMeta.color + '20',
+                border: `1px solid ${activeMeta.color}40`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '20px'
+              }}>
+                {activeMeta.emoji}
+              </div>
+              <div>
+                <h2 style={{ fontSize: '17px', fontWeight: 700, color: '#ffffff' }}>{activeSector}</h2>
+                <p style={{ fontSize: '12px', color: '#aaaaaa' }}>
+                  {filteredTickers.length} {filteredTickers.length === 1 ? 'stock' : 'stocks'} matches
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 style={{ fontSize: '17px', fontWeight: 700, color: '#ffffff' }}>{activeSector}</h2>
-              <p style={{ fontSize: '12px', color: '#aaaaaa' }}>
-                {filteredTickers.length} {filteredTickers.length === 1 ? 'stock' : 'stocks'} matches
-              </p>
-            </div>
+
+            {filteredTickers.length > 0 && (
+              <button
+                onClick={handleExportCategoryCSV}
+                title={`Export ${activeSector} stocks list to CSV`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 14px',
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '6px',
+                  color: '#e2e8f0',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.12s ease',
+                }}
+              >
+                <Download style={{ width: '13px', height: '13px' }} />
+                <span>Export {activeSector} CSV</span>
+              </button>
+            )}
           </div>
 
           {/* Stocks Grid */}
