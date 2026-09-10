@@ -159,7 +159,7 @@ def _calculate_volume_profile(df: pd.DataFrame, n_bins: int = 25) -> Dict[str, A
     }
 
 
-def _calculate_pivots(daily_df: pd.DataFrame) -> Dict[str, Any]:
+def _calculate_pivots(daily_df: pd.DataFrame, today_date = None) -> Dict[str, Any]:
     """
     Computes Camarilla Equation levels (H1-H4, L1-L4), Floor Pivots,
     and Previous Day benchmark boundaries (PDH, PDL, PDC) from the preceding
@@ -172,11 +172,19 @@ def _calculate_pivots(daily_df: pd.DataFrame) -> Dict[str, Any]:
             "floor": {}
         }
 
-    prev_bar = daily_df.iloc[-2] if len(daily_df) >= 2 else daily_df.iloc[-1]
+    if today_date is not None:
+        past_bars = daily_df[daily_df.index.map(lambda d: pd.to_datetime(d).date() < today_date)]
+        if not past_bars.empty:
+            prev_bar = past_bars.iloc[-1]
+        else:
+            prev_bar = daily_df.iloc[-2] if len(daily_df) >= 2 else daily_df.iloc[-1]
+    else:
+        prev_bar = daily_df.iloc[-2] if len(daily_df) >= 2 else daily_df.iloc[-1]
+
     h = float(prev_bar["High"])
     l = float(prev_bar["Low"])
     c = float(prev_bar["Close"])
-    rng = h - l
+    rng = max(h - l, 0.01)
 
     # Camarilla Equation
     h4 = c + (rng * 1.1) / 2.0
@@ -304,7 +312,9 @@ def _calculate_orb(df: pd.DataFrame, interval: str) -> Dict[str, Any]:
 
     curr_close = float(df["Close"].iloc[-1])
 
-    if curr_close > high_15m:
+    if len(df) < count_15m:
+        status = "FORMING_RANGE"
+    elif curr_close > high_15m:
         status = "BULLISH_BREAKOUT"
     elif curr_close < low_15m:
         status = "BEARISH_BREAKDOWN"
@@ -384,7 +394,7 @@ def _calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float 
 
 
 def _calculate_atr(df: pd.DataFrame, period: int = 14) -> np.ndarray:
-    """Computes standard Average True Range (ATR) across candlestick bars."""
+    """Computes Welles Wilder Average True Range (ATR) across candlestick bars."""
     if len(df) < 2:
         return np.zeros(len(df))
     h = df["High"].values
@@ -396,18 +406,20 @@ def _calculate_atr(df: pd.DataFrame, period: int = 14) -> np.ndarray:
     tr2[0] = tr1[0]
     tr3[0] = tr1[0]
     tr = np.maximum(tr1, np.maximum(tr2, tr3))
-    atr = pd.Series(tr).rolling(period, min_periods=1).mean().values
+    # Welles Wilder exponential smoothing (RMA)
+    atr = pd.Series(tr).ewm(alpha=1.0 / period, adjust=False).mean().values
     return np.nan_to_num(atr, nan=0.0)
 
 
 def _calculate_rsi(series: pd.Series, period: int = 14) -> np.ndarray:
-    """Computes standard Relative Strength Index (RSI)."""
+    """Computes Welles Wilder Relative Strength Index (RSI)."""
     if len(series) < 2:
         return np.full(len(series), 50.0)
 
     delta = series.diff()
-    gain = (delta.where(delta > 0, 0.0)).rolling(window=period, min_periods=1).mean()
-    loss = (-delta.where(delta < 0, 0.0)).rolling(window=period, min_periods=1).mean()
+    # Welles Wilder exponential moving average for gain and loss
+    gain = (delta.where(delta > 0, 0.0)).ewm(com=period - 1, adjust=False, min_periods=period).mean()
+    loss = (-delta.where(delta < 0, 0.0)).ewm(com=period - 1, adjust=False, min_periods=period).mean()
 
     rs = gain / np.maximum(loss, 1e-9)
     rsi = 100.0 - (100.0 / (1.0 + rs))
@@ -448,7 +460,16 @@ def _calculate_gap_intelligence(today_df: pd.DataFrame, daily_df: pd.DataFrame, 
     if daily_df.empty or today_df.empty:
         return {"gap_pts": 0.0, "gap_pct": 0.0, "gap_type": "FLAT", "gap_filled": True, "gap_fill_dist": 0.0, "playbook": "NEUTRAL"}
 
-    prev_bar = daily_df.iloc[-2] if len(daily_df) >= 2 else daily_df.iloc[-1]
+    if not today_df.empty:
+        today_date = pd.to_datetime(today_df.index[-1]).date()
+        past_bars = daily_df[daily_df.index.map(lambda d: pd.to_datetime(d).date() < today_date)]
+        if not past_bars.empty:
+            prev_bar = past_bars.iloc[-1]
+        else:
+            prev_bar = daily_df.iloc[-2] if len(daily_df) >= 2 else daily_df.iloc[-1]
+    else:
+        prev_bar = daily_df.iloc[-2] if len(daily_df) >= 2 else daily_df.iloc[-1]
+
     prev_close = float(prev_bar["Close"])
     prev_high = float(prev_bar["High"])
     prev_low = float(prev_bar["Low"])
@@ -817,7 +838,8 @@ def get_intraday_analysis(
 
         # 2. Fetch daily history for Pivots & Prev Close
         daily_df = get_history(clean_ticker, period="5d", interval="1d")
-        pivots = _calculate_pivots(daily_df)
+        today_date = pd.to_datetime(df.index[-1]).date() if not df.empty else None
+        pivots = _calculate_pivots(daily_df, today_date=today_date)
 
         # 3. Live quote snapshot
         quote = get_quote(clean_ticker)

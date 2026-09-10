@@ -201,20 +201,17 @@ def _detect_regime(df: pd.DataFrame) -> str:
             return "HIGH_VOLATILITY"
     except Exception as e:
         print(f"[ML] HMM Regime detection failed: {e}")
-        # Fallback to simple rule-based classification if HMM fails
+        # Fallback to rule-based volatility regime classification if HMM fails
         try:
-            closes = df['Close'].tail(60)
             vol_now = df['returns'].tail(20).std()
             vol_long = df['returns'].tail(60).std()
-            if vol_now > 1.8 * vol_long: return "HIGH_VOLATILITY"
-            price = closes.iloc[-1]
-            ma20 = closes.rolling(20).mean().iloc[-1]
-            ma50 = closes.rolling(min(50, len(closes))).mean().iloc[-1]
-            if price > ma20 > ma50: return "TRENDING_UP"
-            if price < ma20 < ma50: return "TRENDING_DOWN"
-            return "SIDEWAYS"
-        except:
-            return "UNKNOWN"
+            if vol_now > 1.4 * vol_long or (vol_now * np.sqrt(252) > 0.35):
+                return "HIGH_VOLATILITY"
+            elif vol_now < 0.8 * vol_long or (vol_now * np.sqrt(252) < 0.16):
+                return "LOW_VOLATILITY"
+            return "MEDIUM_VOLATILITY"
+        except Exception:
+            return "MEDIUM_VOLATILITY"
 
 
 def _forecast_garch_volatility(df: pd.DataFrame) -> float:
@@ -306,15 +303,17 @@ def _walk_forward_metrics(X: np.ndarray, y: np.ndarray,
     correct    = np.sign(b_arr) == np.sign(y_arr)
     dir_acc    = float(np.mean(correct) * 100)
 
-    wins  = y_arr[correct]
-    loses = y_arr[~correct]
+    strat_ret = np.sign(b_arr) * y_arr
+    wins = strat_ret[strat_ret > 0]
+    loses = np.abs(strat_ret[strat_ret < 0])
+
     gross_win  = float(wins.sum())  if len(wins)  else 0.0
     gross_loss = float(loses.sum()) if len(loses) else 0.0
-    profit_fac = (gross_win / abs(gross_loss)) if gross_loss < 0 else float('inf')
+    profit_fac = (gross_win / gross_loss) if gross_loss > 0 else (9.99 if gross_win > 0 else 1.0)
     profit_fac = min(profit_fac, 9.99)
 
     avg_win  = float(wins.mean())  if len(wins)  else 0.0
-    avg_loss = float(loses.mean()) if len(loses) else 0.0
+    avg_loss = float(-loses.mean()) if len(loses) else 0.0
 
     # Benchmark: ensemble direction acc - xgb-alone direction acc
     xgb_delta = 0.0

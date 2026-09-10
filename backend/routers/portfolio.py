@@ -152,16 +152,18 @@ def get_portfolio_metrics(ticker: str = Query(..., description="Stock ticker sym
             import math
             
             S = float(hist['Close'].iloc[-1])   # Spot price
+            if S <= 0 or math.isnan(S):
+                S = 1.0
             K = S                                # At-the-money strike
-            T = 30.0 / 365.0                     # 30-day horizon in years
-            r = rf_rate                          # Risk-free rate
-            sigma = max(annual_vol / 100.0, 0.05) # Annualized volatility
+            T = max(30.0 / 365.0, 1e-4)          # 30-day horizon in years
+            r = max(rf_rate, 0.001)              # Risk-free rate
+            sigma = max(annual_vol / 100.0, 0.01) # Annualized volatility
             
-            d1 = (math.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
+            d1 = (math.log(max(S / K, 1e-6)) + (r + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
             d2 = d1 - sigma * math.sqrt(T)
             
-            call_price = S * norm.cdf(d1) - K * math.exp(-r * T) * norm.cdf(d2)
-            put_price  = K * math.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
+            call_price = max(0.0, S * norm.cdf(d1) - K * math.exp(-r * T) * norm.cdf(d2))
+            put_price  = max(0.0, K * math.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1))
             
             # Analytical Options Greeks
             delta_call = norm.cdf(d1)
@@ -419,7 +421,8 @@ def analyze_portfolio(req: PortfolioRequest):
             portfolio_curr_sym = "$" if is_portfolio_us else "₹"
             tk = list(returns_map.keys())[0]
             r  = returns_map[tk]
-            rf = 0.065 / 252
+            rf_rate_holding = 0.045 if is_portfolio_us else 0.065
+            rf = rf_rate_holding / 252
             sharpe = float((r.mean() - rf) / (r.std() + 1e-9) * np.sqrt(252))
             vol    = round(float(r.std() * np.sqrt(252) * 100), 2)
             var95  = round(-1.645 * float(r.std()) * total_value, 2)

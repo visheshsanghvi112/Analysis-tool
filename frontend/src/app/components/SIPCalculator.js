@@ -72,17 +72,20 @@ function calcXIRR(cashflows, dates) {
 
   let rate = 0.1;
   for (let iter = 0; iter < 100; iter++) {
+    if (rate <= -0.999) rate = -0.99;
     let f = 0, df = 0;
     for (let i = 0; i < cashflows.length; i++) {
-      const factor = Math.pow(1 + rate, t[i]);
+      const denom = Math.max(1 + rate, 0.001);
+      const factor = Math.pow(denom, t[i]);
       f  += cashflows[i] / factor;
-      df -= t[i] * cashflows[i] / (factor * (1 + rate));
+      df -= t[i] * cashflows[i] / (factor * denom);
     }
-    const delta = f / df;
+    if (Math.abs(df) < 1e-12) break;
+    const delta = Math.max(-0.5, Math.min(0.5, f / df));
     rate -= delta;
     if (Math.abs(delta) < 1e-7) break;
   }
-  return isFinite(rate) ? rate * 100 : null;
+  return isFinite(rate) && rate > -1.0 ? rate * 100 : null;
 }
 
 // ── Core Financial Math Engines ───────────────────────────────────────────────

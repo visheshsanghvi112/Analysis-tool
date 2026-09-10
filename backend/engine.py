@@ -32,23 +32,44 @@ def _flatten_columns(df):
 
 
 def calculate_support_resistance(data, window=10):
+    if len(data) < 2 * window + 1:
+        cur = _scalar(data['Close'].iloc[-1]) if not data.empty else 0.0
+        return round(cur * 0.95, 2), round(cur * 1.05, 2)
+
     highs = data['High']
     lows  = data['Low']
+    curr_price = _scalar(data['Close'].iloc[-1])
+    
     swing_highs, swing_lows = [], []
 
     for i in range(window, len(data) - window):
         if highs.iloc[i] == highs.iloc[i - window: i + window + 1].max():
-            swing_highs.append((data.index[i], _scalar(highs.iloc[i])))
+            swing_highs.append(_scalar(highs.iloc[i]))
         if lows.iloc[i] == lows.iloc[i - window: i + window + 1].min():
-            swing_lows.append((data.index[i], _scalar(lows.iloc[i])))
+            swing_lows.append(_scalar(lows.iloc[i]))
 
-    if not swing_highs or not swing_lows:
-        return _scalar(lows.min()), _scalar(highs.max())
+    # Valid candidate supports: swing lows strictly below current market price
+    valid_supports = [s for s in swing_lows if s < curr_price * 0.999]
+    if valid_supports:
+        recent_support = valid_supports[-1]
+    else:
+        recent_low = _scalar(lows.tail(50).min())
+        recent_support = recent_low if recent_low < curr_price else curr_price * 0.95
 
-    recent_support    = swing_lows[-1][1]
-    recent_resistance = swing_highs[-1][1]
-    if recent_support > recent_resistance:
-        recent_support, recent_resistance = recent_resistance, recent_support
+    # Valid candidate resistances: swing highs strictly above current market price
+    valid_resistances = [r for r in swing_highs if r > curr_price * 1.001]
+    if valid_resistances:
+        recent_resistance = valid_resistances[-1]
+    else:
+        recent_high = _scalar(highs.tail(50).max())
+        recent_resistance = recent_high if recent_high > curr_price else curr_price * 1.05
+
+    # Guarantee support strictly < curr_price strictly < resistance
+    if recent_support >= curr_price:
+        recent_support = curr_price * 0.96
+    if recent_resistance <= curr_price:
+        recent_resistance = curr_price * 1.04
+
     return round(recent_support, 2), round(recent_resistance, 2)
 
 
@@ -111,21 +132,28 @@ def generate_signal(rsi, macd, signal_line, close, upper_band, lower_band,
         reasons.append(f"RSI neutral ({rsi:.1f})")
 
     if prev_macd is not None and prev_signal is not None:
+        was_above = prev_macd > prev_signal
         was_below = prev_macd < prev_signal
         is_above  = macd > signal_line
+        is_below  = macd < signal_line
+
         if was_below and is_above:
             score += 2; reasons.append("MACD bullish crossover")
-        elif not was_below and not is_above:
+        elif was_above and is_below:
             score -= 2; reasons.append("MACD bearish crossover")
-        elif macd > signal_line:
+        elif is_above:
             score += 1; reasons.append("MACD above signal (bullish)")
-        else:
+        elif is_below:
             score -= 1; reasons.append("MACD below signal (bearish)")
+        else:
+            reasons.append("MACD converged on signal line")
     else:
         if macd > signal_line:
             score += 1; reasons.append("MACD above signal (bullish)")
-        else:
+        elif macd < signal_line:
             score -= 1; reasons.append("MACD below signal (bearish)")
+        else:
+            reasons.append("MACD converged on signal line")
 
     band_range = upper_band - lower_band
     if band_range > 0:
@@ -260,27 +288,34 @@ def fetch_fundamentals(ticker):
         return {}
 
 
-def calculate_atr(df):
+def calculate_atr(df, n=14):
     hl = (df['High'] - df['Low']).rename('hl')
     hc = np.abs(df['High'] - df['Close'].shift()).rename('hc')
     lc = np.abs(df['Low']  - df['Close'].shift()).rename('lc')
     tr = pd.concat([hl, hc, lc], axis=1).max(axis=1)
-    return tr.rolling(14).mean()
+    # Welles Wilder exponential smoothing (RMA)
+    return tr.ewm(alpha=1.0 / n, adjust=False).mean()
 
 
 def calculate_adx(df, n=14):
     df = df.copy()
-    df['+DM'] = np.where(
-        (df['High'] - df['High'].shift(1)) > (df['Low'].shift(1) - df['Low']),
-        (df['High'] - df['High'].shift(1)).clip(lower=0), 0)
-    df['-DM'] = np.where(
-        (df['Low'].shift(1) - df['Low']) > (df['High'] - df['High'].shift(1)),
-        (df['Low'].shift(1) - df['Low']).clip(lower=0), 0)
-    df['+DI'] = 100 * (df['+DM'].rolling(n).sum() / df['ATR'].replace(0, np.nan))
-    df['-DI'] = 100 * (df['-DM'].rolling(n).sum() / df['ATR'].replace(0, np.nan))
-    denom     = (df['+DI'] + df['-DI']).replace(0, np.nan)
-    df['DX']  = (np.abs(df['+DI'] - df['-DI']) / denom) * 100
-    df['ADX'] = df['DX'].rolling(n).mean()
+    up_move = df['High'] - df['High'].shift(1)
+    down_move = df['Low'].shift(1) - df['Low']
+
+    df['+DM'] = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
+    df['-DM'] = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
+
+    # Welles Wilder smoothed +DM, -DM, and TR
+    smooth_pdm = df['+DM'].ewm(alpha=1.0 / n, adjust=False).mean()
+    smooth_mdm = df['-DM'].ewm(alpha=1.0 / n, adjust=False).mean()
+    smooth_tr  = df['ATR'].replace(0, np.nan)
+
+    df['+DI'] = (100.0 * (smooth_pdm / smooth_tr)).clip(lower=0.0, upper=100.0)
+    df['-DI'] = (100.0 * (smooth_mdm / smooth_tr)).clip(lower=0.0, upper=100.0)
+
+    di_sum    = (df['+DI'] + df['-DI']).replace(0, np.nan)
+    df['DX']  = ((np.abs(df['+DI'] - df['-DI']) / di_sum) * 100.0).clip(lower=0.0, upper=100.0)
+    df['ADX'] = df['DX'].ewm(alpha=1.0 / n, adjust=False).mean().clip(lower=0.0, upper=100.0)
     return df
 
 
@@ -317,10 +352,14 @@ def calculate_risk_metrics(close_series):
     downside   = excess_ret[excess_ret < 0]
     sortino    = float((excess_ret.mean() / downside.std()) * np.sqrt(252)) if len(downside) > 1 and downside.std() > 0 else 0.0
 
-    # Calmar Ratio: Annualized Return / |Max Drawdown|
-    ann_return = float(returns.mean() * 252 * 100)
+    # Calmar Ratio: Compound Annual Growth Rate (CAGR) / |Max Drawdown|
+    n_days = max(len(returns), 1)
+    if cumulative.iloc[-1] > 0:
+        cagr = float(((cumulative.iloc[-1]) ** (252.0 / n_days) - 1.0) * 100.0)
+    else:
+        cagr = -100.0
     abs_dd     = abs(max_dd)
-    calmar     = round(ann_return / abs_dd, 2) if abs_dd > 0.5 else None
+    calmar     = round(cagr / abs_dd, 2) if abs_dd > 0.5 else None
 
     skew       = round(float(returns.skew()), 2) if len(returns) > 2 else 0.0
     kurt       = round(float(returns.kurtosis()), 2) if len(returns) > 3 else 0.0
@@ -364,10 +403,28 @@ def calculate_relative_strength(ticker, start_date=None, end_date=None, days=Non
         stock = get_history(ticker, period=period)
         if bench is None or stock is None or bench.empty or stock.empty:
             return {}
-        b_start = _scalar(bench['Close'].iloc[0])
-        b_end   = _scalar(bench['Close'].iloc[-1])
-        s_start = _scalar(stock['Close'].iloc[0])
-        s_end   = _scalar(stock['Close'].iloc[-1])
+
+        # Synchronize dates by intersecting timezone-neutral dates
+        s_close = stock['Close'].dropna()
+        b_close = bench['Close'].dropna()
+
+        s_idx = s_close.index.tz_localize(None) if hasattr(s_close.index, 'tz') and s_close.index.tz else s_close.index
+        b_idx = b_close.index.tz_localize(None) if hasattr(b_close.index, 'tz') and b_close.index.tz else b_close.index
+
+        s_series = pd.Series(s_close.values, index=s_idx)
+        b_series = pd.Series(b_close.values, index=b_idx)
+
+        common_dates = s_series.index.intersection(b_series.index)
+        if len(common_dates) >= 5:
+            s_start = _scalar(s_series.loc[common_dates[0]])
+            s_end   = _scalar(s_series.loc[common_dates[-1]])
+            b_start = _scalar(b_series.loc[common_dates[0]])
+            b_end   = _scalar(b_series.loc[common_dates[-1]])
+        else:
+            s_start = _scalar(s_series.iloc[0])
+            s_end   = _scalar(s_series.iloc[-1])
+            b_start = _scalar(b_series.iloc[0])
+            b_end   = _scalar(b_series.iloc[-1])
 
         if b_start <= 0 or s_start <= 0:
             return {}

@@ -129,6 +129,7 @@ class NewsIntelligence:
         
         sentiment_scores = []
         confidence_scores = []
+        sample_weights = []
         market_keywords = {
             'positive': ['buy', 'bullish', 'surge', 'gains', 'profit', 'growth', 'upgrade', 'outperform', 'strong', 'beat'],
             'negative': ['sell', 'bearish', 'fall', 'loss', 'decline', 'downgrade', 'underperform', 'weak', 'miss', 'drop']
@@ -159,9 +160,10 @@ class NewsIntelligence:
             
             # Weight by relevance and recency
             recency_weight = max(0.1, 1 - (datetime.now() - article['published']).days / 7)
-            relevance_weight = article['relevance_score']
+            relevance_weight = max(0.1, article['relevance_score'])
             weight = recency_weight * relevance_weight
             
+            sample_weights.append(weight)
             sentiment_scores.append(adjusted_polarity * weight)
             confidence_scores.append(confidence * weight)
             
@@ -173,10 +175,14 @@ class NewsIntelligence:
             else:
                 neutral_count += 1
         
-        # Calculate weighted averages
-        total_weight = sum(confidence_scores) if confidence_scores else 1
-        overall_sentiment = sum(sentiment_scores) / total_weight if total_weight > 0 else 0.0
-        avg_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.0
+        # Calculate mathematically sound weighted averages
+        total_sample_weight = sum(sample_weights) if sample_weights else 0.0
+        if total_sample_weight > 0:
+            overall_sentiment = max(-1.0, min(1.0, sum(sentiment_scores) / total_sample_weight))
+            avg_confidence = max(0.0, min(1.0, sum(confidence_scores) / total_sample_weight))
+        else:
+            overall_sentiment = 0.0
+            avg_confidence = 0.0
         
         # Market impact score (how much this news might affect stock price)
         # Based on sentiment strength, confidence, and article count
