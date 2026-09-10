@@ -78,12 +78,18 @@ const Header = ({ onTickerSelect, currentTicker }) => {
       }
     };
 
+    const handleOpenWatchlist = () => {
+      setWatchlistOpen(true);
+    };
+
     window.addEventListener('trigger-search-focus', handleTriggerFocus);
     window.addEventListener('open-stock-search', handleTriggerFocus);
+    window.addEventListener('open-watchlist-drawer', handleOpenWatchlist);
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('trigger-search-focus', handleTriggerFocus);
       window.removeEventListener('open-stock-search', handleTriggerFocus);
+      window.removeEventListener('open-watchlist-drawer', handleOpenWatchlist);
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
@@ -441,6 +447,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
         isOpen={sideNavOpen}
         onClose={() => setSideNavOpen(false)}
         onOpenSearch={() => setSpotlightOpen(true)}
+        onOpenWatchlist={() => setWatchlistOpen(true)}
         currentTicker={currentTicker}
       />
 

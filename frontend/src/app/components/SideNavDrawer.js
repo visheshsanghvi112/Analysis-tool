@@ -15,9 +15,10 @@ import {
   Calculator,
   Shield,
   ChevronRight,
+  Bookmark,
 } from 'lucide-react';
 
-export default function SideNavDrawer({ isOpen, onClose, onOpenSearch, currentTicker }) {
+export default function SideNavDrawer({ isOpen, onClose, onOpenSearch, onOpenWatchlist, currentTicker }) {
   const pathname = usePathname();
 
   // Close on Escape key
@@ -110,6 +111,15 @@ export default function SideNavDrawer({ isOpen, onClose, onOpenSearch, currentTi
   const handleSearchClick = () => {
     onClose();
     if (onOpenSearch) onOpenSearch();
+  };
+
+  const handleWatchlistClick = () => {
+    onClose();
+    if (onOpenWatchlist) {
+      onOpenWatchlist();
+    } else {
+      window.dispatchEvent(new CustomEvent('open-watchlist-drawer'));
+    }
   };
 
   return (
@@ -246,6 +256,25 @@ export default function SideNavDrawer({ isOpen, onClose, onOpenSearch, currentTi
                 <kbd className="text-[10px] px-2 py-0.5 rounded bg-white/[0.05] border border-white/10 text-slate-400 font-mono">
                   ⌘K
                 </kbd>
+              </button>
+
+              {/* Personal Watchlist */}
+              <button
+                onClick={handleWatchlistClick}
+                className="w-full text-left flex items-center justify-between px-3 py-2.5 rounded-xl text-slate-300 hover:text-white hover:bg-white/[0.04] transition cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-1.5 rounded-lg bg-white/[0.04] text-amber-400/90 group-hover:text-amber-300">
+                    <Bookmark className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-slate-200 group-hover:text-white">
+                      Personal Watchlist
+                    </div>
+                    <div className="text-[10px] text-slate-500">Track pinned tickers &amp; 1-click export</div>
+                  </div>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-300 group-hover:translate-x-0.5 transition-transform" />
               </button>
 
               {/* SIP Calculator Jump */}
