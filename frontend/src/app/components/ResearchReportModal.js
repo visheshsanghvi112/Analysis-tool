@@ -257,6 +257,10 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
                       <span className="font-bold text-emerald-400 print:text-black">{rm.sortino_ratio ?? '—'}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                      <span className="text-slate-400 print:text-slate-600">Calmar Ratio</span>
+                      <span className="font-bold text-emerald-400 print:text-black">{rm.calmar_ratio ?? '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
                       <span className="text-slate-400 print:text-slate-600">Max Drawdown</span>
                       <span className="font-bold text-rose-400 print:text-black">{rm.max_drawdown ? `${rm.max_drawdown}%` : '—'}</span>
                     </div>

@@ -311,12 +311,18 @@ def calculate_risk_metrics(close_series):
     downside   = excess_ret[excess_ret < 0]
     sortino    = float((excess_ret.mean() / downside.std()) * np.sqrt(252)) if len(downside) > 1 and downside.std() > 0 else 0.0
 
+    # Calmar Ratio: Annualized Return / |Max Drawdown|
+    ann_return = float(returns.mean() * 252 * 100)
+    abs_dd     = abs(max_dd)
+    calmar     = round(ann_return / abs_dd, 2) if abs_dd > 0.5 else None
+
     return {
         'annualizedVolatility': round(ann_vol, 2),
         'maxDrawdown':          round(max_dd, 2),
         'var95_1D':             round(var_95, 2),
         'sharpeRatio':          round(sharpe, 2),
         'sortinoRatio':         round(sortino, 2),
+        'calmarRatio':          calmar,
     }
 
 
