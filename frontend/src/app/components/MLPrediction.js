@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Brain, TrendingUp, TrendingDown, Target, Zap, AlertCircle, RefreshCw, BarChart2, Info } from 'lucide-react';
+import { Brain, TrendingUp, TrendingDown, Target, Zap, AlertCircle, RefreshCw, BarChart2, Info, Download } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
@@ -235,6 +235,75 @@ export default function MLPrediction({ ticker }) {
     await fetchPrediction(selectedPeriod, startDate, endDate, false);
   };
 
+  const handleExportForecastCSV = () => {
+    if (!prediction) return;
+    const cleanTicker = (ticker || 'stock').replace(/[^a-zA-Z0-9_-]/g, '_');
+    
+    const lines = [
+      '# StockIQ Pro AI Machine Learning Forecast & Factor Attribution',
+      `Ticker,${cleanTicker}`,
+      `Generated At,"${new Date(prediction.timestamp || Date.now()).toISOString()}"`,
+      `Training Horizon,${selectedPeriod}`,
+      `Prediction Horizon Days,${prediction.prediction_horizon_days || 5}`,
+      `Current Price,${prediction.current_price ?? ''}`,
+      `Signal,${prediction.signal || ''}`,
+      `5-Day Target Price,${prediction.predicted_price ?? ''}`,
+      `Expected Return %,${prediction.predicted_return ?? ''}`,
+      `Confidence %,${prediction.confidence ?? ''}`,
+      `Signal Strength,${prediction.signal_strength ?? ''}`,
+      `HMM Regime,${prediction.regime ?? ''}`,
+      `GARCH Volatility %,${prediction.garch_volatility ?? ''}`,
+      `Consensus Stability,${prediction.stability ?? ''}`,
+      `Risk Reward Ratio,${prediction.risk_reward_ratio ?? ''}`,
+      `Walk-Forward Direction Accuracy %,${prediction.direction_accuracy ?? ''}`,
+      `Profit Factor,${prediction.profit_factor ?? ''}`,
+      `Avg Win %,${prediction.avg_win_pct ?? ''}`,
+      `Avg Loss %,${prediction.avg_loss_pct ?? ''}`,
+      `Raw ML Return %,${prediction.ml_raw_return ?? ''}`,
+      `News Sentiment Used,${prediction.news_sentiment_used ?? ''}`,
+      '',
+      '# Base Model Stacked Predictions',
+      'Model Name,Predicted Price,Expected Return %'
+    ];
+
+    if (prediction.models && typeof prediction.models === 'object') {
+      Object.entries(prediction.models).forEach(([name, val]) => {
+        lines.push(`"${name.replace(/_/g, ' ')}",${val.predicted_price ?? ''},${val.predicted_return ?? ''}`);
+      });
+    }
+
+    lines.push('');
+    lines.push('# Feature Importance & SHAP Contributions');
+    lines.push('Feature,Contribution / Importance Weight,Direction');
+
+    const feats = Array.isArray(prediction.top_features)
+      ? prediction.top_features
+      : prediction.top_features && typeof prediction.top_features === 'object'
+      ? Object.entries(prediction.top_features).map(([name, val]) => ({
+          name,
+          label: name.replace(/_/g, ' '),
+          value: val,
+          abs_value: Math.abs(val)
+        }))
+      : [];
+
+    feats.forEach((f) => {
+      const dir = f.value > 0 ? 'Bullish' : f.value < 0 ? 'Bearish' : 'Neutral';
+      lines.push(`"${f.label || f.name}",${f.value ?? f.abs_value ?? ''},${dir}`);
+    });
+
+    const csvContent = lines.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${cleanTicker}_ml_forecast_factors_${selectedPeriod}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const getSignalStyle = (signal) => {
     switch (signal) {
       case 'STRONG BUY':
@@ -290,14 +359,28 @@ export default function MLPrediction({ ticker }) {
           </div>
         </div>
         
-        <button
-          onClick={handleRefresh}
-          disabled={loading}
-          className="p-2 rounded-lg active:bg-slate-800 text-slate-500 active:text-slate-300 transition disabled:opacity-40 cursor-pointer"
-          title="Refresh Prediction"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex items-center gap-1.5">
+          {prediction && (
+            <button
+              onClick={handleExportForecastCSV}
+              disabled={loading}
+              className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-white/[0.04] hover:bg-purple-600/20 text-slate-300 hover:text-purple-300 border border-white/[0.08] hover:border-purple-500/30 transition-all cursor-pointer disabled:opacity-40 shadow-sm"
+              title="Export ML forecast, base models and feature importance to CSV"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Export CSV</span>
+            </button>
+          )}
+
+          <button
+            onClick={handleRefresh}
+            disabled={loading}
+            className="p-1.5 rounded-lg active:bg-slate-800 text-slate-400 hover:text-white hover:bg-white/[0.06] transition disabled:opacity-40 cursor-pointer"
+            title="Refresh Prediction"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {/* Training Period Selector */}
