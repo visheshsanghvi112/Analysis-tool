@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import {
   Wallet, Clock, Zap, Target, TrendingDown, ArrowRight,
   ChevronDown, ChevronUp, AlertTriangle, CheckCircle2,
-  BarChart3, ShieldCheck, Lightbulb, X, Sparkles, Info, Eye
+  BarChart3, ShieldCheck, Lightbulb, X, Sparkles, Info, Eye, Download
 } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
@@ -473,6 +473,42 @@ function ResultsPanel({ data, onReset, currSym = '₹', loc = 'en-IN' }) {
 
   const confColor = s.overall_confidence === 'HIGH' ? 'text-emerald-400' : s.overall_confidence === 'MODERATE' ? 'text-indigo-400' : 'text-amber-400';
 
+  const handleExportPlanCSV = useCallback(() => {
+    if (!data?.suggestions?.length) return;
+    const headers = [
+      'Ticker',
+      'Sector',
+      'Signal',
+      'Priority',
+      'Allocated Amount',
+      'Weight (%)',
+      'Shares to Buy',
+      'Current PnL (%)',
+      'Average Down Strategy Rationale'
+    ];
+    const rows = data.suggestions.map(sug => [
+      `"${sug.ticker}"`,
+      `"${sug.sector || 'Others'}"`,
+      `"${sug.signal || ''}"`,
+      `"${sug.priority_label || ''}"`,
+      sug.allocated_amount ?? 0,
+      sug.allocation_weight_pct ?? 0,
+      sug.shares_to_buy ?? 0,
+      sug.current_pnl_pct != null ? sug.current_pnl_pct.toFixed(2) : 0,
+      `"${(sug.rationale || '').replace(/"/g, '""')}"`
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Smart_Capital_Allocation_Plan_${s.horizon_label?.replace(/\s+/g, '_') || 'Custom'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [data?.suggestions, s.horizon_label]);
+
   return (
     <div className="space-y-5">
       {/* Summary banner */}
@@ -482,9 +518,19 @@ function ResultsPanel({ data, onReset, currSym = '₹', loc = 'en-IN' }) {
             <p className="text-[10px] text-slate-300 uppercase tracking-wider font-bold">Capital Allocation Plan</p>
             <p className="text-2xl font-black text-white mt-0.5">{fmtVal(s.total_allocated, activeCurrSym, activeLoc)} <span className="text-sm text-slate-300 font-normal">deployed</span></p>
           </div>
-          <div className="text-right">
-            <p className="text-[9px] text-slate-400 uppercase">Confidence</p>
-            <p className={`text-lg font-black ${confColor}`}>{s.overall_confidence}</p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExportPlanCSV}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-500/30 bg-violet-500/15 hover:bg-violet-500/25 text-violet-300 text-xs font-bold transition cursor-pointer shadow-sm"
+              title="Download Capital Allocation Plan as CSV for trade execution"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export Plan (CSV)</span>
+            </button>
+            <div className="text-right">
+              <p className="text-[9px] text-slate-400 uppercase">Confidence</p>
+              <p className={`text-lg font-black ${confColor}`}>{s.overall_confidence}</p>
+            </div>
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">

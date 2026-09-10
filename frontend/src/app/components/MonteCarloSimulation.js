@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import {
   Compass, TrendingUp, TrendingDown, RefreshCw, AlertCircle,
-  Percent, Activity, ArrowRightLeft, Info
+  Percent, Activity, ArrowRightLeft, Info, Download
 } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 
@@ -196,6 +196,37 @@ export default function MonteCarloSimulation({ ticker }) {
 
   const stats = data?.stats;
 
+  const handleExportSimulationCSV = useCallback(() => {
+    if (!data?.simulated?.length) return;
+    const cleanTicker = (ticker || 'SIMULATION').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const headers = [
+      'Date',
+      'Percentile_02_5 (95% Downside)',
+      'Percentile_25_0 (Interquartile Low)',
+      'Median_P50 (Expected Path)',
+      'Percentile_75_0 (Interquartile High)',
+      'Percentile_97_5 (95% Upside)'
+    ];
+    const rows = data.simulated.map(s => [
+      `"${s.date || ''}"`,
+      s.p025 != null ? Number(s.p025).toFixed(2) : '',
+      s.p250 != null ? Number(s.p250).toFixed(2) : '',
+      s.p500 != null ? Number(s.p500).toFixed(2) : '',
+      s.p750 != null ? Number(s.p750).toFixed(2) : '',
+      s.p975 != null ? Number(s.p975).toFixed(2) : ''
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${cleanTicker}_MonteCarlo_${mode}_${horizon}D.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [data?.simulated, ticker, mode, horizon]);
+
   return (
     <div className="glass-card p-4 sm:p-6">
       {/* Header */}
@@ -216,13 +247,25 @@ export default function MonteCarloSimulation({ ticker }) {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => fetchSimulation(horizon, mode)}
-          disabled={loading}
-          className="p-2 rounded-lg text-slate-500 hover:text-slate-300 active:scale-95 transition disabled:opacity-40 cursor-pointer"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportSimulationCSV}
+            disabled={!data?.simulated?.length}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition bg-white/[0.03] hover:bg-indigo-500/15 text-indigo-300 border-white/[0.08] hover:border-indigo-500/30 disabled:opacity-40 cursor-pointer"
+            title="Export Monte Carlo Percentile Cone to CSV"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Export Simulation</span>
+          </button>
+          <button
+            onClick={() => fetchSimulation(horizon, mode)}
+            disabled={loading}
+            className="p-2 rounded-lg text-slate-500 hover:text-slate-300 active:scale-95 transition disabled:opacity-40 cursor-pointer"
+            title="Refresh Simulation"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {/* Control Bar: Mode Toggle & Horizon Selector */}

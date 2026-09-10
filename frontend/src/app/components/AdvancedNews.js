@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Newspaper, 
   RefreshCw, 
@@ -23,6 +23,7 @@ export default function AdvancedNews({ ticker, companyName }) {
   const [newsData, setNewsData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [sentimentFilter, setSentimentFilter] = useState('ALL'); // 'ALL' | 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL'
 
   const fetchAdvancedNews = async () => {
     if (!ticker) return;
@@ -78,6 +79,18 @@ export default function AdvancedNews({ ticker, companyName }) {
     const diffInDays = Math.floor(diffInHours / 24);
     return `${diffInDays}d ago`;
   };
+
+  const positiveCount = useMemo(() => (newsData?.articles || []).filter(a => a.sentiment > 0.1).length, [newsData?.articles]);
+  const negativeCount = useMemo(() => (newsData?.articles || []).filter(a => a.sentiment < -0.1).length, [newsData?.articles]);
+  const neutralCount = useMemo(() => (newsData?.articles || []).filter(a => a.sentiment >= -0.1 && a.sentiment <= 0.1).length, [newsData?.articles]);
+
+  const filteredArticles = useMemo(() => {
+    if (!newsData?.articles) return [];
+    if (sentimentFilter === 'POSITIVE') return newsData.articles.filter(a => a.sentiment > 0.1);
+    if (sentimentFilter === 'NEGATIVE') return newsData.articles.filter(a => a.sentiment < -0.1);
+    if (sentimentFilter === 'NEUTRAL') return newsData.articles.filter(a => a.sentiment >= -0.1 && a.sentiment <= 0.1);
+    return newsData.articles;
+  }, [newsData?.articles, sentimentFilter]);
 
   return (
     <div className="glass-card p-4 sm:p-6">
@@ -252,14 +265,38 @@ export default function AdvancedNews({ ticker, companyName }) {
 
           {/* Recent Articles */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="font-bold text-sm text-slate-300">Recent Articles</h4>
-              <span className="text-[10px] text-slate-500">{newsData.articles?.length || 0} found</span>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <h4 className="font-bold text-sm text-slate-300">Recent Articles</h4>
+                <span className="text-[10px] text-slate-500 font-mono">({filteredArticles.length})</span>
+              </div>
+
+              {/* Sentiment Filter Pills */}
+              <div className="flex items-center gap-1 p-0.5 rounded-lg bg-white/[0.02] border border-white/[0.05] text-[10px]">
+                {[
+                  { id: 'ALL', label: `All (${newsData.articles?.length || 0})` },
+                  { id: 'POSITIVE', label: `Bullish (${positiveCount})`, activeColor: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30' },
+                  { id: 'NEGATIVE', label: `Bearish (${negativeCount})`, activeColor: 'text-rose-400 bg-rose-500/15 border-rose-500/30' },
+                  { id: 'NEUTRAL', label: `Neutral (${neutralCount})`, activeColor: 'text-slate-300 bg-slate-500/15 border-slate-500/30' },
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setSentimentFilter(f.id)}
+                    className={`px-2 py-0.5 rounded border transition cursor-pointer font-medium ${
+                      sentimentFilter === f.id
+                        ? f.activeColor || 'bg-white/[0.1] text-white font-bold border-white/20'
+                        : 'border-transparent text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
             </div>
             
-            {newsData.articles && newsData.articles.length > 0 ? (
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {newsData.articles.slice(0, 6).map((article, idx) => (
+            {filteredArticles.length > 0 ? (
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {filteredArticles.slice(0, 8).map((article, idx) => (
                   <a
                     key={idx}
                     href={article.link}
@@ -307,22 +344,17 @@ export default function AdvancedNews({ ticker, companyName }) {
             ) : (
               <div className="text-center py-6 text-slate-500">
                 <Newspaper className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No relevant news found</p>
+                <p className="text-sm">No {sentimentFilter.toLowerCase()} articles found</p>
               </div>
             )}
           </div>
 
-          {/* Summary & Update Time */}
-          <div className="mt-4 pt-3 border-t border-slate-800/70">
-            <p className="text-[11px] text-slate-500 leading-relaxed mb-2">
-              {newsData.summary}
-            </p>
-            <div className="flex justify-between items-center text-[9px] text-slate-600">
-              <span>AI-powered sentiment analysis</span>
-              <span>Updated {new Date(newsData.last_updated).toLocaleTimeString('en-IN', { 
-                hour: '2-digit', minute: '2-digit' 
-              })}</span>
-            </div>
+          {/* Update Time */}
+          <div className="mt-4 pt-3 border-t border-slate-800/70 flex justify-between items-center text-[9px] text-slate-500">
+            <span>AI-powered news catalyst &amp; sentiment analysis</span>
+            <span>Updated {new Date(newsData.last_updated).toLocaleTimeString('en-IN', { 
+              hour: '2-digit', minute: '2-digit' 
+            })}</span>
           </div>
         </>
       ) : (
