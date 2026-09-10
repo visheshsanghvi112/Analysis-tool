@@ -37,7 +37,7 @@ const TRENDING_PICKS = [
   { symbol: 'MON100.NS', name: 'Motilal Oswal Nasdaq 100 ETF', sector: 'ETF', type: 'ETF' },
   { symbol: 'SWIGGY.NS', name: 'Swiggy Limited', sector: 'Consumer Tech', type: 'Equity' },
   { symbol: 'WAAREEENER.NS', name: 'Waaree Energies Limited', sector: 'Renewables', type: 'Equity' },
-  { symbol: 'ETERNAL.NS', name: 'Eternal Limited (Zomato)', sector: 'Consumer Tech', type: 'Equity' },
+  { symbol: 'ZOMATO.NS', name: 'Zomato Limited', sector: 'Consumer Tech', type: 'Equity' },
 ];
 
 const SECTOR_STYLES = {

@@ -12,7 +12,8 @@ import {
   ChevronRight,
   RefreshCw,
   Loader2,
-  Sparkles
+  Sparkles,
+  Download
 } from 'lucide-react';
 import { smartSearch, fetchSmartTickers } from '../utils/smartSearch';
 
@@ -124,6 +125,33 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
     }
   }, [isOpen, watchlist, fetchWatchlistQuotes]);
 
+  // ── 5b. Export Watchlist to CSV ──────────────────────────────────────────
+  const handleExportWatchlistCSV = useCallback(() => {
+    if (!watchlist.length) return;
+    const headers = ['Symbol', 'Name', 'Sector', 'Live Price', 'Change', 'Change (%)'];
+    const rows = watchlist.map((item) => {
+      const q = quotes[item.symbol] || {};
+      return [
+        `"${item.symbol}"`,
+        `"${(item.name || '').replace(/"/g, '""')}"`,
+        `"${item.sector || 'Equity'}"`,
+        q.price ?? '',
+        q.change ?? '',
+        q.changePercent != null ? q.changePercent.toFixed(2) : ''
+      ];
+    });
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `StockIQ_Watchlist_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [watchlist, quotes]);
+
   // ── 6. Smart filter search results (Handles aliases, typos, BSE codes) ───
   useEffect(() => {
     const q = searchQuery.trim();
@@ -209,9 +237,17 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
 
           <div className="flex items-center gap-1.5">
             <button
+              onClick={handleExportWatchlistCSV}
+              disabled={watchlist.length === 0}
+              className="p-2 text-slate-400 hover:text-emerald-400 rounded-lg hover:bg-white/[0.06] transition-colors disabled:opacity-40 cursor-pointer"
+              title="Export Watchlist to CSV"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+            <button
               onClick={fetchWatchlistQuotes}
               disabled={loadingQuotes}
-              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors disabled:opacity-50"
+              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors disabled:opacity-50 cursor-pointer"
               title="Refresh live prices"
             >
               <RefreshCw className={`w-4 h-4 ${loadingQuotes ? 'animate-spin text-blue-400' : ''}`} />
