@@ -655,6 +655,36 @@ export default function IntradayTerminal() {
     document.body.removeChild(link);
   };
 
+  const exportBlockDealsCSV = () => {
+    if (!blockDeals) return;
+    const deals = [
+      ...(blockDeals.block_deals || []).map(d => ({ ...d, type: 'BLOCK' })),
+      ...(blockDeals.bulk_deals || []).map(d => ({ ...d, type: 'BULK' }))
+    ];
+    if (!deals.length) return;
+
+    const headers = ['Symbol', 'Deal_Type', 'Trade_Type', 'Client', 'Quantity', 'Price'];
+    const rows = deals.map(d => [
+      `"${d.symbol || ''}"`,
+      `"${d.type || ''}"`,
+      `"${d.trade_type === 'B' || d.trade_type === 'BUY' ? 'BUY' : 'SELL'}"`,
+      `"${(d.client || 'Undisclosed').replace(/"/g, '""')}"`,
+      d.quantity ?? '',
+      d.price ?? d.avg_price ?? ''
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `nse_block_bulk_deals_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // Position Sizing & Friction Breakeven Calculations
   const sizingResults = useMemo(() => {
     const entry = parseFloat(calcEntry) || 0;
@@ -3086,7 +3116,19 @@ export default function IntradayTerminal() {
                 </h3>
                 <InfoBadge infoKey="block_deals" />
               </div>
-              {blockDealsLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />}
+              <div className="flex items-center gap-2">
+                {blockDeals && ((blockDeals.block_deals?.length || 0) > 0 || (blockDeals.bulk_deals?.length || 0) > 0) && (
+                  <button
+                    onClick={exportBlockDealsCSV}
+                    title="Export NSE Block & Bulk Deals to CSV"
+                    className="text-xs font-semibold px-2 py-0.5 rounded-lg border bg-slate-800 text-slate-300 border-slate-700 hover:text-orange-400 hover:border-orange-500/40 transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span className="hidden sm:inline">CSV</span>
+                  </button>
+                )}
+                {blockDealsLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />}
+              </div>
             </div>
 
             {scannerMarket !== 'IN' ? (
