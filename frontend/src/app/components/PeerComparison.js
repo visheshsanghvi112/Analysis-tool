@@ -190,6 +190,8 @@ export default function PeerComparison({ ticker }) {
       ['Sharpe Ratio', comparison.metrics_a.sharpe ?? '', comparison.metrics_b.sharpe ?? '', comparison.winners.sharpe ?? ''],
       ['Sortino Ratio', comparison.metrics_a.sortino ?? '', comparison.metrics_b.sortino ?? '', comparison.winners.sortino ?? ''],
       ['Calmar Ratio', comparison.metrics_a.calmar ?? '', comparison.metrics_b.calmar ?? '', comparison.winners.calmar ?? ''],
+      ['VaR 95% (1D) (%)', comparison.metrics_a.var_95 ?? '', comparison.metrics_b.var_95 ?? '', comparison.winners.var_95 ?? ''],
+      ['CVaR 95% (ES) (%)', comparison.metrics_a.cvar_95 ?? '', comparison.metrics_b.cvar_95 ?? '', comparison.winners.cvar_95 ?? ''],
       ['Max Drawdown (%)', comparison.metrics_a.max_drawdown ?? '', comparison.metrics_b.max_drawdown ?? '', comparison.winners.max_drawdown ?? ''],
       ['Dist from 52W High (%)', comparison.metrics_a.pct_from_high ?? '', comparison.metrics_b.pct_from_high ?? '', comparison.winners.pct_from_high ?? ''],
       ['Annual Volatility (%)', comparison.metrics_a.annual_vol ?? '', comparison.metrics_b.annual_vol ?? '', comparison.winners.annual_vol ?? ''],
@@ -407,6 +409,8 @@ export default function PeerComparison({ ticker }) {
             <MetricRow label="Sharpe Ratio"     valA={comparison.metrics_a.sharpe}     valB={comparison.metrics_b.sharpe}     winner={comparison.winners.sharpe}     tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} />
             <MetricRow label="Sortino Ratio"    valA={comparison.metrics_a.sortino}    valB={comparison.metrics_b.sortino}    winner={comparison.winners.sortino}    tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} />
             <MetricRow label="Calmar Ratio"     valA={comparison.metrics_a.calmar}     valB={comparison.metrics_b.calmar}     winner={comparison.winners.calmar}     tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} />
+            <MetricRow label="VaR 95% (1D)"      valA={comparison.metrics_a.var_95}     valB={comparison.metrics_b.var_95}     winner={comparison.winners.var_95}     tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} unit="%" higherIsBetter={true} />
+            <MetricRow label="CVaR 95% (ES)"     valA={comparison.metrics_a.cvar_95}    valB={comparison.metrics_b.cvar_95}    winner={comparison.winners.cvar_95}    tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} unit="%" higherIsBetter={true} />
             <MetricRow label="Max Drawdown (1Y)" valA={comparison.metrics_a.max_drawdown} valB={comparison.metrics_b.max_drawdown} winner={comparison.winners.max_drawdown} tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} unit="%" higherIsBetter={true} />
             <MetricRow label="Dist from 52W High" valA={comparison.metrics_a.pct_from_high} valB={comparison.metrics_b.pct_from_high} winner={comparison.winners.pct_from_high} tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} unit="%" higherIsBetter={true} />
             <MetricRow label="Annual Volatility" valA={comparison.metrics_a.annual_vol} valB={comparison.metrics_b.annual_vol} winner={comparison.winners.annual_vol} tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} unit="%" higherIsBetter={false} />

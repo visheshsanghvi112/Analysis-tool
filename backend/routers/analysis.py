@@ -90,6 +90,11 @@ def _compute_quick_metrics(ticker: str) -> dict | None:
         abs_dd = abs(max_drawdown)
         calmar = _safe_float(ret_1y / abs_dd, default=None, ndigits=2) if (ret_1y is not None and abs_dd > 0.5) else None
 
+        # Tail Risk: VaR 95% & CVaR 95% (Expected Shortfall)
+        var_95  = _safe_float(float(np.percentile(returns, 5) * 100), default=0.0, ndigits=2)
+        tail_95 = returns[returns <= np.percentile(returns, 5)]
+        cvar_95 = _safe_float(float(tail_95.mean() * 100), default=0.0, ndigits=2) if len(tail_95) > 0 else var_95
+
         return {
             'ticker':        ticker,
             'current_price': _safe_float(current_price, default=0.0, ndigits=2),
@@ -101,6 +106,8 @@ def _compute_quick_metrics(ticker: str) -> dict | None:
             'sharpe':        sharpe,
             'sortino':       sortino,
             'calmar':        calmar,
+            'var_95':        var_95,
+            'cvar_95':       cvar_95,
             'max_drawdown':  max_drawdown,
             'rsi':           rsi,
             'pct_from_high': pct_from_high,
@@ -538,6 +545,8 @@ def peer_compare_endpoint(
             'sharpe':        winner('sharpe'),
             'sortino':       winner('sortino'),
             'calmar':        winner('calmar'),
+            'var_95':        winner('var_95', higher_is_better=True),
+            'cvar_95':       winner('cvar_95', higher_is_better=True),
             'max_drawdown':  winner('max_drawdown', higher_is_better=True),
             'pct_from_high': winner('pct_from_high', higher_is_better=True),
             'annual_vol':    winner('annual_vol', higher_is_better=False),
