@@ -305,6 +305,12 @@ def calculate_risk_metrics(close_series):
     drawdown   = (cumulative - rolling_max) / rolling_max
     max_dd     = float(drawdown.min() * 100)
     var_95     = float(np.percentile(returns, 5) * 100)
+    var_99     = float(np.percentile(returns, 1) * 100)
+    
+    # Expected Shortfall (CVaR 95%): average loss beyond 95% VaR
+    tail_95    = returns[returns <= np.percentile(returns, 5)]
+    cvar_95    = float(tail_95.mean() * 100) if len(tail_95) > 0 else var_95
+
     rf_daily   = 0.065 / 252
     excess_ret = returns - rf_daily
     sharpe     = float((excess_ret.mean() / returns.std()) * np.sqrt(252)) if returns.std() > 0 else 0.0
@@ -316,13 +322,20 @@ def calculate_risk_metrics(close_series):
     abs_dd     = abs(max_dd)
     calmar     = round(ann_return / abs_dd, 2) if abs_dd > 0.5 else None
 
+    skew       = round(float(returns.skew()), 2) if len(returns) > 2 else 0.0
+    kurt       = round(float(returns.kurtosis()), 2) if len(returns) > 3 else 0.0
+
     return {
         'annualizedVolatility': round(ann_vol, 2),
         'maxDrawdown':          round(max_dd, 2),
         'var95_1D':             round(var_95, 2),
+        'var99_1D':             round(var_99, 2),
+        'cvar95_1D':            round(cvar_95, 2),
         'sharpeRatio':          round(sharpe, 2),
         'sortinoRatio':         round(sortino, 2),
         'calmarRatio':          calmar,
+        'skewness':             skew,
+        'kurtosis':             kurt,
     }
 
 

@@ -268,9 +268,17 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
                       <span className="text-slate-400 print:text-slate-600">Beta vs Bench</span>
                       <span className="font-bold text-white print:text-black">{mm.beta ?? '—'}</span>
                     </div>
-                    <div className="flex justify-between py-1">
+                    <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
                       <span className="text-slate-400 print:text-slate-600">Annual Vol</span>
                       <span className="font-bold text-white print:text-black">{rm.annual_volatility ? `${rm.annual_volatility}%` : '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                      <span className="text-slate-400 print:text-slate-600">VaR 95% (1D)</span>
+                      <span className="font-bold text-rose-400 print:text-black">{rm.var_95_daily ? `${rm.var_95_daily}%` : '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-slate-400 print:text-slate-600">CVaR 95% (ES)</span>
+                      <span className="font-bold text-rose-400 print:text-black">{rm.expected_shortfall_95 ? `${rm.expected_shortfall_95}%` : '—'}</span>
                     </div>
                   </div>
                 </div>
