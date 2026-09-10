@@ -19,7 +19,7 @@ import ResearchReportModal from './components/ResearchReportModal';
 import {
   TrendingUp, Brain, Newspaper, PieChart,
   Activity, ArrowRight, CheckCircle, Clock, AlertTriangle,
-  LayoutGrid, BarChart2, Trophy, FileText,
+  LayoutGrid, BarChart2, Trophy, FileText, Star,
 } from 'lucide-react';
 import InfoBadge from './components/InfoBadge';
 
@@ -265,9 +265,79 @@ export default function Dashboard() {
     const handleReset = () => {
       setSelectedTicker('');
     };
+    const handleOpenReport = () => {
+      setReportModalOpen(true);
+    };
     window.addEventListener('reset-selected-ticker', handleReset);
-    return () => window.removeEventListener('reset-selected-ticker', handleReset);
+    window.addEventListener('open-report-modal', handleOpenReport);
+    return () => {
+      window.removeEventListener('reset-selected-ticker', handleReset);
+      window.removeEventListener('open-report-modal', handleOpenReport);
+    };
   }, []);
+
+  // Track if current asset is pinned in Watchlist
+  const [isWatchlisted, setIsWatchlisted] = useState(false);
+
+  useEffect(() => {
+    if (!selectedTicker) {
+      setIsWatchlisted(false);
+      return;
+    }
+    const checkWatchlist = () => {
+      try {
+        const saved = localStorage.getItem('stockiq_pro_watchlist');
+        if (saved) {
+          const list = JSON.parse(saved);
+          if (Array.isArray(list)) {
+            const cleanCur = selectedTicker.replace('.NS', '').replace('.BO', '').toUpperCase();
+            const found = list.some(item => {
+              const itemSym = (item.symbol || '').replace('.NS', '').replace('.BO', '').toUpperCase();
+              return itemSym === cleanCur;
+            });
+            setIsWatchlisted(found);
+            return;
+          }
+        }
+      } catch (_) {}
+      setIsWatchlisted(false);
+    };
+
+    checkWatchlist();
+    window.addEventListener('stockiq-watchlist-changed', checkWatchlist);
+    return () => window.removeEventListener('stockiq-watchlist-changed', checkWatchlist);
+  }, [selectedTicker]);
+
+  const handleToggleWatchlist = () => {
+    if (!selectedTicker) return;
+    try {
+      const saved = localStorage.getItem('stockiq_pro_watchlist');
+      let list = saved ? JSON.parse(saved) : [];
+      if (!Array.isArray(list)) list = [];
+
+      const cleanCur = selectedTicker.replace('.NS', '').replace('.BO', '').toUpperCase();
+      const existingIdx = list.findIndex(item => {
+        const itemSym = (item.symbol || '').replace('.NS', '').replace('.BO', '').toUpperCase();
+        return itemSym === cleanCur;
+      });
+
+      if (existingIdx >= 0) {
+        list.splice(existingIdx, 1);
+        setIsWatchlisted(false);
+      } else {
+        list.push({
+          symbol: selectedTicker.toUpperCase(),
+          name: cleanCur,
+          sector: 'Equities'
+        });
+        setIsWatchlisted(true);
+      }
+      localStorage.setItem('stockiq_pro_watchlist', JSON.stringify(list));
+      window.dispatchEvent(new CustomEvent('stockiq-watchlist-changed'));
+    } catch (e) {
+      console.error('Error toggling watchlist:', e);
+    }
+  };
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#000' }}>
@@ -307,7 +377,24 @@ export default function Dashboard() {
                   {selectedTicker}
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={handleToggleWatchlist}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    padding: '6px 13px',
+                    background: isWatchlisted ? 'rgba(234, 179, 8, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                    border: `1px solid ${isWatchlisted ? 'rgba(234, 179, 8, 0.4)' : 'rgba(255, 255, 255, 0.1)'}`,
+                    borderRadius: '7px',
+                    color: isWatchlisted ? '#fbbf24' : '#cbd5e1',
+                    fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                  title={isWatchlisted ? "Remove from personal watchlist" : "Pin to personal watchlist"}
+                >
+                  <Star style={{ width: '13px', height: '13px', fill: isWatchlisted ? '#fbbf24' : 'none', color: isWatchlisted ? '#fbbf24' : '#94a3b8' }} />
+                  <span>{isWatchlisted ? 'Pinned to Watchlist' : 'Add to Watchlist'}</span>
+                </button>
                 <Link
                   href={`/intraday?ticker=${encodeURIComponent(selectedTicker)}`}
                   style={{
