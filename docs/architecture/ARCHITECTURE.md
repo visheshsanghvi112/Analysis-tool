@@ -14,10 +14,11 @@
 4. [Machine Learning & Quantitative Analytics Engine](#4-machine-learning--quantitative-analytics-engine)
 5. [Intelligent News Reader & Deep Scraping (Powered by Scrapling)](#5-intelligent-news-reader--deep-scraping-powered-by-scrapling)
 6. [Fundamental Valuation & Risk Forensics](#6-fundamental-valuation--risk-forensics)
-7. [Portfolio Management & Capital Allocation](#7-portfolio-management--capital-allocation)
-8. [Frontend User Experience & Interactive Architecture](#8-frontend-user-experience--interactive-architecture)
-9. [Caching Tier, Reliability & Benchmarks](#9-caching-tier-reliability--benchmarks)
-10. [Engineering Principles & Stability Guidelines](#10-engineering-principles--stability-guidelines)
+7. [Portfolio Management, Capital Allocation & Wealth Planning](#7-portfolio-management-capital-allocation--wealth-planning)
+8. [High-Frequency Intraday Engine & Technical Indicators](#8-high-frequency-intraday-engine--technical-indicators)
+9. [Frontend User Experience & Interactive Architecture](#9-frontend-user-experience--interactive-architecture)
+10. [Caching Tier, Reliability & Benchmarks](#10-caching-tier-reliability--benchmarks)
+11. [Engineering Principles & Stability Guidelines](#11-engineering-principles--stability-guidelines)
 
 ---
 
@@ -51,6 +52,7 @@ graph TD
             Routers --> R_ML[/api/ml-predict - 6-Model Ensemble & Regimes]
             Routers --> R_News[/api/advanced-news - Scrapling Deep News Reader]
             Routers --> R_Port[/api/portfolio - MPT & Capital Allocation]
+            Routers --> R_Intra[/api/intraday - High-Frequency Candles & Indicators]
         end
         
         subgraph Services [Domain Services Tier]
@@ -59,6 +61,7 @@ graph TD
             R_ML --> S_MLModels[MLEnsemble - XGBoost, LightGBM, HMM, GARCH]
             R_News --> S_NewsReader[IntelligentNewsReader - Scrapling Engine]
             R_Port --> S_CapAlloc[CapitalAllocator - Markowitz, Monte Carlo]
+            R_Intra --> S_Intra[IntradayEngine - Supertrend, VWAP, EMA Ribbons]
         end
         
         subgraph Scraping_Data [Data Access & Scraping Engine]
@@ -259,37 +262,78 @@ StockIQ Pro computes institutional financial metrics in [`backend/engine.py`](fi
 
 ---
 
-## 7. Portfolio Management & Capital Allocation
+## 7. Portfolio Management, Capital Allocation & Wealth Planning
 
-The portfolio intelligence module ([`backend/capital_allocator.py`](file:///Users/vishesh/Downloads/Analysis-tool/backend/capital_allocator.py)) provides institutional portfolio construction:
+The portfolio intelligence module ([`backend/capital_allocator.py`](file:///Users/vishesh/Downloads/Analysis-tool/backend/capital_allocator.py) and [`backend/routers/portfolio.py`](file:///Users/vishesh/Downloads/Analysis-tool/backend/routers/portfolio.py)) provides institutional portfolio construction, risk management, and long-term wealth planning:
 
 1.  **Modern Portfolio Theory (Markowitz Efficient Frontier)**:
-    - Calculates the covariance matrix $\Sigma$ across historical asset returns.
+    - Calculates the asset covariance matrix $\Sigma$ across historical asset returns.
     - Determines the **Tangency Portfolio** (Maximum Sharpe Ratio):
       $$\max_{w} \frac{w^T \mu - r_f}{\sqrt{w^T \Sigma w}} \quad \text{s.t.} \quad \sum w_i = 1, \quad w_i \ge 0$$
     - Determines the **Global Minimum Variance (GMV)** portfolio for capital preservation.
 2.  **Monte Carlo Simulation (1,000 Iterations)**:
-    - Generates multi-year stochastic asset paths using Cholesky decomposition of the covariance matrix.
+    - Generates multi-year stochastic asset paths using Cholesky decomposition of the covariance matrix and Geometric Brownian Motion (GBM):
+      $$S_t = S_0 \exp\left( \left(\mu - \frac{1}{2}\sigma^2\right)t + \sigma W_t \right)$$
     - Computes **Value-at-Risk (VaR 95%, 99%)** and **Conditional VaR (CVaR / Expected Shortfall)** to measure maximum drawdown expectations.
-3.  **Dynamic Asset Rebalancing**:
-    - Recommends explicit buy/sell trade amounts to adjust the user's current holdings toward the mathematically optimal weights.
+    - Projects interactive quantile corridors ($P_{2.5}, P_{25}, P_{50}, P_{75}, P_{97.5}$) exportable to CSV.
+3.  **Smart Capital Advisor (Strategic Averaging Down)**:
+    - Detects underwater portfolio positions and calculates dynamic recovery priority scores based on technical oversold conditions, fundamental margin of safety, and market capitalization.
+    - Generates a granular capital deployment plan detailing allocated amounts, allocation weights, target purchase shares, and revised break-even prices.
+4.  **SIP & Compound Wealth Planner**:
+    - Models Systematic Investment Plans with annual step-up contribution multipliers:
+      $$FV = P \times \left[ \frac{(1 + r/12)^{12n} - 1}{r/12} \right] \times (1 + r/12)$$
+    - Dynamically computes inflation-adjusted purchasing power schedules and long-term milestones.
 
 ---
 
-## 8. Frontend User Experience & Interactive Architecture
+## 8. High-Frequency Intraday Engine & Technical Indicators
 
-The frontend is built with **Next.js 16 (Turbopack)** and **Vanilla CSS** tokens, adhering to a responsive, dark-mode financial terminal aesthetic.
+The intraday execution engine ([`backend/routers/intraday.py`](file:///Users/vishesh/Downloads/Analysis-tool/backend/routers/intraday.py)) provides high-resolution data streams and quantitative trading indicators across 1m, 2m, 5m, 15m, 30m, and 60m candles:
+
+1.  **Supertrend Trend-Following Filter**:
+    - Computes True Range ($TR$) and 10-period Average True Range ($ATR$).
+    - Determines dynamic upper and lower bands adjusted by multiplier factor $M=3.0$:
+      $$UpperBand = \frac{High + Low}{2} + M \times ATR, \quad LowerBand = \frac{High + Low}{2} - M \times ATR$$
+    - Tracks directional regime flips ($+1$ for Bullish, $-1$ for Bearish) to eliminate emotional trade entries.
+2.  **Volume-Weighted Average Price (VWAP) with Standard Deviation Bands**:
+    - Aggregates intraday tick volumes and price levels:
+      $$VWAP = \frac{\sum (TypicalPrice_i \times Volume_i)}{\sum Volume_i}, \quad TypicalPrice_i = \frac{High_i + Low_i + Close_i}{3}$$
+    - Computes cumulative volume-weighted variance $\sigma_{VWAP}^2$ and renders $\pm 1\sigma$ and $\pm 2\sigma$ volatility bands for institutional liquidity mean-reversion analysis.
+3.  **Full Exponential Moving Average (EMA) Ribbons**:
+    - Recursive exponential smoothing for 9, 21, 50, and 200 periods:
+      $$EMA_t = \alpha \times Close_t + (1 - \alpha) \times EMA_{t-1}, \quad \alpha = \frac{2}{N + 1}$$
+4.  **Oscillator Suite**:
+    - **RSI (14-period)** with Wilder's exponential smoothing of average gains and losses.
+    - **MACD (12, 26, 9)** line, signal line, and divergence histogram.
+    - **Average True Range (ATR 14)** for absolute volatility measurement.
+5.  **Full Time-Series CSV Export**:
+    - All indicator columns and OHLCV bars are downloadable via one-click CSV export.
+
+---
+
+## 9. Frontend User Experience & Interactive Architecture
+
+The frontend is built with **Next.js 16 (Turbopack)**, **React 19**, and **Vanilla CSS + Tailwind CSS**, adhering to a responsive, dark-mode financial terminal aesthetic.
+
+### Application Routes:
+*   **`/`**: Master quantitative workstation (fundamentals, 6-model ML forecasts, Monte Carlo, DCF, DuPont, news intelligence).
+*   **`/intraday`**: High-frequency intraday technical charting and indicator terminal.
+*   **`/portfolio`**: Portfolio optimizer, Markowitz efficient frontier, and Smart Capital Advisor.
+*   **`/browse`**: Market-wide 7,954 universe asset explorer with sector categorization.
+*   **`/features`**: System capabilities, architecture flowcharts, and technical performance matrix.
+*   **`/terms`**: Platform terms of use, licensing, and SEBI regulatory risk disclosures.
 
 ### Core Interactive Features:
 *   **Spotlight Command Palette** (<kbd>⌘K</kbd> / <kbd>/</kbd>): Instant modal with category tabs (**All**, **Equities**, **ETFs**, **Indices**, **Global**), arrow-key navigation, and recent search history.
 *   **TradingView Lightweight Charts**: GPU-accelerated interactive candlestick charts with volume bars, 20/50/200 EMA overlays, Bollinger Bands, and RSI/MACD sub-charts.
 *   **Real-Time Watchlist Drawer**: Persistent multi-stock monitoring panel with live prices, daily $\Delta \%$, and one-click removal.
-*   **Peer Comparison Engine**: Side-by-side comparison across P/E, EV/EBITDA, ROE, Debt/Equity, and 1-year returns with sector benchmarks.
-*   **Executive Research Memo Exporter**: Generates a print-ready A4 institutional memo in PDF/Markdown format, complete with investment thesis, valuation breakdown, technical levels, and risk disclosures.
+*   **Multi-Format Exporters**:
+    *   **CSV Exports**: Intraday indicator series, Smart Capital Allocation plans, and Monte Carlo percentile distributions.
+    *   **Executive Research Memo**: Generates a print-ready A4 institutional memo in PDF/Markdown format with full thesis, valuation breakdown, and risk disclosures.
 
 ---
 
-## 9. Caching Tier, Reliability & Benchmarks
+## 10. Caching Tier, Reliability & Benchmarks
 
 To eliminate rate-limiting and minimize external API calls, a thread-safe, in-memory **Time-To-Live (TTL) cache** is implemented across all backend services:
 
@@ -302,15 +346,16 @@ To eliminate rate-limiting and minimize external API calls, a thread-safe, in-me
 | **`/api/market-screener`** (Sector Movers) | 60 seconds | ~1.20 s | **0.35 ms** | **~3,400x** |
 
 ### Automated Test Suite:
-StockIQ Pro maintains an automated pytest test suite in [`backend/tests/test_api.py`](file:///Users/vishesh/Downloads/Analysis-tool/backend/tests/test_api.py).
-*   **Test Coverage**: 15 test suites covering API health, master ticker retrieval, smart search typo tolerance, corporate financial aliases, DCF valuation, options Greeks, DuPont analysis, and news intelligence.
-*   **Status**: **15 / 15 Tests Passing (100%)**.
+StockIQ Pro maintains an automated pytest test suite validating all API endpoints, algorithmic routines, statistical calculations, and search behaviors:
+*   **`backend/tests/test_api.py`**: 18 tests covering API health, ticker search, sector groupings, live quotes, DCF validations, backtesting, ETF search, BSE scrip code resolution, and fuzzy typo tolerance.
+*   **`backend/tests/test_polished_algorithms.py`**: 7 tests covering DCF valuations, GARCH volatility clustering, Monte Carlo stochastic simulations, Markov regime detection, sentiment extraction, backtest engines, and the 6-model ML ensemble.
+*   **Status**: **25 / 25 Tests Passing (100%)**.
 
 ---
 
-## 10. Engineering Principles & Stability Guidelines
+## 11. Engineering Principles & Stability Guidelines
 
 1.  **No Cosmetic Rewrites**: Code is modified only to fix defects, enhance performance, or implement required features. Working, tested implementations are preserved.
 2.  **Decoupled Boundaries**: Routers handle HTTP parsing and validation; services execute financial math and ML; clients manage external network access.
 3.  **Fail-Soft Resilience**: If an external news source or financial data feed experiences transient outages, the system degrades gracefully with clear status codes and informative messaging rather than throwing unhandled exceptions.
-4.  **Mathematical Accuracy**: Financial formulas (Black-Scholes, DuPont, DCF, GARCH) follow standard peer-reviewed quantitative finance literature without heuristic shortcuts.
+4.  **Mathematical Accuracy**: Financial formulas (Black-Scholes, DuPont, DCF, GARCH, Supertrend, VWAP) follow standard peer-reviewed quantitative finance literature without heuristic shortcuts.

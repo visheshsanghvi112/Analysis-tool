@@ -80,17 +80,18 @@ export default function AdvancedNews({ ticker, companyName }) {
     return `${diffInDays}d ago`;
   };
 
-  const positiveCount = useMemo(() => (newsData?.articles || []).filter(a => a.sentiment > 0.1).length, [newsData?.articles]);
-  const negativeCount = useMemo(() => (newsData?.articles || []).filter(a => a.sentiment < -0.1).length, [newsData?.articles]);
-  const neutralCount = useMemo(() => (newsData?.articles || []).filter(a => a.sentiment >= -0.1 && a.sentiment <= 0.1).length, [newsData?.articles]);
+  const articles = newsData?.articles;
+  const positiveCount = useMemo(() => (articles || []).filter(a => a.sentiment > 0.1).length, [articles]);
+  const negativeCount = useMemo(() => (articles || []).filter(a => a.sentiment < -0.1).length, [articles]);
+  const neutralCount = useMemo(() => (articles || []).filter(a => a.sentiment >= -0.1 && a.sentiment <= 0.1).length, [articles]);
 
   const filteredArticles = useMemo(() => {
-    if (!newsData?.articles) return [];
-    if (sentimentFilter === 'POSITIVE') return newsData.articles.filter(a => a.sentiment > 0.1);
-    if (sentimentFilter === 'NEGATIVE') return newsData.articles.filter(a => a.sentiment < -0.1);
-    if (sentimentFilter === 'NEUTRAL') return newsData.articles.filter(a => a.sentiment >= -0.1 && a.sentiment <= 0.1);
-    return newsData.articles;
-  }, [newsData?.articles, sentimentFilter]);
+    if (!articles) return [];
+    if (sentimentFilter === 'POSITIVE') return articles.filter(a => a.sentiment > 0.1);
+    if (sentimentFilter === 'NEGATIVE') return articles.filter(a => a.sentiment < -0.1);
+    if (sentimentFilter === 'NEUTRAL') return articles.filter(a => a.sentiment >= -0.1 && a.sentiment <= 0.1);
+    return articles;
+  }, [articles, sentimentFilter]);
 
   return (
     <div className="glass-card p-4 sm:p-6">

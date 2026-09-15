@@ -149,7 +149,7 @@ railway up
 1. Connect GitHub repo to Render
 2. Create new "Web Service"
 3. Configure:
-   - Environment: Python 3.9+
+   - Environment: Python 3.10+ (Python 3.11 recommended)
    - Build Command: `pip install -r requirements.txt`
    - Start Command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
    - Root Directory: `backend`
@@ -159,7 +159,7 @@ railway up
 ENVIRONMENT=production
 ALLOWED_HOSTS=your-frontend-domain.com
 RATE_LIMIT_PER_MINUTE=30
-PYTHON_VERSION=3.9.0
+PYTHON_VERSION=3.11.5
 ```
 
 #### Frontend Deployment

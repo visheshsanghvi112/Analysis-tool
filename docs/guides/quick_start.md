@@ -76,7 +76,7 @@ railway up
 2. Click **"New Web Service"**
 3. Connect your GitHub repo
 4. Configure:
-   - **Environment**: Python 3.9
+   - **Environment**: Python 3.10+ (Python 3.11 recommended)
    - **Build Command**: `pip install -r requirements.txt`
    - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
    - **Root Directory**: `backend`

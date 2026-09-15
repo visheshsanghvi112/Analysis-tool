@@ -458,21 +458,6 @@ function ResultsPanel({ data, onReset, currSym = '₹', loc = 'en-IN' }) {
     return acc;
   }, {});
 
-  if (data.no_loss_positions) {
-    return (
-      <div className="text-center py-8 space-y-3">
-        <CheckCircle2 className="h-12 w-12 text-emerald-400 mx-auto" />
-        <p className="text-base font-bold text-white">All Positions in Profit!</p>
-        <p className="text-sm text-slate-400">{data.message}</p>
-        <button onClick={onReset} className="mt-3 text-xs text-violet-400 hover:text-violet-300 underline cursor-pointer">
-          Recalculate
-        </button>
-      </div>
-    );
-  }
-
-  const confColor = s.overall_confidence === 'HIGH' ? 'text-emerald-400' : s.overall_confidence === 'MODERATE' ? 'text-indigo-400' : 'text-amber-400';
-
   const handleExportPlanCSV = useCallback(() => {
     if (!data?.suggestions?.length) return;
     const headers = [
@@ -502,12 +487,27 @@ function ResultsPanel({ data, onReset, currSym = '₹', loc = 'en-IN' }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `Smart_Capital_Allocation_Plan_${s.horizon_label?.replace(/\s+/g, '_') || 'Custom'}.csv`);
+    link.setAttribute('download', `Smart_Capital_Allocation_Plan_${s?.horizon_label?.replace(/\s+/g, '_') || 'Custom'}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  }, [data?.suggestions, s.horizon_label]);
+  }, [data, s?.horizon_label]);
+
+  if (data.no_loss_positions) {
+    return (
+      <div className="text-center py-8 space-y-3">
+        <CheckCircle2 className="h-12 w-12 text-emerald-400 mx-auto" />
+        <p className="text-base font-bold text-white">All Positions in Profit!</p>
+        <p className="text-sm text-slate-400">{data.message}</p>
+        <button onClick={onReset} className="mt-3 text-xs text-violet-400 hover:text-violet-300 underline cursor-pointer">
+          Recalculate
+        </button>
+      </div>
+    );
+  }
+
+  const confColor = s?.overall_confidence === 'HIGH' ? 'text-emerald-400' : s?.overall_confidence === 'MODERATE' ? 'text-indigo-400' : 'text-amber-400';
 
   return (
     <div className="space-y-5">

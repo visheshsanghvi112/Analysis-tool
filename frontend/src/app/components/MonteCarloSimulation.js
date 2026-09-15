@@ -225,7 +225,7 @@ export default function MonteCarloSimulation({ ticker }) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  }, [data?.simulated, ticker, mode, horizon]);
+  }, [data, ticker, mode, horizon]);
 
   return (
     <div className="glass-card p-4 sm:p-6">

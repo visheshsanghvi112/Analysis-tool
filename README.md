@@ -15,7 +15,7 @@
 [![Python](https://img.shields.io/badge/Python_3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Scrapling Engine](https://img.shields.io/badge/Scrapling_Stealth_Engine-06B6D4?style=for-the-badge&logo=cloudflare&logoColor=white)](https://github.com/d4vinci/Scrapling)
 [![Machine Learning](https://img.shields.io/badge/6--Model_Ensemble_Stack-10B981?style=for-the-badge&logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
-[![Tests](https://img.shields.io/badge/Pytest_Suite-18%2F18_Passing_(100%25)-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](https://docs.pytest.org/)
+[![Tests](https://img.shields.io/badge/Pytest_Suite-25%2F25_Passing_(100%25)-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](https://docs.pytest.org/)
 [![Deployed on Vercel](https://img.shields.io/badge/Deployed_on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/)
 
 <br/>
@@ -46,20 +46,23 @@ Our mission is to give every individual investor the analytical firepower of a m
 
 ---
 
-## 🚀 The 8 Major Breakthroughs of StockIQ Pro
+## 🚀 The 10 Major Breakthroughs of StockIQ Pro
 
 ```
-                                  STOCKIQ PRO CORE CAPABILITIES
+                                      STOCKIQ PRO CORE CAPABILITIES
  ┌───────────────────────────┬───────────────────────────┬───────────────────────────┐
  │   7,954 Master Universe   │   Universal Smart Search  │    Live Scrapling News    │
  │  NSE, BSE, ETFs, Indices  │   Aliases, Scrips, Typos  │  Deep Full-Article Reader │
  ├───────────────────────────┼───────────────────────────┼───────────────────────────┤
  │    6-Model ML Ensemble    │   GARCH & Regime HMM      │  DCF & Forensics Suite    │
  │  RF, ET, GB, XGB, LGB, BR │  Volatility & Market Mode │ DuPont, Z-Score, Greeks   │
- ├───────────────────────────┴───────────────────────────┼───────────────────────────┤
- │        Modern Portfolio Theory & Monte Carlo          │   Spotlight UI & Memos    │
- │       Markowitz Efficient Frontier & 99% VaR          │   ⌘K Palette & PDF Export │
- └───────────────────────────────────────────────────────┴───────────────────────────┘
+ ├───────────────────────────┼───────────────────────────┼───────────────────────────┤
+ │   Modern Portfolio (MPT)  │     Intraday Terminal     │   Smart Capital Advisor   │
+ │   Markowitz & Monte Carlo │ Supertrend, VWAP, Ribbons │ Averaging Down & Recovery │
+ ├───────────────────────────┴───────────────────────────┴───────────────────────────┤
+ │                     Spotlight UI, SIP Planner & Multi-Format Exporters            │
+ │                    ⌘K Command Palette, CSV Data Dumps & PDF Research Memos        │
+ └───────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 1. 🌌 The 7,954 Master Asset Catalog
@@ -142,11 +145,31 @@ Financial markets are noisy and non-linear. Single models quickly overfit. Stock
 
 ---
 
-### 8. 💻 Dark-Mode Financial Terminal & Research Exporter
-*   **Spotlight Command Palette (<kbd>⌘K</kbd> / <kbd>/</kbd>)**: Instant global search modal with category tabs (**All**, **Equities**, **ETFs**, **Indices**, **Global**) and arrow navigation.
-*   **GPU-Accelerated TradingView Charts**: Real-time candlestick charts with volume profiles, 20/50/200 EMAs, Bollinger Bands, and MACD/RSI sub-panels.
-*   **Live Watchlist Drawer**: Slide-out multi-asset tracking drawer with one-click monitoring.
-*   **Executive Research Memo Exporter**: Generates a print-ready A4 institutional memo in PDF/Markdown format, complete with investment thesis, valuation breakdown, technical levels, and risk disclosures.
+### 8. ⚡ High-Frequency Intraday Terminal (`/intraday`)
+A dedicated execution-grade workspace for day traders and quantitative technicians:
+*   **Live Candlestick Intervals**: High-resolution 1m, 2m, 5m, 15m, 30m, and 60m OHLCV feeds with auto-refresh timers.
+*   **Supertrend Signal Generator**: Multiplier-tuned Average True Range (ATR) trend filter providing unambiguous bullish/bearish directional flips.
+*   **Multi-Timeframe VWAP with Standard Deviation Bands**: Volume-Weighted Average Price with Upper 1/2 and Lower 1/2 standard deviation volatility bands for mean-reversion fades.
+*   **Full EMA Ribbons**: 9, 21, 50, and 200 Exponential Moving Averages dynamically overlaid to track momentum transitions.
+*   **Oscillators Suite**: 14-period Relative Strength Index (RSI), MACD (12, 26, 9) histogram divergence, and true Average True Range (ATR).
+*   **One-Click Intraday CSV Exporter**: Download the complete indicator and OHLCV time-series directly into Excel or Python notebooks.
+
+---
+
+### 9. 🛡️ Smart Capital Advisor & Loss Averaging Strategist (`/portfolio`)
+Takes the emotion out of managing underwater portfolio positions:
+*   **Automated Loss Identification**: Automatically analyzes portfolio holdings to identify positions in drawdown.
+*   **Strategic Averaging Down Allocation**: Deploys fresh capital across high-conviction, oversold assets based on mathematical priority weighting.
+*   **Target Break-Even Projections**: Computes required shares to buy, post-averaging breakeven price, and percentage recovery reduction.
+*   **Allocation Plan CSV Exporter**: Downloads full trade execution worksheets with rationale, priority labels, and target allocations.
+
+---
+
+### 10. 💻 Dark-Mode Financial Terminal, SIP Wealth Planner & PDF Research Memos
+*   **Universal Spotlight Command Palette (<kbd>⌘K</kbd> / <kbd>/</kbd>)**: Instant global search modal across 7,954 assets with category filtering (**All**, **Equities**, **ETFs**, **Indices**, **Global**) and arrow-key navigation.
+*   **Systematic Investment Plan (SIP) Calculator**: Compound interest and wealth accumulation planner with step-up annual escalation, inflation indexing, and wealth milestone timelines.
+*   **Multi-Asset Peer Comparison**: Side-by-side comparative matrices analyzing target tickers against industry peers across P/E, P/B, EV/EBITDA, ROE, ROCE, and Dividend Yield.
+*   **Executive Research Memo Exporter**: Generates a print-ready A4 institutional memo in PDF and Markdown format, complete with investment thesis, valuation breakdown, technical levels, and risk disclosures.
 
 ---
 
@@ -221,33 +244,40 @@ StockIQ Pro adheres to strict test-driven development practices. All endpoints, 
 
 ```bash
 cd backend
-PYTHONPATH=. .venv/bin/pytest tests/test_api.py -v
+pytest tests/ -v
 ```
 
 ```text
 ============================= test session starts ==============================
-collected 18 items
+collected 25 items
 
-tests/test_api.py::test_health_endpoint PASSED                           [  5%]
-tests/test_api.py::test_root_endpoint PASSED                             [ 11%]
-tests/test_api.py::test_tickers_search PASSED                            [ 16%]
-tests/test_api.py::test_sectors_grouping PASSED                          [ 22%]
-tests/test_api.py::test_live_price PASSED                                [ 27%]
-tests/test_api.py::test_dcf_valuation_invalid_ticker PASSED              [ 33%]
-tests/test_api.py::test_backtest_endpoint PASSED                         [ 38%]
-tests/test_api.py::test_master_universe_loaded PASSED                    [ 44%]
-tests/test_api.py::test_etf_search_real PASSED                           [ 50%]
-tests/test_api.py::test_bse_code_search_real PASSED                      [ 55%]
-tests/test_api.py::test_index_ticker_live_price PASSED                   [ 61%]
-tests/test_api.py::test_smart_search_typo_tolerance PASSED               [ 66%]
-tests/test_api.py::test_smart_search_multi_token_space PASSED            [ 72%]
-tests/test_api.py::test_smart_search_financial_alias PASSED              [ 77%]
-tests/test_api.py::test_smart_search_concept_gold_etf PASSED             [ 83%]
-tests/test_api.py::test_empty_ticker_validation PASSED                   [ 88%]
-tests/test_api.py::test_portfolio_optimize_single_holding_validation PASSED [ 94%]
-tests/test_api.py::test_advanced_news_endpoint_schema PASSED             [100%]
+tests/test_api.py::test_health_endpoint PASSED                           [  4%]
+tests/test_api.py::test_root_endpoint PASSED                             [  8%]
+tests/test_api.py::test_tickers_search PASSED                            [ 12%]
+tests/test_api.py::test_sectors_grouping PASSED                          [ 16%]
+tests/test_api.py::test_live_price PASSED                                [ 20%]
+tests/test_api.py::test_dcf_valuation_invalid_ticker PASSED              [ 24%]
+tests/test_api.py::test_backtest_endpoint PASSED                         [ 28%]
+tests/test_api.py::test_master_universe_loaded PASSED                    [ 32%]
+tests/test_api.py::test_etf_search_real PASSED                           [ 36%]
+tests/test_api.py::test_bse_code_search_real PASSED                      [ 40%]
+tests/test_api.py::test_index_ticker_live_price PASSED                   [ 44%]
+tests/test_api.py::test_smart_search_typo_tolerance PASSED               [ 48%]
+tests/test_api.py::test_smart_search_multi_token_space PASSED            [ 52%]
+tests/test_api.py::test_smart_search_financial_alias PASSED              [ 56%]
+tests/test_api.py::test_smart_search_concept_gold_etf PASSED             [ 60%]
+tests/test_api.py::test_empty_ticker_validation PASSED                   [ 64%]
+tests/test_api.py::test_portfolio_optimize_single_holding_validation PASSED [ 68%]
+tests/test_api.py::test_advanced_news_endpoint_schema PASSED             [ 72%]
+tests/test_polished_algorithms.py::test_polished_dcf PASSED              [ 76%]
+tests/test_polished_algorithms.py::test_polished_garch PASSED            [ 80%]
+tests/test_polished_algorithms.py::test_polished_monte_carlo PASSED      [ 84%]
+tests/test_polished_algorithms.py::test_polished_regimes PASSED          [ 88%]
+tests/test_polished_algorithms.py::test_polished_sentiment PASSED        [ 92%]
+tests/test_polished_algorithms.py::test_polished_backtest PASSED         [ 96%]
+tests/test_polished_algorithms.py::test_polished_ml_predict PASSED       [100%]
 
-======================== 18 passed, 1 warning in 7.18s =========================
+======================== 25 passed, 1 warning in 117.14s =======================
 ```
 
 ---

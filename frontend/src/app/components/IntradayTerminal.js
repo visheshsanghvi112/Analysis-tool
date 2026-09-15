@@ -448,7 +448,7 @@ export default function IntradayTerminal() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  }, [data?.candles, ticker, candleInterval, period]);
+  }, [data, ticker, candleInterval, period]);
 
   // Initial and param-change load
   useEffect(() => {
