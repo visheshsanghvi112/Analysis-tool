@@ -23,6 +23,7 @@ import {
   LayoutGrid, BarChart2, Trophy, FileText, Star,
 } from 'lucide-react';
 import InfoBadge from './components/InfoBadge';
+import { API_BASE_URL } from './config';
 
 /* ── Status badge ─────────────────────────────────────────────────── */
 const StatusBadge = ({ icon: Icon, title, subtitle, status, infoKey }) => {
@@ -238,30 +239,64 @@ const LoadingState = ({ ticker }) => (
   </div>
 );
 
+// Comprehensive ETF heuristic for Indian & global ETFs
+const checkIsETF = (ticker) => {
+  if (!ticker) return false;
+  const t = ticker.toUpperCase().trim();
+  const ETF_KEYWORDS = [
+    'BEES', 'ETF', 'MON100', 'MONQ50', 'MAFANG', 'CPSE', 'GOLD', 'SILVER',
+    'LIQUIDBEES', 'SILVERBEES', 'ITBEES', 'SETFNN50', 'KOTAKNV20',
+    'MID150BEES', 'JUNIORBEES', 'HDFCNIFTY', 'ICICINIFTY', 'NIFTYETF',
+    'Q50', 'NV20', 'MID150', 'BHARAT22', 'ICICIB22', 'SETF', 'NIFTYQLITY',
+    'LOWVOL', 'ALPHA', 'MOMENTUM', 'COMMODITY', 'INVESCO', 'AXISNIFTY',
+    'UTINIFT', 'KOTAKNIFTY', 'SBINIFTY', 'MASPTOP50', 'MIDSML400', 'HDFCSML250',
+  ];
+  const GLOBAL_ETFS = new Set([
+    'SPY', 'QQQ', 'VOO', 'IVV', 'VTI', 'IWM', 'DIA', 'GLD', 'SLV',
+    'ARKK', 'SMH', 'XLF', 'XLE', 'XLK', 'EEM', 'VEA', 'VWO', 'SCHD',
+    'TLT', 'IEF', 'SHY', 'XBI', 'IBB', 'VNQ', 'VIG', 'VYM',
+  ]);
+  return (
+    ETF_KEYWORDS.some(k => t.includes(k)) ||
+    t.endsWith('ETF.NS') ||
+    t.endsWith('ETF.BO') ||
+    GLOBAL_ETFS.has(t)
+  );
+};
+
 /* ── Dashboard ────────────────────────────────────────────────────── */
 export default function Dashboard() {
   const [selectedTicker, setSelectedTicker] = useState('');
   const [isLoading, setIsLoading]           = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [confirmedETF, setConfirmedETF]     = useState(null);
 
-  // ETF detection — comprehensive heuristic for Indian & global ETFs
-  const ETF_KEYWORDS = [
-    'BEES', 'MON100', 'MAFANG', 'CPSEETF', 'GOLDETF',
-    'LIQUIDBEES', 'SILVERBEES', 'ITBEES', 'SETFNN50', 'KOTAKNV20',
-    'MID150BEES', 'JUNIORBEES', 'HDFCNIFTY', 'ICICINIFTY', 'NIFTYETF',
-  ];
-  const GLOBAL_ETFS = new Set([
-    'SPY', 'QQQ', 'VOO', 'IVV', 'VTI', 'IWM', 'DIA', 'GLD', 'SLV',
-    'ARKK', 'SMH', 'XLF', 'XLE', 'XLK', 'EEM', 'VEA', 'VWO',
-  ]);
-  const isETF = selectedTicker
-    ? (
-        ETF_KEYWORDS.some(k => selectedTicker.toUpperCase().includes(k)) ||
-        selectedTicker.toUpperCase().endsWith('ETF.NS') ||
-        selectedTicker.toUpperCase().endsWith('ETF.BO') ||
-        GLOBAL_ETFS.has(selectedTicker.toUpperCase().trim())
-      )
-    : false;
+  const isETF = confirmedETF !== null ? confirmedETF : checkIsETF(selectedTicker);
+
+  // Asynchronously confirm ETF status from backend if not already matched
+  useEffect(() => {
+    if (!selectedTicker) {
+      return;
+    }
+
+    const controller = new AbortController();
+    fetch(`${API_BASE_URL}/api/live?ticker=${encodeURIComponent(selectedTicker)}`, {
+      signal: controller.signal
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (data) {
+          if (data.asset_type === 'ETF' || data.asset_type === 'MUTUALFUND') {
+            setConfirmedETF(true);
+          } else if (data.longName && /\b(etf|bees)\b/i.test(data.longName)) {
+            setConfirmedETF(true);
+          }
+        }
+      })
+      .catch(() => {});
+
+    return () => controller.abort();
+  }, [selectedTicker]);
 
   const handleTickerSelect = useCallback((ticker) => {
     setIsLoading(true);
@@ -493,7 +528,7 @@ export default function Dashboard() {
               <SIPCalculator ticker={selectedTicker} />
 
               {/* ── Peer & Sector Intelligence Tabs ───────────────────── */}
-              <PeerSectorTabs ticker={selectedTicker} />
+              {!isETF && <PeerSectorTabs ticker={selectedTicker} />}
             </div>
           </div>
         )}

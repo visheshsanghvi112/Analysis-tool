@@ -171,6 +171,7 @@ def get_quote(ticker: str) -> dict:
             "fiftyTwoWeekLow":  meta.get("fiftyTwoWeekLow"),
             "currency":   curr_code,
             "currency_symbol": curr_sym,
+            "asset_type": get_asset_type(ticker),
         }
     except Exception:
         return {}
@@ -271,10 +272,10 @@ def get_asset_type(ticker: str) -> str:
 
     # Known Indian & Global ETF ticker patterns
     ETF_PATTERNS = [
-        "BEES", "MON100", "MAFANG", "CPSEETF", "GOLDETF",
+        "BEES", "MON100", "MONQ50", "MAFANG", "CPSEETF", "GOLDETF",
         "SILVETF", "ITBEES", "BANKBEES", "LIQUIDBEES", "SILVERBEES",
         "JUNIORBEES", "SETFNN50", "KOTAKNV20", "MID150BEES", "HDFCNIFTY",
-        "ICICINIFTY", "NIFTYETF", "KOTAKBKETF",
+        "ICICINIFTY", "NIFTYETF", "KOTAKBKETF", "Q50", "NV20",
     ]
     if any(p in t for p in ETF_PATTERNS) or t.endswith("ETF.NS") or t.endswith("ETF.BO"):
         return "ETF"
@@ -342,6 +343,13 @@ _INDIAN_ETF_META_FALLBACK = {
         'fund_family': 'Mirae Asset Mutual Fund',
         'category': 'International US FANG+ ETF',
         'inception_date': '2021-05-06',
+    },
+    'MONQ50.NS': {
+        'total_assets': 1.1e10,          # ~₹1,100 Cr
+        'expense_ratio': 0.0050,         # 0.50%
+        'fund_family': 'Motilal Oswal Mutual Fund',
+        'category': 'International US Nasdaq Q-50 ETF',
+        'inception_date': '2021-12-28',
     },
     'CPSEETF.NS': {
         'total_assets': 4.1e11,          # ~₹41,000 Cr
