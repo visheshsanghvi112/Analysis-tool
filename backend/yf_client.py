@@ -247,6 +247,278 @@ def get_info(ticker: str) -> dict:
         return {}
 
 
+# ─────────────────────────────────────────────────────────────
+# Asset type detection — ETF, EQUITY, INDEX
+# ─────────────────────────────────────────────────────────────
+def get_asset_type(ticker: str) -> str:
+    """
+    Returns 'ETF', 'EQUITY', 'INDEX', or 'MUTUALFUND'.
+    Accurately identifies ETFs for both global markets (quoteType=='ETF')
+    and Indian markets (where NSE/BSE lists ETFs under quoteType=='EQUITY').
+    """
+    t = ticker.upper()
+    if t.startswith("^"):
+        return "INDEX"
+
+    info = get_info(ticker)
+    qt = (info.get("quoteType") or "").upper()
+    if qt == "ETF":
+        return "ETF"
+    if qt == "INDEX":
+        return "INDEX"
+    if qt == "MUTUALFUND":
+        return "MUTUALFUND"
+
+    # Known Indian & Global ETF ticker patterns
+    ETF_PATTERNS = [
+        "BEES", "MON100", "MAFANG", "CPSEETF", "GOLDETF",
+        "SILVETF", "ITBEES", "BANKBEES", "LIQUIDBEES", "SILVERBEES",
+        "JUNIORBEES", "SETFNN50", "KOTAKNV20", "MID150BEES", "HDFCNIFTY",
+        "ICICINIFTY", "NIFTYETF", "KOTAKBKETF",
+    ]
+    if any(p in t for p in ETF_PATTERNS) or t.endswith("ETF.NS") or t.endswith("ETF.BO"):
+        return "ETF"
+
+    # Check longName / shortName for ETF indicators (e.g. "Nippon India ETF Nifty 50 BeES")
+    names = [info.get("longName") or "", info.get("shortName") or ""]
+    for name in names:
+        upper_name = f" {name.upper()} "
+        if " ETF " in upper_name or upper_name.endswith(" ETF ") or " BEES " in upper_name:
+            return "ETF"
+
+    if qt in ("EQUITY", "STOCK"):
+        return "EQUITY"
+
+    return "EQUITY"
+
+
+# Curated metadata fallback for top Indian ETFs where Yahoo Finance lacks fundProfile/fundPerformance
+_INDIAN_ETF_META_FALLBACK = {
+    'NIFTYBEES.NS': {
+        'total_assets': 3.1e11,          # ~₹31,000 Cr
+        'expense_ratio': 0.0004,         # 0.04%
+        'fund_family': 'Nippon India Mutual Fund',
+        'category': 'Large Cap Index ETF',
+        'inception_date': '2001-12-28',
+    },
+    'BANKBEES.NS': {
+        'total_assets': 1.2e11,          # ~₹12,000 Cr
+        'expense_ratio': 0.0016,         # 0.16%
+        'fund_family': 'Nippon India Mutual Fund',
+        'category': 'Banking Sector ETF',
+        'inception_date': '2004-05-27',
+    },
+    'GOLDBEES.NS': {
+        'total_assets': 1.15e11,         # ~₹11,500 Cr
+        'expense_ratio': 0.0079,         # 0.79%
+        'fund_family': 'Nippon India Mutual Fund',
+        'category': 'Commodity Gold ETF',
+        'inception_date': '2007-03-08',
+    },
+    'SILVERBEES.NS': {
+        'total_assets': 3.2e10,          # ~₹3,200 Cr
+        'expense_ratio': 0.0053,         # 0.53%
+        'fund_family': 'Nippon India Mutual Fund',
+        'category': 'Commodity Silver ETF',
+        'inception_date': '2022-01-13',
+    },
+    'JUNIORBEES.NS': {
+        'total_assets': 4.8e10,          # ~₹4,800 Cr
+        'expense_ratio': 0.0012,         # 0.12%
+        'fund_family': 'Nippon India Mutual Fund',
+        'category': 'Next 50 Index ETF',
+        'inception_date': '2003-02-21',
+    },
+    'MON100.NS': {
+        'total_assets': 7.5e10,          # ~₹7,500 Cr
+        'expense_ratio': 0.0058,         # 0.58%
+        'fund_family': 'Motilal Oswal Mutual Fund',
+        'category': 'International US Tech ETF',
+        'inception_date': '2011-03-29',
+    },
+    'MAFANG.NS': {
+        'total_assets': 2.4e10,          # ~₹2,400 Cr
+        'expense_ratio': 0.0064,         # 0.64%
+        'fund_family': 'Mirae Asset Mutual Fund',
+        'category': 'International US FANG+ ETF',
+        'inception_date': '2021-05-06',
+    },
+    'CPSEETF.NS': {
+        'total_assets': 4.1e11,          # ~₹41,000 Cr
+        'expense_ratio': 0.0005,         # 0.05%
+        'fund_family': 'Nippon India Mutual Fund',
+        'category': 'PSU / Dividend ETF',
+        'inception_date': '2014-03-28',
+    },
+    'ITBEES.NS': {
+        'total_assets': 2.6e10,          # ~₹2,600 Cr
+        'expense_ratio': 0.0022,         # 0.22%
+        'fund_family': 'Nippon India Mutual Fund',
+        'category': 'IT Sector ETF',
+        'inception_date': '2020-06-19',
+    },
+    'LIQUIDBEES.NS': {
+        'total_assets': 1.5e11,          # ~₹15,000 Cr
+        'expense_ratio': 0.0069,         # 0.69%
+        'fund_family': 'Nippon India Mutual Fund',
+        'category': 'Liquid / Money Market ETF',
+        'inception_date': '2003-07-08',
+    },
+    'SETFNN50.NS': {
+        'total_assets': 2.1e10,          # ~₹2,100 Cr
+        'expense_ratio': 0.0015,         # 0.15%
+        'fund_family': 'SBI Mutual Fund',
+        'category': 'Next 50 Index ETF',
+        'inception_date': '2016-09-21',
+    },
+    'KOTAKNV20.NS': {
+        'total_assets': 1.8e9,           # ~₹180 Cr
+        'expense_ratio': 0.0014,         # 0.14%
+        'fund_family': 'Kotak Mahindra Mutual Fund',
+        'category': 'Smart Beta Nifty 50 Value 20 ETF',
+        'inception_date': '2015-12-14',
+    },
+}
+
+
+def get_etf_meta(ticker: str) -> dict:
+    """
+    Returns ETF-specific metadata fields from Yahoo Finance.
+    Works alongside get_info() — uses the same cache.
+    Fields: AUM (totalAssets), ytdReturn, 3Y/5Y avg return,
+            expense ratio (annualReportExpenseRatio), fund inception date.
+    Provides curated fallback for prominent Indian ETFs where Yahoo Finance
+    omits mutual fund/ETF detail modules.
+    Returns empty dict for non-ETF tickers or when data unavailable.
+    """
+    if get_asset_type(ticker) != "ETF":
+        return {}
+
+    info = get_info(ticker)
+    if not info:
+        return {}
+
+    def _safe(val):
+        try:
+            f = float(val)
+            import math
+            return None if (math.isnan(f) or math.isinf(f)) else f
+        except (TypeError, ValueError):
+            return None
+
+    # Inception date
+    inception_ts = info.get("fundInceptionDate")
+    inception_date = None
+    if inception_ts:
+        try:
+            inception_date = datetime.fromtimestamp(inception_ts).strftime("%Y-%m-%d")
+        except Exception:
+            pass
+
+    t_clean = ticker.strip().upper()
+    fallback = _INDIAN_ETF_META_FALLBACK.get(t_clean, {})
+
+    total_assets  = _safe(info.get("totalAssets")) or fallback.get('total_assets')
+    expense_ratio = _safe(info.get("annualReportExpenseRatio")) or fallback.get('expense_ratio')
+    fund_family   = info.get("fundFamily") or fallback.get('fund_family')
+    category      = info.get("category") or fallback.get('category')
+    inception_date = inception_date or fallback.get('inception_date')
+
+    return {
+        "total_assets":          total_assets,       # AUM in native currency
+        "ytd_return":            _safe(info.get("ytdReturn")),
+        "three_year_avg_return": _safe(info.get("threeYearAverageReturn")),
+        "five_year_avg_return":  _safe(info.get("fiveYearAverageReturn")),
+        "expense_ratio":         expense_ratio,
+        "inception_date":        inception_date,
+        "fund_family":           fund_family,
+        "category":              category,
+        "nav":                   _safe(info.get("navPrice")),
+    }
+
+
+@cache_ttl(seconds=3600)
+def get_etf_holdings(ticker: str) -> dict:
+    """
+    Fetches ETF holdings and sector breakdown from Yahoo Finance quoteSummary topHoldings module.
+    Returns:
+      {
+        "holdings": [{"symbol": "NVDA", "name": "NVIDIA Corp", "weight_pct": 8.08}, ...],
+        "sectors": [{"sector": "Technology", "weight_pct": 32.5}, ...]
+      }
+    Returns empty lists if not available (e.g. Indian ETFs where NSE doesn't provide it).
+    """
+    t = (ticker or "").strip().upper()
+    if not t or get_asset_type(t) != "ETF":
+        return {"holdings": [], "sectors": []}
+
+    global _CRUMB
+    crumb = _ensure_crumb()
+    params = {"modules": "topHoldings"}
+    if crumb:
+        params["crumb"] = crumb
+
+    data = _get(
+        _QUOTE_URL.format(ticker=t),
+        params=params,
+    )
+    if not data:
+        return {"holdings": [], "sectors": []}
+
+    try:
+        res = data.get("quoteSummary", {}).get("result", [])
+        if not res or not res[0] or not isinstance(res[0], dict):
+            return {"holdings": [], "sectors": []}
+
+        th = res[0].get("topHoldings") or {}
+        raw_holdings = th.get("holdings") or []
+        raw_sectors = th.get("sectorWeightings") or []
+
+        holdings = []
+        for h in raw_holdings:
+            if not isinstance(h, dict):
+                continue
+            name = h.get("holdingName") or h.get("symbol")
+            sym = h.get("symbol")
+            pct_raw = h.get("holdingPercent")
+            val = pct_raw.get("raw") if isinstance(pct_raw, dict) else pct_raw
+            if val is not None:
+                try:
+                    f_val = float(val)
+                    import math
+                    if not (math.isnan(f_val) or math.isinf(f_val)):
+                        holdings.append({
+                            "symbol": sym,
+                            "name": name or sym or "Unknown",
+                            "weight_pct": round(f_val * 100, 2)
+                        })
+                except (TypeError, ValueError):
+                    continue
+
+        sectors = []
+        for s in raw_sectors:
+            if not isinstance(s, dict):
+                continue
+            for k, v in s.items():
+                val = v.get("raw") if isinstance(v, dict) else v
+                if val is not None:
+                    try:
+                        f_val = float(val)
+                        import math
+                        if f_val > 0 and not (math.isnan(f_val) or math.isinf(f_val)):
+                            sector_name = str(k).replace("_", " ").title()
+                            sectors.append({
+                                "sector": sector_name,
+                                "weight_pct": round(f_val * 100, 2)
+                            })
+                    except (TypeError, ValueError):
+                        continue
+
+        return {"holdings": holdings, "sectors": sectors}
+    except Exception:
+        return {"holdings": [], "sectors": []}
+
+
 @cache_ttl(seconds=3600)
 def get_fundamentals_data(ticker: str) -> dict:
     """

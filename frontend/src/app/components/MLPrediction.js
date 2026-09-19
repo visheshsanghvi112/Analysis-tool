@@ -134,6 +134,110 @@ function SHAPWaterfallChart({ features, shapPowered }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Street Analyst Consensus vs AI Target Comparison
+// ─────────────────────────────────────────────────────────────
+function StreetConsensusCard({ consensus, aiPredictedPrice, currentPrice, currSym }) {
+  if (!consensus || !consensus.target_mean) return null;
+
+  const { target_mean, target_high, target_low, num_analysts, recommendation } = consensus;
+  const sym = currSym || '₹';
+
+  const streetReturn = currentPrice && Number(currentPrice) > 0
+    ? ((Number(target_mean) - Number(currentPrice)) / Number(currentPrice)) * 100
+    : null;
+
+  const aiVsStreetPct = Number(target_mean) > 0 && aiPredictedPrice != null && Number(aiPredictedPrice) > 0
+    ? ((Number(aiPredictedPrice) - Number(target_mean)) / Number(target_mean)) * 100
+    : null;
+
+  const isAiMoreBullish = aiVsStreetPct != null && aiVsStreetPct > 0.5;
+  const isAiMoreConservative = aiVsStreetPct != null && aiVsStreetPct < -0.5;
+
+  const sentimentText = isAiMoreBullish
+    ? 'AI is more bullish than consensus'
+    : isAiMoreConservative
+    ? 'AI is more conservative than consensus'
+    : 'AI closely aligns with consensus';
+
+  const recColor =
+    recommendation?.includes('BUY') ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
+    recommendation?.includes('SELL') ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' :
+    'bg-amber-500/10 border-amber-500/30 text-amber-400';
+
+  const formatPrice = (val) => {
+    if (val == null || isNaN(Number(val))) return '–';
+    return Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  return (
+    <div className="rounded-xl p-3.5 sm:p-4 bg-white/[0.03] border border-white/[0.06] mb-4">
+      <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center gap-1.5">
+          <p className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+            Street Consensus vs AI Target
+          </p>
+          <InfoBadge
+            title="Street Consensus vs AI Target"
+            what="Compares Wall Street / Dalal Street sell-side equity analyst consensus price targets with StockIQ's 6-model AI ensemble target."
+            why="Helps identify whether the AI ensemble sees an asymmetric contrarian move or confirms broad institutional consensus."
+            interpretation="When AI target and Street target align, institutional confidence is high. If AI target is significantly higher, algorithmic indicators detect positive momentum or undervaluation ahead of sell-side revisions."
+          />
+        </div>
+        {recommendation && (
+          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${recColor}`}>
+            {recommendation} {num_analysts ? `• ${num_analysts} Analysts` : ''}
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 mb-1">
+        {/* Street Consensus Target */}
+        <div className="rounded-lg p-2.5 bg-white/[0.02] border border-white/[0.04]">
+          <p className="text-[8px] text-slate-500 uppercase tracking-wider font-semibold">Street Mean Target</p>
+          <div className="flex items-baseline gap-1.5 mt-0.5">
+            <span className="text-sm font-bold text-slate-200">
+              {sym}{formatPrice(target_mean)}
+            </span>
+            {streetReturn != null && (
+              <span className={`text-[10px] font-bold ${streetReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {streetReturn >= 0 ? '+' : ''}{streetReturn.toFixed(1)}%
+              </span>
+            )}
+          </div>
+          {target_low && target_high && (
+            <p className="text-[8px] text-slate-500 mt-1">
+              Range: {sym}{formatPrice(target_low)} – {sym}{formatPrice(target_high)}
+            </p>
+          )}
+        </div>
+
+        {/* AI Ensemble Target */}
+        <div className="rounded-lg p-2.5 bg-white/[0.02] border border-white/[0.04]">
+          <p className="text-[8px] text-slate-500 uppercase tracking-wider font-semibold">AI Ensemble Target</p>
+          <div className="flex items-baseline gap-1.5 mt-0.5">
+            <span className="text-sm font-bold text-violet-300">
+              {aiPredictedPrice != null ? `${sym}${formatPrice(aiPredictedPrice)}` : '–'}
+            </span>
+            {aiVsStreetPct != null && (
+              <span className={`text-[10px] font-bold ${
+                isAiMoreBullish ? 'text-emerald-400' : isAiMoreConservative ? 'text-amber-400' : 'text-sky-400'
+              }`}>
+                {aiVsStreetPct >= 0 ? '+' : ''}{aiVsStreetPct.toFixed(1)}% vs Street
+              </span>
+            )}
+          </div>
+          {aiVsStreetPct != null && (
+            <p className="text-[8px] text-slate-500 mt-1">
+              {sentimentText}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 export default function MLPrediction({ ticker }) {
   const [prediction, setPrediction] = useState(null);
@@ -143,7 +247,17 @@ export default function MLPrediction({ ticker }) {
   const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
   const currSym = prediction?.currency_symbol || (isUS ? '$' : '₹');
 
-  const [selectedPeriod, setSelectedPeriod] = useState('2y');
+  // Detect ETF — from API response (primary) or ticker name (fallback)
+  const isETF = prediction?.asset_type === 'ETF' ||
+    (ticker && [
+      'BEES', 'MON100', 'MAFANG', 'CPSEETF', 'GOLDETF', 'LIQUIDBEES',
+    ].some(p => ticker.toUpperCase().includes(p)));
+
+  const ETF_PERIODS  = ['3y', '5y', '10y', 'max', 'custom'];
+  const STOCK_PERIODS = ['1y', '2y', '5y', 'max', 'custom'];
+  const periodOptions = isETF ? ETF_PERIODS : STOCK_PERIODS;
+
+  const [selectedPeriod, setSelectedPeriod] = useState(isETF ? '5y' : '2y');
   const [predictionCache, setPredictionCache] = useState({});
 
   // Dynamic default dates for custom range
@@ -247,7 +361,7 @@ export default function MLPrediction({ ticker }) {
       `Prediction Horizon Days,${prediction.prediction_horizon_days || 5}`,
       `Current Price,${prediction.current_price ?? ''}`,
       `Signal,${prediction.signal || ''}`,
-      `5-Day Target Price,${prediction.predicted_price ?? ''}`,
+      `${prediction.prediction_horizon_days || 5}-Day Target Price,${prediction.predicted_price ?? ''}`,
       `Expected Return %,${prediction.predicted_return ?? ''}`,
       `Confidence %,${prediction.confidence ?? ''}`,
       `Signal Strength,${prediction.signal_strength ?? ''}`,
@@ -306,6 +420,7 @@ export default function MLPrediction({ ticker }) {
 
   const getSignalStyle = (signal) => {
     switch (signal) {
+      // Stock signals
       case 'STRONG BUY':
         return { bg: 'bg-emerald-500/20', border: 'border-emerald-500/40', text: 'text-emerald-400', dot: 'bg-emerald-400' };
       case 'BUY':
@@ -314,6 +429,17 @@ export default function MLPrediction({ ticker }) {
         return { bg: 'bg-rose-500/20', border: 'border-rose-500/40', text: 'text-rose-400', dot: 'bg-rose-400' };
       case 'SELL':
         return { bg: 'bg-rose-500/15', border: 'border-rose-500/30', text: 'text-rose-400', dot: 'bg-rose-400' };
+      // ETF signals
+      case 'STRONG ACCUMULATE':
+        return { bg: 'bg-emerald-500/20', border: 'border-emerald-500/40', text: 'text-emerald-400', dot: 'bg-emerald-400' };
+      case 'ACCUMULATE':
+        return { bg: 'bg-emerald-500/15', border: 'border-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-400' };
+      case 'AVOID / REDUCE':
+        return { bg: 'bg-rose-500/20', border: 'border-rose-500/40', text: 'text-rose-400', dot: 'bg-rose-400' };
+      case 'CAUTION':
+        return { bg: 'bg-orange-500/15', border: 'border-orange-500/30', text: 'text-orange-400', dot: 'bg-orange-400' };
+      case 'HOLD / SIP':
+        return { bg: 'bg-amber-500/15', border: 'border-amber-500/30', text: 'text-amber-400', dot: 'bg-amber-400' };
       default:
         return { bg: 'bg-amber-500/15', border: 'border-amber-500/30', text: 'text-amber-400', dot: 'bg-amber-400' };
     }
@@ -352,10 +478,14 @@ export default function MLPrediction({ ticker }) {
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h3 className="text-sm sm:text-base font-bold text-white">AI Price Prediction</h3>
+              <h3 className="text-sm sm:text-base font-bold text-white">
+                {isETF ? 'AI Trend Outlook' : 'AI Price Prediction'}
+              </h3>
               <InfoBadge infoKey="ml_ensemble" />
             </div>
-            <p className="text-[10px] sm:text-xs text-slate-400">Machine Learning Forecast</p>
+            <p className="text-[10px] sm:text-xs text-slate-400">
+              {isETF ? 'Long-Term Accumulation Signal' : 'Machine Learning Forecast'}
+            </p>
           </div>
         </div>
         
@@ -385,9 +515,11 @@ export default function MLPrediction({ ticker }) {
 
       {/* Training Period Selector */}
       <div className="mb-5">
-        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Training Data Horizon</p>
+        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+          {isETF ? 'Training Data Window' : 'Training Data Horizon'}
+        </p>
         <div className="flex p-0.5 bg-white/[0.03] rounded-lg border border-white/[0.06] gap-1">
-          {['1y', '2y', '5y', 'max', 'custom'].map((p) => (
+          {periodOptions.map((p) => (
             <button
               key={p}
               onClick={() => handlePeriodChange(p)}
@@ -458,7 +590,9 @@ export default function MLPrediction({ ticker }) {
                 </span>
               </div>
               <div className="text-right">
-                <p className="text-[10px] sm:text-xs text-slate-400">5-Day Target</p>
+                <p className="text-[10px] sm:text-xs text-slate-400">
+                  {prediction.prediction_horizon_days ? `${prediction.prediction_horizon_days}-Day Target` : (isETF ? '30-Day Target' : '5-Day Target')}
+                </p>
                 <p className="font-bold text-lg sm:text-xl text-white">{currSym}{prediction.predicted_price?.toLocaleString()}</p>
               </div>
             </div>
@@ -560,6 +694,14 @@ export default function MLPrediction({ ticker }) {
             </div>
           </div>
 
+          {/* Street Consensus vs AI Target (for equities) */}
+          <StreetConsensusCard
+            consensus={prediction.analyst_consensus}
+            aiPredictedPrice={prediction.predicted_price}
+            currentPrice={prediction.current_price}
+            currSym={currSym}
+          />
+
           {/* Walk-Forward Validation Metrics */}
           <div className="mb-4 p-3 rounded-lg bg-white/[0.03] border border-white/[0.06]">
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Walk-Forward Backtest (OOS)</p>
@@ -595,9 +737,11 @@ export default function MLPrediction({ ticker }) {
 
           {/* Sentiment Fusion & Risk/Reward */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-            {/* Sentiment Fusion */}
+            {/* Sentiment Fusion (stocks) / Trend Analysis (ETFs) */}
             <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06]">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Sentiment Fusion</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">
+                {isETF ? 'Trend Analysis' : 'Sentiment Fusion'}
+              </p>
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2 min-w-0">
                   <span className="text-[10px] text-slate-500 shrink-0">ML Raw Return</span>
@@ -605,17 +749,27 @@ export default function MLPrediction({ ticker }) {
                     {prediction.ml_raw_return >= 0 ? '+' : ''}{prediction.ml_raw_return}%
                   </span>
                 </div>
-                <div className="flex items-center justify-between gap-2 min-w-0">
-                  <span className="text-[10px] text-slate-500 shrink-0">News Sentiment</span>
-                  <span className={`text-[10px] font-semibold ml-auto ${
-                    prediction.news_sentiment_used > 0.1 ? 'text-emerald-400' :
-                    prediction.news_sentiment_used < -0.1 ? 'text-rose-400' : 'text-slate-400'
-                  }`}>
-                    {prediction.news_sentiment_used > 0 ? '+' : ''}{prediction.news_sentiment_used}
-                  </span>
-                </div>
+                {isETF ? (
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <span className="text-[10px] text-slate-500 shrink-0">Horizon</span>
+                    <span className="text-[10px] font-semibold text-violet-300 ml-auto">
+                      {prediction.prediction_horizon_days || 30}-Day Outlook
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <span className="text-[10px] text-slate-500 shrink-0">News Sentiment</span>
+                    <span className={`text-[10px] font-semibold ml-auto ${
+                      prediction.news_sentiment_used > 0.1 ? 'text-emerald-400' :
+                      prediction.news_sentiment_used < -0.1 ? 'text-rose-400' : 'text-slate-400'
+                    }`}>
+                      {prediction.news_sentiment_used > 0 ? '+' : ''}{prediction.news_sentiment_used}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
+
 
             {/* Volatility & Risk */}
             <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06]">

@@ -27,14 +27,15 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
     let isMounted = true;
     setLoading(true);
 
-    // Fetch live quote, fundamentals, valuation, risk metrics, and technical analysis
+    // Fetch live quote, fundamentals, valuation, risk metrics, technical analysis, and ETF analysis
     Promise.all([
       fetch(`${API_BASE_URL}/api/live?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch(`${API_BASE_URL}/api/valuation?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch(`${API_BASE_URL}/api/fundamentals?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch(`${API_BASE_URL}/api/portfolio-metrics?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch(`${API_BASE_URL}/api/analyze?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([quote, valuation, fundamentals, riskMetrics, analysis]) => {
+      fetch(`${API_BASE_URL}/api/etf-analysis?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([quote, valuation, fundamentals, riskMetrics, analysis, etfAnalysis]) => {
       if (!isMounted) return;
       const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
       const loc = isUS ? 'en-US' : 'en-IN';
@@ -44,6 +45,7 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
         fundamentals,
         riskMetrics,
         analysis,
+        etfAnalysis,
         generatedAt: new Date().toLocaleString(loc, {
           dateStyle: 'medium',
           timeStyle: 'short'
@@ -68,6 +70,14 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
   const rm = data?.riskMetrics?.risk_metrics || {};
   const mm = data?.riskMetrics?.market_metrics || {};
   const sum = data?.analysis?.summary || {};
+  const etf = data?.etfAnalysis || null;
+  const isETF = Boolean(etf?.ticker) || (
+    ticker && [
+      'BEES', 'MON100', 'MAFANG', 'CPSEETF', 'GOLDETF', 'LIQUIDBEES', 'SILVERBEES',
+      'ITBEES', 'SETFNN50', 'KOTAKNV20', 'MID150BEES', 'JUNIORBEES', 'HDFCNIFTY', 'ICICINIFTY', 'NIFTYETF',
+      'SPY', 'QQQ', 'VOO', 'IVV', 'VTI', 'IWM', 'DIA', 'GLD', 'SLV'
+    ].some(k => ticker.toUpperCase().includes(k))
+  );
   const currSym = q.currency_symbol || (isUS ? '$' : '₹');
   const loc = isUS ? 'en-US' : 'en-IN';
 
@@ -87,8 +97,10 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
               <FileText className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-white tracking-wide">Executive Equity Research Memo</h2>
-              <p className="text-[11px] text-slate-400">Institutional Snapshot · {ticker}</p>
+              <h2 className="text-sm font-bold text-white tracking-wide">
+                {isETF ? 'Executive ETF Intelligence Memo' : 'Executive Equity Research Memo'}
+              </h2>
+              <p className="text-[11px] text-slate-400">Institutional Snapshot · {ticker} {isETF ? '(Exchange Traded Fund)' : ''}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -119,6 +131,11 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
                 <span className="px-2.5 py-0.5 rounded text-xs font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30 print:border-black print:text-black">
                   {ticker}
                 </span>
+                {isETF && (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30 print:border-black print:text-black">
+                    ETF
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-400 print:text-slate-600 mt-1">
                 Exchange: {ticker.endsWith('.NS') ? 'National Stock Exchange (NSE)' : ticker.endsWith('.BO') ? 'Bombay Stock Exchange (BSE)' : 'Global'} · Currency: INR
@@ -149,15 +166,32 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
                   </span>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] print:border-slate-300">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">DCF Fair Value</span>
-                  <span className="text-xl font-bold text-white print:text-black">
-                    {v.fair_value ? `${currSym}${v.fair_value.toLocaleString(loc)}` : '—'}
-                  </span>
-                  <span className={`text-xs block mt-1 font-semibold ${(v.upside_downside || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {(v.upside_downside || 0) >= 0 ? '+' : ''}{v.upside_downside ? v.upside_downside.toFixed(1) : '—'}% Fair Value Gap
-                  </span>
-                </div>
+                {isETF ? (
+                  <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] print:border-slate-300">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">3Y CAGR (vs Bench)</span>
+                    <span className="text-xl font-bold text-white print:text-black">
+                      {etf?.performance?.cagr_3y != null ? `${etf.performance.cagr_3y}%` : '—'}
+                    </span>
+                    <span className={`text-xs block mt-1 font-semibold ${
+                      etf?.performance?.cagr_3y != null && etf?.performance?.bench_cagr_3y != null && etf.performance.cagr_3y >= etf.performance.bench_cagr_3y
+                        ? 'text-emerald-400' : 'text-slate-400'
+                    }`}>
+                      {etf?.performance?.cagr_3y != null && etf?.performance?.bench_cagr_3y != null
+                        ? `${(etf.performance.cagr_3y - etf.performance.bench_cagr_3y) >= 0 ? '+' : ''}${(etf.performance.cagr_3y - etf.performance.bench_cagr_3y).toFixed(1)}% vs Bench`
+                        : 'Benchmark replication'}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] print:border-slate-300">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">DCF Fair Value</span>
+                    <span className="text-xl font-bold text-white print:text-black">
+                      {v.fair_value ? `${currSym}${v.fair_value.toLocaleString(loc)}` : '—'}
+                    </span>
+                    <span className={`text-xs block mt-1 font-semibold ${(v.upside_downside || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {(v.upside_downside || 0) >= 0 ? '+' : ''}{v.upside_downside ? v.upside_downside.toFixed(1) : '—'}% Fair Value Gap
+                    </span>
+                  </div>
+                )}
 
                 <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] print:border-slate-300">
                   <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">52W Range</span>
@@ -167,47 +201,89 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
                   <span className="text-[10px] text-slate-400 block mt-1">Annual Volatility Corridor</span>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] print:border-slate-300">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Valuation Status</span>
-                  <span className={`text-sm font-bold block mt-1 ${
-                    (v.upside_downside || 0) > 10 ? 'text-emerald-400' : (v.upside_downside || 0) < -10 ? 'text-amber-400' : 'text-blue-400'
-                  }`}>
-                    {(v.upside_downside || 0) > 15 ? 'UNDERVALUED' : (v.upside_downside || 0) < -15 ? 'PREMIUM PRICED' : 'FAIR VALUE'}
-                  </span>
-                  <span className="text-[10px] text-slate-400 block mt-1">Discounted Cash Flow</span>
-                </div>
+                {isETF ? (
+                  <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] print:border-slate-300">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">SIP Suitability</span>
+                    <span className="text-sm font-bold block mt-1 text-emerald-400">
+                      {etf?.sip_score != null ? `${etf.sip_score}/10` : '—'}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-1">
+                      {etf?.sip_label || 'Systematic Accumulation'}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] print:border-slate-300">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Valuation Status</span>
+                    <span className={`text-sm font-bold block mt-1 ${
+                      (v.upside_downside || 0) > 10 ? 'text-emerald-400' : (v.upside_downside || 0) < -10 ? 'text-amber-400' : 'text-blue-400'
+                    }`}>
+                      {(v.upside_downside || 0) > 15 ? 'UNDERVALUED' : (v.upside_downside || 0) < -15 ? 'PREMIUM PRICED' : 'FAIR VALUE'}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-1">Discounted Cash Flow</span>
+                  </div>
+                )}
               </div>
 
               {/* Three-Column Analytical Deep Dive */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Financial Health & Fundamentals */}
-                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] print:border-slate-300">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 print:text-black mb-3 flex items-center gap-1.5">
-                    <Activity className="w-3.5 h-3.5 text-blue-400" /> Fundamental Health
-                  </h3>
-                  <div className="space-y-2.5 text-xs">
-                    <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
-                      <span className="text-slate-400 print:text-slate-600">Trailing P/E</span>
-                      <span className="font-bold text-white print:text-black">{f.trailingPE ? f.trailingPE.toFixed(2) : '—'}</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
-                      <span className="text-slate-400 print:text-slate-600">Price to Book</span>
-                      <span className="font-bold text-white print:text-black">{f.priceToBook ? f.priceToBook.toFixed(2) : '—'}</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
-                      <span className="text-slate-400 print:text-slate-600">Return on Equity</span>
-                      <span className="font-bold text-white print:text-black">{f.returnOnEquity ? `${(f.returnOnEquity * 100).toFixed(2)}%` : '—'}</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
-                      <span className="text-slate-400 print:text-slate-600">Profit Margin</span>
-                      <span className="font-bold text-white print:text-black">{f.profitMargins ? `${(f.profitMargins * 100).toFixed(2)}%` : '—'}</span>
-                    </div>
-                    <div className="flex justify-between py-1">
-                      <span className="text-slate-400 print:text-slate-600">Debt to Equity</span>
-                      <span className="font-bold text-white print:text-black">{f.debtToEquity ? (f.debtToEquity / 100).toFixed(2) : '—'}</span>
+                {/* Financial Health / ETF Structure */}
+                {isETF ? (
+                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] print:border-slate-300">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 print:text-black mb-3 flex items-center gap-1.5">
+                      <Activity className="w-3.5 h-3.5 text-blue-400" /> ETF Structure &amp; Health
+                    </h3>
+                    <div className="space-y-2.5 text-xs">
+                      <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                        <span className="text-slate-400 print:text-slate-600">AUM (Fund Size)</span>
+                        <span className="font-bold text-white print:text-black">{etf?.etf_meta?.aum_display || '—'}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                        <span className="text-slate-400 print:text-slate-600">Expense Ratio</span>
+                        <span className="font-bold text-white print:text-black">{etf?.etf_meta?.expense_ratio_pct != null ? `${etf.etf_meta.expense_ratio_pct}%` : '—'}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                        <span className="text-slate-400 print:text-slate-600">Tracking Error</span>
+                        <span className="font-bold text-emerald-400 print:text-black">{etf?.performance?.tracking_error_annual != null ? `${etf.performance.tracking_error_annual}%` : '—'}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                        <span className="text-slate-400 print:text-slate-600">Benchmark</span>
+                        <span className="font-bold text-white print:text-black">{etf?.etf_meta?.benchmark_ticker || '—'}</span>
+                      </div>
+                      <div className="flex justify-between py-1">
+                        <span className="text-slate-400 print:text-slate-600">Health Checklist</span>
+                        <span className="font-bold text-white print:text-black">{etf?.health_score_label || '—'}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] print:border-slate-300">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 print:text-black mb-3 flex items-center gap-1.5">
+                      <Activity className="w-3.5 h-3.5 text-blue-400" /> Fundamental Health
+                    </h3>
+                    <div className="space-y-2.5 text-xs">
+                      <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                        <span className="text-slate-400 print:text-slate-600">Trailing P/E</span>
+                        <span className="font-bold text-white print:text-black">{f.trailingPE ? f.trailingPE.toFixed(2) : '—'}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                        <span className="text-slate-400 print:text-slate-600">Price to Book</span>
+                        <span className="font-bold text-white print:text-black">{f.priceToBook ? f.priceToBook.toFixed(2) : '—'}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                        <span className="text-slate-400 print:text-slate-600">Return on Equity</span>
+                        <span className="font-bold text-white print:text-black">{f.returnOnEquity ? `${(f.returnOnEquity * 100).toFixed(2)}%` : '—'}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-white/[0.04] print:border-slate-200">
+                        <span className="text-slate-400 print:text-slate-600">Profit Margin</span>
+                        <span className="font-bold text-white print:text-black">{f.profitMargins ? `${(f.profitMargins * 100).toFixed(2)}%` : '—'}</span>
+                      </div>
+                      <div className="flex justify-between py-1">
+                        <span className="text-slate-400 print:text-slate-600">Debt to Equity</span>
+                        <span className="font-bold text-white print:text-black">{f.debtToEquity ? (f.debtToEquity / 100).toFixed(2) : '—'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Technical Momentum & Trend */}
                 <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] print:border-slate-300">
@@ -290,16 +366,29 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
                   <Brain className="w-3.5 h-3.5 text-purple-400" /> Quantitative Intelligence Summary
                 </h3>
                 <div className="space-y-2 text-xs leading-relaxed text-slate-300 print:text-slate-700">
-                  <p>
-                    <strong>Valuation Horizon:</strong> The DCF model projects intrinsic worth based on free cash flows discounted at a normalized Cost of Equity. The gap indicates potential medium-to-long term margin of safety.
-                  </p>
-                  <p>
-                    <strong>Volatility Profiling:</strong> Operating within a 52-week corridor of {currSym}{q.fiftyTwoWeekLow?.toFixed(0) || '—'} to {currSym}{q.fiftyTwoWeekHigh?.toFixed(0) || '—'}. Positioned at {
-                      q.price && q.fiftyTwoWeekHigh
-                        ? `${(((q.fiftyTwoWeekHigh - q.price) / q.fiftyTwoWeekHigh) * 100).toFixed(1)}% below annual peak.`
-                        : 'balanced distribution.'
-                    }
-                  </p>
+                  {isETF ? (
+                    <>
+                      <p>
+                        <strong>ETF Replication &amp; Alpha:</strong> Replicating benchmark {etf?.etf_meta?.benchmark_ticker ? `(${etf.etf_meta.benchmark_ticker})` : ''} with {etf?.performance?.tracking_error_annual != null ? `${etf.performance.tracking_error_annual}% annualised tracking error` : 'tight tracking'}. 3-Year CAGR stands at {etf?.performance?.cagr_3y != null ? `${etf.performance.cagr_3y}%` : '—'}.
+                      </p>
+                      <p>
+                        <strong>Systematic Accumulation (SIP):</strong> Rated {etf?.sip_score ?? '—'}/10 ({etf?.sip_label || 'Accumulation Candidate'}) based on institutional fund liquidity, cost ratio compounding, and low return dispersion across multi-year cycles.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p>
+                        <strong>Valuation Horizon:</strong> The DCF model projects intrinsic worth based on free cash flows discounted at a normalized Cost of Equity. The gap indicates potential medium-to-long term margin of safety.
+                      </p>
+                      <p>
+                        <strong>Volatility Profiling:</strong> Operating within a 52-week corridor of {currSym}{q.fiftyTwoWeekLow?.toFixed(0) || '—'} to {currSym}{q.fiftyTwoWeekHigh?.toFixed(0) || '—'}. Positioned at {
+                          q.price && q.fiftyTwoWeekHigh
+                            ? `${(((q.fiftyTwoWeekHigh - q.price) / q.fiftyTwoWeekHigh) * 100).toFixed(1)}% below annual peak.`
+                            : 'balanced distribution.'
+                        }
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
 

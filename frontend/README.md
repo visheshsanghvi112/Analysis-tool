@@ -17,7 +17,7 @@ The application features a modern multi-page Next.js App Router architecture:
 
 | Route | Name | Description |
 | :--- | :--- | :--- |
-| **`/`** | **Analysis Workstation** | Master terminal for single-stock fundamental analysis (DCF, DuPont, Graham, Altman Z, Beneish M), 6-model ML price forecasts, GARCH volatility, Monte Carlo simulations, options Greeks, news intelligence, and executive PDF memos. |
+| **`/`** | **Analysis Workstation** | Master terminal with asset-adaptive architecture: single-stock fundamental analysis (DCF, DuPont, Graham, Altman Z, Beneish M) or ETF long-term intelligence (AUM, Expense Ratio, Tracking Error vs Benchmark, 6-Point Health Checklist, SIP Suitability Scoring), alongside 6-model ML price forecasts, GARCH volatility, Monte Carlo simulations, options Greeks, news intelligence, and executive PDF memos. |
 | **`/intraday`** | **Intraday Terminal** | High-frequency technical analysis workspace with live candlestick charting, Supertrend indicators, EMA Ribbons (9, 21, 50, 200), Multi-timeframe VWAP with volatility bands ($\pm 1\sigma, \pm 2\sigma$), RSI, MACD, ATR, and one-click CSV export. |
 | **`/portfolio`** | **Portfolio & Capital Advisor** | Modern Portfolio Theory (Markowitz Efficient Frontier), Tangency & GMV allocation, Value-at-Risk (VaR 95/99%), dynamic rebalancing, and the **Smart Capital Advisor** for automated loss recovery and averaging down. |
 | **`/browse`** | **Market Universe Browser** | Search, filter, and explore the complete 7,954 instrument database across NSE equities, BSE scrips, ETFs, sectoral indices, and global ADRs. |
@@ -34,11 +34,12 @@ The application features a modern multi-page Next.js App Router architecture:
 | **`StockSearchModal.js`** | Universal Spotlight search palette (<kbd>⌘K</kbd> / <kbd>/</kbd>) with categorized tabs (All, Equities, ETFs, Indices, Global), BSE 6-digit code resolution, and fuzzy typo tolerance. |
 | **`StockChart.js`** | Primary interactive candlestick and line chart with volume profiles, moving averages, and technical indicators. |
 | **`IntradayTerminal.js`** | Dedicated intraday trading terminal featuring real-time intervals (1m, 2m, 5m, 15m, 30m, 60m), Supertrend signals, multi-band VWAP, and CSV indicator exports. |
-| **`MLPrediction.js`** | 6-model ML ensemble predictions (Random Forest, Extra Trees, Gradient Boosting, XGBoost, LightGBM, Bayesian Ridge) with SHAP feature attribution. |
+| **`MLPrediction.js`** | Asset-aware 6-model ML ensemble (Random Forest, Extra Trees, Gradient Boosting, XGBoost, LightGBM, Bayesian Ridge) with SHAP waterfall attribution. Adapts dynamically: 5-day horizon and news fusion for stocks; 30-day horizon, 38 long-term features (Golden Cross, quarterly momentum, annual drawdown), ACCUMULATE/AVOID signals, and zeroed company news for ETFs. |
+| **`ETFLongTermPanel.js`** | Dedicated institutional ETF analysis panel replacing DCF/Graham for ETF tickers. Computes 1Y/3Y/5Y CAGR vs benchmark, annualised tracking error, Sharpe ratio (3yr), max drawdown, 6-Point ETF Health Checklist (AUM, expense ratio, tracking error, CAGR alpha, Sharpe, NAV discount), SIP Suitability Score (0–10), and yearly returns sparklines. |
 | **`MonteCarloSimulation.js`** | Geometric Brownian Motion (GBM) stochastic price path simulation across 30 to 365-day horizons with quantile corridors ($P_{2.5}$ to $P_{97.5}$) and CSV export. |
 | **`AdvancedNews.js`** | Deep news reader powered by Scrapling, featuring live sentiment analysis, catalyst tags (Order Wins, Earnings Beat, Regulatory, Solvency), and sentiment filtering. |
 | **`FundamentalsAnalysis.js`** | Institutional valuation suite: 10-step DCF, Graham Formula, Peter Lynch Fair Value, 3/5-Stage DuPont decomposition, Altman Z-Score, and Beneish M-Score. |
-| **`LongTermAnalysis.js`** | Historical revenue/profit CAGR, balance sheet health, debt-to-equity trends, and return on equity trajectories. |
+| **`LongTermAnalysis.js`** | Historical revenue/profit CAGR, balance sheet health, debt-to-equity trends, and return on equity trajectories for equities. |
 | **`SmartCapitalAdvisor.js`** | Capital allocation advisor that analyzes underwater holdings, computes priority recovery weights, calculates shares to purchase, and exports actionable plans to CSV. |
 | **`PortfolioTracker.js`** | Multi-asset portfolio tracker with live P&L tracking, sector diversification charts, and Markowitz portfolio rebalancing. |
 | **`PortfolioMetrics.js`** | Quantitative risk metrics: Sharpe Ratio, Sortino Ratio, Beta, Treynor Ratio, Jensen's Alpha, and Maximum Historical Drawdown. |
@@ -98,8 +99,14 @@ Performs static code analysis and enforces React 19 / Next.js best practices.
 
 ---
 
-## 🎨 Design System & Styling
+## 🎨 Design System & Styling Architecture
 
-*   **Tailwind CSS 3.4**: Utility-first styling with custom glassmorphic blur classes (`glass-card`, `glass-nav`).
-*   **Curated Dark Palette**: Deep slate background (`#0B0F19`, `#0F172A`) with emerald, cyan, violet, and amber accents for positive/negative market indicators.
-*   **Responsive Typography**: Optimized for high-density information display across mobile, tablet, and ultra-wide financial desktop monitors.
+*   **Asset-Adaptive Layout Engine**: The dashboard dynamically detects asset type (`EQUITY` vs `ETF`). For single stocks, it renders deep forensic accounting panels (DCF, DuPont, Graham, Altman Z). For ETFs, it seamlessly switches to the `ETFLongTermPanel` (AUM, expense ratio, tracking error vs benchmark, 6-point health checklist, SIP score), preventing irrelevant corporate valuation metrics from polluting ETF analysis.
+*   **Glassmorphic UI System**: Engineered using Tailwind CSS 3.4 with layered backdrop blur (`backdrop-blur-xl`), sub-pixel borders (`border-white/[0.06]`), and semi-transparent dark backgrounds (`bg-white/[0.02]`, `bg-white/[0.03]`).
+*   **Curated Financial Color Palette**:
+    *   **Backgrounds**: Deep obsidian canvas (`#050811`, `#0B0F19`, `#0F172A`).
+    *   **Bullish / Growth**: Emerald gradient accents (`#10B981`, `#34D399`) with glow shadows (`rgba(52,211,153,0.35)`).
+    *   **Bearish / Risk**: Rose gradient accents (`#F43F5E`, `#FB7185`) with glow shadows (`rgba(251,113,133,0.35)`).
+    *   **Neutral / Caution**: Amber and violet highlights (`#F59E0B`, `#8B5CF6`) for consensus stability and SHAP factor attribution.
+*   **Institutional Data Density**: High-density typography utilizing tabular numerals (`font-mono`, `tabular-nums`) to ensure zero-jitter price updates and precise alignment across high-resolution ultra-wide financial displays.
+*   **Dynamic Micro-Interactions**: Smooth CSS transitions for SHAP factor impact bars, interactive candlestick tooltips, animated SIP progress rings, and printable research report themes.

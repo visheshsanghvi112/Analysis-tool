@@ -166,6 +166,175 @@ FEATURE_COLS = [
 
 
 # ─────────────────────────────────────────────────────────────
+# ETF Feature Engineering (~38 long-term features)
+# Used when asset_type == 'ETF' — replaces _create_features()
+# Focus: trend following, macro cycles, not short-term momentum
+# ─────────────────────────────────────────────────────────────
+def _create_etf_features(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    # ── Core price ──
+    df['returns']       = df['Close'].pct_change()
+    df['log_returns']   = np.log(df['Close'] / df['Close'].shift(1))
+    df['price_range']   = (df['High'] - df['Low']) / df['Close']
+    df['close_to_high'] = df['Close'] / df['High']
+    df['close_to_low']  = df['Close'] / df['Low']
+    # Note: no 'gap' feature — gaps are rare/meaningless for ETFs
+
+    # ── Long-term MA ratios (50/100/150/200-day) ──
+    for p in [20, 50, 100, 150, 200]:
+        window = min(p, len(df))
+        ma = df['Close'].rolling(window, min_periods=1).mean()
+        df[f'ma_ratio_{p}'] = df['Close'] / ma
+
+    # ── Golden/Death Cross — the primary ETF timing signal ──
+    ma50  = df['Close'].rolling(min(50,  len(df)), min_periods=1).mean()
+    ma200 = df['Close'].rolling(min(200, len(df)), min_periods=1).mean()
+    df['golden_cross']   = (ma50 > ma200).astype(float)   # 1 = bullish regime
+    df['cross_dist_pct'] = (ma50 - ma200) / (ma200 + 1e-9) # distance of cross
+
+    # ── Slower EMA cross (26/52 — ETF-appropriate MACD) ──
+    ema26 = df['Close'].ewm(span=26, min_periods=1).mean()
+    ema52 = df['Close'].ewm(span=52, min_periods=1).mean()
+    df['ema_cross_26_52'] = (ema26 - ema52) / (df['Close'] + 1e-9)
+    macd_line   = df['Close'].ewm(span=26, min_periods=1).mean() - df['Close'].ewm(span=52, min_periods=1).mean()
+    df['macd_slow']        = macd_line / (df['Close'] + 1e-9)
+    df['macd_slow_signal'] = df['macd_slow'].ewm(span=18, min_periods=1).mean()
+
+    # ── RSI (21-period — slower, more appropriate for ETFs) ──
+    delta    = df['Close'].diff()
+    avg_gain = delta.clip(lower=0).ewm(com=20, adjust=False, min_periods=1).mean()
+    avg_loss = (-delta).clip(lower=0).ewm(com=20, adjust=False, min_periods=1).mean()
+    df['rsi_21'] = 100 - 100 / (1 + avg_gain / avg_loss.replace(0, 1e-9))
+
+    # ── ATR (21-period) ──
+    tr = pd.concat([
+        df['High'] - df['Low'],
+        (df['High'] - df['Close'].shift()).abs(),
+        (df['Low']  - df['Close'].shift()).abs(),
+    ], axis=1).max(axis=1)
+    df['atr_ratio'] = tr.ewm(span=21, adjust=False, min_periods=1).mean() / (df['Close'] + 1e-9)
+
+    # ── Bollinger Bands (50-period for ETFs) ──
+    w_bb = min(50, len(df))
+    bb_mid       = df['Close'].rolling(w_bb, min_periods=1).mean()
+    bb_std       = df['Close'].rolling(w_bb, min_periods=2).std()
+    df['bb_pos']   = (df['Close'] - (bb_mid - 2*bb_std)) / (4*bb_std + 1e-9)
+    df['bb_width'] = (4 * bb_std) / (bb_mid + 1e-9)
+
+    # ── Monthly/Quarterly/Semi-annual Rate of Change (ETF momentum) ──
+    df['roc_21']  = df['Close'].pct_change(21)   # ~1 month
+    df['roc_63']  = df['Close'].pct_change(63)   # ~1 quarter
+    df['roc_126'] = df['Close'].pct_change(126)  # ~6 months
+
+    # ── Volume (simpler — ETF volume is less meaningful than for stocks) ──
+    w_vol = min(20, len(df))
+    vol_sma         = df['Volume'].rolling(w_vol, min_periods=1).mean()
+    df['vol_ratio'] = df['Volume'] / vol_sma.replace(0, 1)
+
+    # ── Volatility regime (20d / 60d / 252d annual) ──
+    w_20  = min(20,  len(df))
+    w_60  = min(60,  len(df))
+    w_252 = min(252, len(df))
+    df['vol_20']     = df['returns'].rolling(w_20,  min_periods=2).std()
+    df['vol_60']     = df['returns'].rolling(w_60,  min_periods=2).std()
+    df['vol_252']    = df['returns'].rolling(w_252, min_periods=5).std()
+    df['vol_regime'] = df['vol_20'] / (df['vol_60'] + 1e-9)
+
+    # ── Trend strength (ADX proxy: |mean return| / std of returns) ──
+    df['adx_proxy'] = df['returns'].rolling(min(21, len(df)), min_periods=3).apply(
+        lambda x: abs(x).mean() / (x.std() + 1e-9), raw=True
+    )
+
+    # ── Distribution moments (63d — quarterly window) ──
+    df['skew_63'] = df['returns'].rolling(min(63, len(df)), min_periods=5).skew()
+    df['kurt_63'] = df['returns'].rolling(min(63, len(df)), min_periods=6).kurt()
+
+    # ── 52-week + annual drawdown proximity ──
+    w_52 = min(252, len(df))
+    high52           = df['High'].rolling(w_52, min_periods=1).max()
+    low52            = df['Low'].rolling(w_52,  min_periods=1).min()
+    df['pct_52w_h']  = (df['Close'] - high52) / (high52 + 1e-9)
+    df['pct_52w_l']  = (df['Close'] - low52)  / (low52.replace(0, 1) + 1e-9)
+    df['annual_dd']  = (df['Close'] - high52) / (high52 + 1e-9)   # always <= 0
+
+    # ── Calendar effects (month + quarter-end rebalancing flag) ──
+    idx = pd.to_datetime(df.index)
+    df['month']       = idx.month / 12.0
+    df['quarter_end'] = idx.month.isin([3, 6, 9, 12]).astype(float)
+
+    # ── Long-period lagged returns (weekly / monthly / quarterly) ──
+    for lag in [5, 10, 21, 63, 126]:
+        df[f'ret_lag_{lag}'] = df['returns'].shift(lag)
+
+    return df
+
+
+ETF_FEATURE_COLS = [
+    'returns', 'log_returns', 'price_range', 'close_to_high', 'close_to_low',
+    'ma_ratio_20', 'ma_ratio_50', 'ma_ratio_100', 'ma_ratio_150', 'ma_ratio_200',
+    'golden_cross', 'cross_dist_pct',
+    'ema_cross_26_52', 'macd_slow', 'macd_slow_signal',
+    'rsi_21',
+    'atr_ratio', 'bb_pos', 'bb_width',
+    'roc_21', 'roc_63', 'roc_126',
+    'vol_ratio',
+    'vol_20', 'vol_60', 'vol_252', 'vol_regime',
+    'adx_proxy',
+    'skew_63', 'kurt_63',
+    'pct_52w_h', 'pct_52w_l', 'annual_dd',
+    'month', 'quarter_end',
+    'ret_lag_5', 'ret_lag_10', 'ret_lag_21', 'ret_lag_63', 'ret_lag_126',
+]
+
+# Human-readable labels for ETF features (used in SHAP waterfall)
+_ETF_FEATURE_LABELS = {
+    'returns':          'Daily Returns',
+    'log_returns':      'Log Returns',
+    'price_range':      'Daily Price Range',
+    'close_to_high':    'Close-to-High Ratio',
+    'close_to_low':     'Close-to-Low Ratio',
+    'ma_ratio_20':      'MA Ratio (20d)',
+    'ma_ratio_50':      'MA Ratio (50d)',
+    'ma_ratio_100':     'MA Ratio (100d)',
+    'ma_ratio_150':     'MA Ratio (150d)',
+    'ma_ratio_200':     'MA Ratio (200d)',
+    'golden_cross':     'Golden Cross Signal',
+    'cross_dist_pct':   'MA Cross Distance',
+    'ema_cross_26_52':  'EMA Cross (26/52)',
+    'macd_slow':        'MACD (Slow)',
+    'macd_slow_signal': 'MACD Signal (Slow)',
+    'rsi_21':           'RSI (21)',
+    'atr_ratio':        'ATR Ratio (21d)',
+    'bb_pos':           'Bollinger Band Position',
+    'bb_width':         'Bollinger Band Width',
+    'roc_21':           '1-Month Momentum',
+    'roc_63':           '3-Month Momentum',
+    'roc_126':          '6-Month Momentum',
+    'vol_ratio':        'Volume Ratio',
+    'vol_20':           '20d Volatility',
+    'vol_60':           '60d Volatility',
+    'vol_252':          'Annual Volatility',
+    'vol_regime':       'Volatility Regime',
+    'adx_proxy':        'Trend Strength (ADX)',
+    'skew_63':          'Return Skewness (63d)',
+    'kurt_63':          'Return Kurtosis (63d)',
+    'pct_52w_h':        '52-Week High Proximity',
+    'pct_52w_l':        '52-Week Low Proximity',
+    'annual_dd':        'Annual Drawdown',
+    'month':            'Calendar Month',
+    'quarter_end':      'Quarter-End Flag',
+    'ret_lag_5':        'Return Lag 1wk',
+    'ret_lag_10':       'Return Lag 2wk',
+    'ret_lag_21':       'Return Lag 1mo',
+    'ret_lag_63':       'Return Lag 1Q',
+    'ret_lag_126':      'Return Lag 6mo',
+}
+
+
+
+
+# ─────────────────────────────────────────────────────────────
 # Market regime detection
 # ─────────────────────────────────────────────────────────────
 # Market regime detection (Hidden Markov Model)
@@ -436,6 +605,7 @@ class StockPredictor:
         self.end_date     = None
         self.train_meta   = {}
         self.shap_features = {}
+        self.asset_type   = 'EQUITY'  # 'ETF' or 'EQUITY'
 
     # ── Build diverse model pool ────────────────────────────
     def _build_pool(self) -> dict:
@@ -466,22 +636,38 @@ class StockPredictor:
         return pool
 
     # ── Train ───────────────────────────────────────────────
-    def train(self, ticker, period='2y', start_date=None, end_date=None):
+    def train(self, ticker, period='2y', start_date=None, end_date=None, asset_type='EQUITY'):
         try:
-            df = get_history(ticker, period=period,
-                             start_date=start_date, end_date=end_date)
-            if df is None or df.empty or len(df) < 120:
-                return False, "Insufficient historical data (need ≥120 trading days)"
+            self.asset_type = asset_type
+            is_etf = (asset_type == 'ETF')
 
-            df_feat = _create_features(df)
-            avail   = [c for c in FEATURE_COLS if c in df_feat.columns]
+            # ETFs need longer history to capture full market cycles
+            default_period = '5y' if is_etf else period
+            actual_period  = default_period if period == '2y' and is_etf else period
+
+            df = get_history(ticker, period=actual_period,
+                             start_date=start_date, end_date=end_date)
+
+            # ETFs need >= 252 trading days (1 full year) to learn trend cycles
+            min_days = 252 if is_etf else 120
+            if df is None or df.empty or len(df) < min_days:
+                return False, f"Insufficient historical data (need >={min_days} trading days for {'ETF' if is_etf else 'stock'})"
+
+            # ── Select feature pipeline based on asset type ──
+            feature_fn   = _create_etf_features if is_etf else _create_features
+            feature_cols = ETF_FEATURE_COLS    if is_etf else FEATURE_COLS
+
+            df_feat = feature_fn(df)
+            avail   = [c for c in feature_cols if c in df_feat.columns]
             self.feature_cols = avail
 
+            min_clean = 150 if is_etf else 80
             df_clean = df_feat[avail + ['Close']].ffill().bfill().dropna()
-            if len(df_clean) < 80:
+            if len(df_clean) < min_clean:
                 return False, "Too many NaN values after feature engineering"
 
-            horizon = 5
+            # ETF: 30-day forward return; Stock: 5-day
+            horizon = 30 if is_etf else 5
             n       = len(df_clean) - horizon
             X_raw   = df_clean[avail].values[:n]
             y       = np.array([
@@ -524,13 +710,13 @@ class StockPredictor:
             # ── Walk-forward financial metrics ──
             wf = _walk_forward_metrics(X, y, dict(pool), Ridge(alpha=1.0))
 
-            # ── SHAP on best tree model (use test set for realistic signed values) ──
+            # ── SHAP on best tree model ──
             shap_model = (self.models.get('xgboost')
                           or self.models.get('random_forest')
                           or next(iter(self.models.values())))
             self.shap_features = _shap_top_features(shap_model, X_te[:100], avail)
 
-            self.ticker, self.period = ticker, period
+            self.ticker, self.period = ticker, actual_period
             self.start_date, self.end_date = start_date, end_date
             self.train_meta = {
                 'mae':  round(mae, 5),
@@ -538,6 +724,8 @@ class StockPredictor:
                 'models_used': list(self.models.keys()),
                 'n_train': len(X_tr),
                 'n_test':  len(X_te),
+                'asset_type': asset_type,
+                'horizon_days': horizon,
                 **wf,
             }
             return True, self.train_meta
@@ -549,21 +737,29 @@ class StockPredictor:
     def predict(self, ticker, news_sentiment: float = 0.0):
         """
         news_sentiment: float in [-1, +1]. Passed from news module.
-        Adjusts signal thresholds based on fundamental signal direction.
+        For ETFs, news_sentiment is always 0.0 (no company-specific news).
+        ETFs use ACCUMULATE/AVOID signal language and 30-day horizon.
         """
         try:
             if not self.models:
                 return None, "Models not trained"
 
-            df = get_history(ticker, period='6mo')
+            is_etf = (self.asset_type == 'ETF')
+
+            # ETFs use 1yr of recent data to capture trend context
+            recent_period = '1y' if is_etf else '6mo'
+            df = get_history(ticker, period=recent_period)
             if df is None or df.empty:
                 return None, "No recent price data"
 
-            df_feat  = _create_features(df)
-            avail    = [c for c in self.feature_cols if c in df_feat.columns]
-            df_clean = df_feat[avail].ffill().bfill().dropna()
+            # Use the matching feature pipeline
+            feature_fn = _create_etf_features if is_etf else _create_features
+            df_feat    = feature_fn(df)
+            avail      = [c for c in self.feature_cols if c in df_feat.columns]
+            df_clean   = df_feat[avail].ffill().bfill().dropna()
 
-            if len(df_clean) < 15:
+            min_recent = 30 if is_etf else 15
+            if len(df_clean) < min_recent:
                 return None, "Insufficient recent data"
 
             X_latest = self.scaler.transform(df_clean.tail(1).values)
@@ -583,16 +779,22 @@ class StockPredictor:
                 return None, "All model predictions failed"
 
             # ── Meta prediction ──
-            meta_in        = np.array(base_preds).reshape(1, -1)
+            meta_in          = np.array(base_preds).reshape(1, -1)
             predicted_return = float(self.meta_model.predict(meta_in)[0])
-            predicted_return = float(np.clip(predicted_return, -0.20, 0.20))
+            # ETF 30d returns can be larger; widen clip window
+            clip_max = 0.35 if is_etf else 0.20
+            predicted_return = float(np.clip(predicted_return, -clip_max, clip_max))
 
-            # ── News sentiment fusion ──
-            # Weight: 80% ML, 20% sentiment direction
-            # Only nudges; doesn't override strong ML signal
-            sentiment_nudge  = np.clip(news_sentiment, -1.0, 1.0) * 0.004
-            fused_return     = predicted_return * 0.80 + sentiment_nudge * 0.20
-            fused_return     = float(np.clip(fused_return, -0.20, 0.20))
+            # ── Sentiment fusion ──
+            # ETFs: NO news sentiment — irrelevant for index/commodity ETFs
+            # Stocks: 80% ML + 20% news nudge (original logic)
+            if is_etf:
+                fused_return    = predicted_return
+                news_sentiment  = 0.0   # zero out for clean reporting
+            else:
+                sentiment_nudge = np.clip(news_sentiment, -1.0, 1.0) * 0.004
+                fused_return    = predicted_return * 0.80 + sentiment_nudge * 0.20
+                fused_return    = float(np.clip(fused_return, -0.20, 0.20))
 
             # ── Confidence from model disagreement ──
             model_std = float(np.std(base_preds))
@@ -621,19 +823,28 @@ class StockPredictor:
             else:
                 stability = "STABLE CONSENSUS"
 
-            # ── Regime-aware + sentiment-aware thresholds ──
-            # HMM Regimes: LOW_VOLATILITY, MEDIUM_VOLATILITY, HIGH_VOLATILITY
-            base_thresh = 0.030 if regime == "HIGH_VOLATILITY" else 0.018
-            # If sentiment strongly agrees with ML direction, lower bar slightly
-            if (news_sentiment > 0.3 and fused_return > 0) or \
-               (news_sentiment < -0.3 and fused_return < 0):
-                base_thresh *= 0.85
-
-            if   fused_return >  base_thresh * 1.5: signal = "STRONG BUY"
-            elif fused_return >  base_thresh:        signal = "BUY"
-            elif fused_return < -base_thresh * 1.5:  signal = "STRONG SELL"
-            elif fused_return < -base_thresh:        signal = "SELL"
-            else:                                    signal = "HOLD"
+            # ── Signal thresholds & labels — diverge by asset type ──
+            if is_etf:
+                # ETF: larger threshold (slower moves), long-term language
+                base_thresh = 0.05 if regime == "HIGH_VOLATILITY" else 0.03
+                if   fused_return >  base_thresh * 1.5: signal = "STRONG ACCUMULATE"
+                elif fused_return >  base_thresh:        signal = "ACCUMULATE"
+                elif fused_return < -base_thresh * 1.5:  signal = "AVOID / REDUCE"
+                elif fused_return < -base_thresh:        signal = "CAUTION"
+                else:                                    signal = "HOLD / SIP"
+                horizon_days = 30
+            else:
+                # Stock: original short-term BUY/SELL signals
+                base_thresh = 0.030 if regime == "HIGH_VOLATILITY" else 0.018
+                if (news_sentiment > 0.3 and fused_return > 0) or \
+                   (news_sentiment < -0.3 and fused_return < 0):
+                    base_thresh *= 0.85
+                if   fused_return >  base_thresh * 1.5: signal = "STRONG BUY"
+                elif fused_return >  base_thresh:        signal = "BUY"
+                elif fused_return < -base_thresh * 1.5:  signal = "STRONG SELL"
+                elif fused_return < -base_thresh:        signal = "SELL"
+                else:                                    signal = "HOLD"
+                horizon_days = 5
 
             signal_strength = float(np.clip(abs(fused_return) * 1000, 0, 100))
 
@@ -642,20 +853,36 @@ class StockPredictor:
             predicted_price = round(current_price * (1 + fused_return), 2)
 
             # ── ATR-based risk/reward ──
-            atr = float(df_feat['atr'].iloc[-1]) if 'atr' in df_feat.columns \
-                  else current_price * 0.02
+            atr_col = 'atr_ratio' if is_etf else 'atr'
+            if atr_col in df_feat.columns:
+                atr_raw = float(df_feat[atr_col].iloc[-1])
+                atr = atr_raw * current_price if is_etf else atr_raw
+            else:
+                atr = current_price * 0.02
             expected_gain = abs(fused_return) * current_price
             risk_reward   = round(expected_gain / (atr + 1e-9), 2)
 
-            # ── SHAP top features (live explanation on latest point) ──
+            # ── SHAP labels: use ETF-specific map for ETF tickers ──
+            label_map = _ETF_FEATURE_LABELS if is_etf else _FEATURE_LABELS
+
+            # ── SHAP top features ──
             live_shap = []
             if self.models:
                 best = (self.models.get('xgboost')
                         or self.models.get('random_forest')
                         or next(iter(self.models.values())))
-                live_shap = _shap_top_features(best, X_latest, avail)
+                # Override labels in _shap_top_features via monkey-patch not ideal;
+                # instead inject labels post-hoc
+                live_shap_raw = _shap_top_features(best, X_latest, avail)
+                live_shap = [
+                    {**f, 'label': label_map.get(f['name'], f['label'])}
+                    for f in live_shap_raw
+                ]
 
-            top_features = live_shap if live_shap else self.shap_features
+            top_features = live_shap if live_shap else [
+                {**f, 'label': label_map.get(f['name'], f['label'])}
+                for f in self.shap_features
+            ]
 
             return {
                 'predicted_return':       round(fused_return * 100, 2),
@@ -667,6 +894,7 @@ class StockPredictor:
                 'stability':              stability,
                 'regime':                 regime,
                 'garch_volatility':       garch_vol,
+                'asset_type':             self.asset_type,
                 # Walk-forward financial metrics
                 'direction_accuracy':     self.train_meta.get('direction_accuracy', 50.0),
                 'profit_factor':          self.train_meta.get('profit_factor', 1.0),
@@ -682,7 +910,7 @@ class StockPredictor:
                 'ml_raw_return':          round(predicted_return * 100, 2),
                 # Risk
                 'risk_reward_ratio':      risk_reward,
-                'prediction_horizon_days': 5,
+                'prediction_horizon_days': horizon_days,
                 'models_used':            list(self.models.keys()),
                 'timestamp':              datetime.now().isoformat(),
                 'models': {
@@ -700,21 +928,23 @@ class StockPredictor:
 
 # ─────────────────────────────────────────────────────────────
 # Public API — per-ticker LRU cache
+# asset_type is included in cache key so ETF/EQUITY are cached separately
 # ─────────────────────────────────────────────────────────────
-def _cache_key(ticker, period, start_date, end_date):
-    return f"{ticker}|{period}|{start_date}|{end_date}"
+def _cache_key(ticker, period, start_date, end_date, asset_type='EQUITY'):
+    return f"{ticker}|{period}|{start_date}|{end_date}|{asset_type}"
 
 
 def get_ml_prediction(ticker, period='2y', start_date=None, end_date=None,
-                      news_sentiment: float = 0.0):
+                      news_sentiment: float = 0.0, asset_type: str = 'EQUITY'):
     global _MODEL_CACHE
-    key = _cache_key(ticker, period, start_date, end_date)
+    key = _cache_key(ticker, period, start_date, end_date, asset_type)
 
     if key not in _MODEL_CACHE:
         predictor = StockPredictor()
         ok, result = predictor.train(
             ticker, period=period,
-            start_date=start_date, end_date=end_date
+            start_date=start_date, end_date=end_date,
+            asset_type=asset_type
         )
         if not ok:
             return None, result
@@ -727,8 +957,10 @@ def get_ml_prediction(ticker, period='2y', start_date=None, end_date=None,
     return _MODEL_CACHE[key].predict(ticker, news_sentiment=news_sentiment)
 
 
-def retrain_model(ticker, period='2y', start_date=None, end_date=None):
-    key = _cache_key(ticker, period, start_date, end_date)
+def retrain_model(ticker, period='2y', start_date=None, end_date=None,
+                  asset_type: str = 'EQUITY'):
+    key = _cache_key(ticker, period, start_date, end_date, asset_type)
     _MODEL_CACHE.pop(key, None)
     return get_ml_prediction(ticker, period=period,
-                             start_date=start_date, end_date=end_date)
+                             start_date=start_date, end_date=end_date,
+                             asset_type=asset_type)

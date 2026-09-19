@@ -107,6 +107,9 @@ Financial markets are noisy and non-linear. Single models quickly overfit. Stock
 6.  **Bayesian Ridge Regressor** (Linear probabilistic prior to prevent regime collapse)
 *   **Stacking Meta-Blender**: A regularized **Ridge Regression** meta-learner combines the predictions using out-of-fold cross-validation.
 *   **Walk-Forward Rolling-Window Validation**: Tested strictly out-of-sample over historical horizons.
+*   **Asset-Aware Adaptation (Stocks vs ETFs)**:
+    *   **Equities**: 5-day horizon, short-term momentum & gap features, news sentiment fusion (80% ML + 20% news), BUY/SELL signal language.
+    *   **ETFs**: 30-day forward horizon, 38 long-term trend & macro features (Golden/Death Cross, 26/52 EMA, quarterly momentum, annual drawdown, rebalancing seasonality), ACCUMULATE/AVOID signals, zeroed company news sentiment, and auto-upgraded 5-year training window.
 
 ---
 
@@ -124,15 +127,19 @@ Financial markets are noisy and non-linear. Single models quickly overfit. Stock
 
 ---
 
-### 6. 💎 Institutional Fundamental Valuation & Risk Forensics
-*   **10-Step Discounted Cash Flow (DCF)**: Calculates intrinsic value per share with dynamic WACC calculation, terminal growth sensitivity, and margin of safety discounts.
-*   **Graham Formula & Peter Lynch Fair Value**: Classic value and GARP (Growth-at-a-Reasonable-Price) benchmarks.
-*   **3-Stage & 5-Stage DuPont Analysis**: Decomposes Return on Equity into Operating Margin, Asset Turnover, Financial Leverage, Tax Burden, and Interest Burden.
-*   **Forensic Accounting Checklists**:
-    *   **Altman Z-Score**: Predicts bankruptcy probability ($Z < 1.81$ Distress, $Z > 2.99$ Safe).
-    *   **Beneish M-Score**: Flags potential earnings manipulation ($M > -1.78$ High Risk).
-    *   **Piotroski F-Score**: 9-point fundamental strength scoring.
-*   **Black-Scholes Options Greeks**: Closed-form analytical solutions for Call and Put options Delta ($\Delta$), Gamma ($\Gamma$), Theta ($\Theta$), Vega ($\mathcal{V}$), and Rho ($\rho$).
+### 6. 💎 Institutional Fundamental Valuation & ETF Long-Term Suite
+*   **Asset-Adaptive Analysis Workflow**: The workstation automatically bifurcates based on instrument classification:
+    *   **For Equities**:
+        *   **10-Step Discounted Cash Flow (DCF)**: Calculates intrinsic value per share with dynamic WACC calculation, terminal growth sensitivity, and margin of safety discounts.
+        *   **Graham Formula & Peter Lynch Fair Value**: Classic value and GARP benchmarks.
+        *   **3-Stage & 5-Stage DuPont Analysis**: Decomposes ROE into Operating Margin, Asset Turnover, Leverage, Tax Burden, and Interest Burden.
+        *   **Forensic Accounting Checklists**: Altman Z-Score, Beneish M-Score, and Piotroski F-Score.
+        *   **Black-Scholes Options Greeks**: $\Delta$, $\Gamma$, $\Theta$, $\mathcal{V}$, and $\rho$.
+    *   **For ETFs (`ETFLongTermPanel`)**:
+        *   **1Y / 3Y / 5Y CAGR vs Benchmark Index**: Quantifies multi-year compounding and true alpha.
+        *   **Annualised Tracking Error**: $\sigma(\text{ETF} - \text{Benchmark}) \times \sqrt{252}$ to measure index replication efficiency.
+        *   **6-Point ETF Health Checklist**: AUM ($\ge ₹500\text{ Cr}$), Expense Ratio ($< 0.50\%$), Tracking Error ($< 0.50\%$), 3Y CAGR Alpha, Sharpe Ratio ($> 0.50$), and NAV Premium/Discount ($< \pm 0.50\%$).
+        *   **SIP Suitability Score (0–10)**: Weighted composite of fund liquidity, expense efficiency, tracking precision, and rolling return consistency for long-term systematic wealth creation.
 
 ---
 

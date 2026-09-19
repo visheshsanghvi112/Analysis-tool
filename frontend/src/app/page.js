@@ -12,6 +12,7 @@ import PeerComparison from './components/PeerComparison';
 import SectorIntelligence from './components/SectorIntelligence';
 import Backtesting from './components/Backtesting';
 import LongTermAnalysis from './components/LongTermAnalysis';
+import ETFLongTermPanel from './components/ETFLongTermPanel';
 import MonteCarloSimulation from './components/MonteCarloSimulation';
 import FundamentalsAnalysis from './components/FundamentalsAnalysis';
 import SIPCalculator from './components/SIPCalculator';
@@ -243,6 +244,25 @@ export default function Dashboard() {
   const [isLoading, setIsLoading]           = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
 
+  // ETF detection — comprehensive heuristic for Indian & global ETFs
+  const ETF_KEYWORDS = [
+    'BEES', 'MON100', 'MAFANG', 'CPSEETF', 'GOLDETF',
+    'LIQUIDBEES', 'SILVERBEES', 'ITBEES', 'SETFNN50', 'KOTAKNV20',
+    'MID150BEES', 'JUNIORBEES', 'HDFCNIFTY', 'ICICINIFTY', 'NIFTYETF',
+  ];
+  const GLOBAL_ETFS = new Set([
+    'SPY', 'QQQ', 'VOO', 'IVV', 'VTI', 'IWM', 'DIA', 'GLD', 'SLV',
+    'ARKK', 'SMH', 'XLF', 'XLE', 'XLK', 'EEM', 'VEA', 'VWO',
+  ]);
+  const isETF = selectedTicker
+    ? (
+        ETF_KEYWORDS.some(k => selectedTicker.toUpperCase().includes(k)) ||
+        selectedTicker.toUpperCase().endsWith('ETF.NS') ||
+        selectedTicker.toUpperCase().endsWith('ETF.BO') ||
+        GLOBAL_ETFS.has(selectedTicker.toUpperCase().trim())
+      )
+    : false;
+
   const handleTickerSelect = useCallback((ticker) => {
     setIsLoading(true);
     setSelectedTicker(ticker);
@@ -364,7 +384,7 @@ export default function Dashboard() {
                 }
               `}</style>
               <StatusBadge icon={Activity}  title="Live Prices"       subtitle="Real-time · 15 min delay" status="active" infoKey="live_prices" />
-              <StatusBadge icon={Brain}     title="ML Predictions"    subtitle="5-day Random Forest"       status="active" infoKey="ml_predictions" />
+              <StatusBadge icon={Brain}     title="ML Predictions"    subtitle={isETF ? '30-Day ETF Outlook' : '5-Day Ensemble'} status="active" infoKey="ml_predictions" />
               <StatusBadge icon={Newspaper} title="News Intelligence" subtitle="AI sentiment · Alerts"     status="active" infoKey="news_intelligence" />
               <StatusBadge icon={PieChart}  title="Risk Analytics"    subtitle="VaR · Options · Portfolio" status="active" infoKey="risk_analytics" />
             </div>
@@ -457,10 +477,19 @@ export default function Dashboard() {
               <div id="monte-carlo-section">
                 <MonteCarloSimulation ticker={selectedTicker} />
               </div>
-              <LongTermAnalysis ticker={selectedTicker} />
-              <div id="valuation-section">
-                <FundamentalsAnalysis ticker={selectedTicker} />
-              </div>
+
+              {/* ── Long-Term: ETF deep-dive OR stock analysis ─────────── */}
+              {isETF ? (
+                <ETFLongTermPanel ticker={selectedTicker} />
+              ) : (
+                <>
+                  <LongTermAnalysis ticker={selectedTicker} />
+                  <div id="valuation-section">
+                    <FundamentalsAnalysis ticker={selectedTicker} />
+                  </div>
+                </>
+              )}
+
               <SIPCalculator ticker={selectedTicker} />
 
               {/* ── Peer & Sector Intelligence Tabs ───────────────────── */}

@@ -1,3 +1,4 @@
+from __future__ import annotations
 import math
 import numpy as np
 import pandas as pd
@@ -5,7 +6,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 
-from yf_client import get_history, get_quote, get_info
+from yf_client import get_history, get_quote, get_info, get_asset_type, get_etf_meta, get_etf_holdings
 from peer_data import get_peers
 
 router = APIRouter(prefix="/api", tags=["analysis"])
@@ -883,3 +884,598 @@ def run_backtest(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Backtest failed: {str(e)}")
+
+
+# ────────────────────────────────────────────────────────────
+# ETF Long-Term Analysis Endpoint
+# Replaces DCF/Graham/DuPont for ETF tickers.
+# ────────────────────────────────────────────────────────────
+
+# Benchmark index tickers for common Indian ETFs
+_ETF_BENCHMARK_MAP = {
+    'NIFTYBEES.NS':  '^NSEI',
+    'JUNIORBEES.NS': '^NSEI',
+    'BANKBEES.NS':   '^NSEBANK',
+    'GOLDBEES.NS':   'GC=F',
+    'SILVERBEES.NS': 'SI=F',
+    'MON100.NS':     '^NDX',
+    'MAFANG.NS':     '^NDX',
+    'ITBEES.NS':     '^NSEI',
+    'CPSEETF.NS':    '^NSEI',
+    'LIQUIDBEES.NS': None,
+    'SETFNN50.NS':   '^NSEI',
+    'KOTAKNV20.NS':  '^NSEI',
+}
+
+
+def _compute_cagr(series: pd.Series, years: float) -> float | None:
+    """Compute CAGR over `years` years from a price series. Returns None if insufficient data."""
+    n = int(years * 252)
+    if len(series) < n + 1:
+        return None
+    start = float(series.iloc[-n - 1])
+    end   = float(series.iloc[-1])
+    if start <= 0:
+        return None
+    cagr = (end / start) ** (1.0 / years) - 1.0
+    return round(cagr * 100, 2)
+
+
+def _compute_sharpe(returns: pd.Series, rf_annual: float = 0.065) -> float | None:
+    """Annualised Sharpe ratio. rf_annual = India risk-free rate."""
+    if returns.empty or returns.std() == 0:
+        return None
+    rf_daily = rf_annual / 252
+    excess   = returns - rf_daily
+    sharpe   = excess.mean() / excess.std() * math.sqrt(252)
+    return round(float(sharpe), 3)
+
+
+def _compute_max_drawdown(series: pd.Series) -> float:
+    """Maximum drawdown (%) from a price series."""
+    if series.empty:
+        return 0.0
+    rolling_max = series.expanding().max()
+    dd = (series - rolling_max) / rolling_max
+    return round(float(dd.min() * 100), 2)
+
+
+def _compute_tracking_error(etf_returns: pd.Series, bench_returns: pd.Series) -> float | None:
+    """Annualised tracking error = std(ETF - Benchmark) * sqrt(252)."""
+    # Align both series on common dates
+    aligned = pd.concat([etf_returns, bench_returns], axis=1).dropna()
+    if len(aligned) < 30:
+        return None
+    diff = aligned.iloc[:, 0] - aligned.iloc[:, 1]
+    te = float(diff.std() * math.sqrt(252) * 100)
+    return round(te, 3)
+
+
+def _compute_rolling_returns(close_series: pd.Series, window_days: int = 756) -> dict | None:
+    """
+    Computes rolling annualised return (CAGR) distribution.
+    window_days = 756 (~3 trading years of 252 days each).
+    """
+    if close_series is None or len(close_series) < window_days + 20:
+        return None
+
+    try:
+        years = window_days / 252.0
+        if years <= 0:
+            return None
+        exponent = 1.0 / years
+
+        ratio = close_series / close_series.shift(window_days)
+        valid_ratios = ratio.dropna()
+        valid_ratios = valid_ratios[valid_ratios > 0]
+
+        if len(valid_ratios) < 10:
+            return None
+
+        rolling_cagr = (np.power(valid_ratios, exponent) - 1.0) * 100.0
+        rolling_cagr = rolling_cagr.replace([np.inf, -np.inf], np.nan).dropna()
+
+        if rolling_cagr.empty or len(rolling_cagr) < 10:
+            return None
+
+        median_val = float(rolling_cagr.median())
+        min_val    = float(rolling_cagr.min())
+        max_val    = float(rolling_cagr.max())
+        curr_val   = float(rolling_cagr.iloc[-1])
+        positive_pct = float((rolling_cagr > 0).mean() * 100.0)
+
+        for v in [median_val, min_val, max_val, curr_val, positive_pct]:
+            if math.isnan(v) or math.isinf(v):
+                return None
+
+        return {
+            "window_years": round(years),
+            "median_cagr": round(median_val, 2),
+            "min_cagr": round(min_val, 2),
+            "max_cagr": round(max_val, 2),
+            "current_cagr": round(curr_val, 2),
+            "positive_periods_pct": round(positive_pct, 1),
+            "total_periods": int(len(rolling_cagr)),
+        }
+    except Exception:
+        return None
+
+
+# Curated holdings for prominent Indian ETFs where NSE does not provide API holdings
+_ETF_CURATED_HOLDINGS: dict[str, dict] = {
+    'NIFTYBEES.NS': {
+        'holdings': [
+            {'symbol': 'HDFCBANK.NS', 'name': 'HDFC Bank Ltd', 'weight_pct': 11.4},
+            {'symbol': 'RELIANCE.NS', 'name': 'Reliance Industries Ltd', 'weight_pct': 9.2},
+            {'symbol': 'ICICIBANK.NS', 'name': 'ICICI Bank Ltd', 'weight_pct': 7.8},
+            {'symbol': 'INFY.NS', 'name': 'Infosys Ltd', 'weight_pct': 5.6},
+            {'symbol': 'ITC.NS', 'name': 'ITC Ltd', 'weight_pct': 4.3},
+            {'symbol': 'TCS.NS', 'name': 'Tata Consultancy Services', 'weight_pct': 3.9},
+            {'symbol': 'LT.NS', 'name': 'Larsen & Toubro Ltd', 'weight_pct': 3.8},
+            {'symbol': 'BHARTIARTL.NS', 'name': 'Bharti Airtel Ltd', 'weight_pct': 3.5},
+            {'symbol': 'AXISBANK.NS', 'name': 'Axis Bank Ltd', 'weight_pct': 3.2},
+            {'symbol': 'SBIN.NS', 'name': 'State Bank of India', 'weight_pct': 2.9},
+        ],
+        'sectors': [
+            {'sector': 'Financial Services', 'weight_pct': 33.5},
+            {'sector': 'Information Technology', 'weight_pct': 13.8},
+            {'sector': 'Oil, Gas & Consumable Fuels', 'weight_pct': 11.2},
+            {'sector': 'Fast Moving Consumer Goods', 'weight_pct': 8.9},
+            {'sector': 'Automobile & Auto Components', 'weight_pct': 7.2},
+            {'sector': 'Construction', 'weight_pct': 4.2},
+            {'sector': 'Healthcare', 'weight_pct': 3.9},
+            {'sector': 'Telecommunication', 'weight_pct': 3.6},
+            {'sector': 'Metals & Mining', 'weight_pct': 3.4},
+            {'sector': 'Power & Utilities', 'weight_pct': 3.2},
+        ],
+    },
+    'BANKBEES.NS': {
+        'holdings': [
+            {'symbol': 'HDFCBANK.NS', 'name': 'HDFC Bank Ltd', 'weight_pct': 28.5},
+            {'symbol': 'ICICIBANK.NS', 'name': 'ICICI Bank Ltd', 'weight_pct': 23.2},
+            {'symbol': 'SBIN.NS', 'name': 'State Bank of India', 'weight_pct': 10.4},
+            {'symbol': 'AXISBANK.NS', 'name': 'Axis Bank Ltd', 'weight_pct': 9.6},
+            {'symbol': 'KOTAKBANK.NS', 'name': 'Kotak Mahindra Bank', 'weight_pct': 9.1},
+            {'symbol': 'INDUSINDBK.NS', 'name': 'IndusInd Bank Ltd', 'weight_pct': 5.8},
+            {'symbol': 'BANKBARODA.NS', 'name': 'Bank of Baroda', 'weight_pct': 2.9},
+            {'symbol': 'FEDERALBNK.NS', 'name': 'Federal Bank Ltd', 'weight_pct': 2.5},
+            {'symbol': 'PNB.NS', 'name': 'Punjab National Bank', 'weight_pct': 2.1},
+            {'symbol': 'IDFCFIRSTB.NS', 'name': 'IDFC First Bank Ltd', 'weight_pct': 1.8},
+        ],
+        'sectors': [
+            {'sector': 'Private Sector Banks', 'weight_pct': 81.2},
+            {'sector': 'Public Sector Banks', 'weight_pct': 18.8},
+        ],
+    },
+    'MON100.NS': {
+        'holdings': [
+            {'symbol': 'AAPL', 'name': 'Apple Inc', 'weight_pct': 9.1},
+            {'symbol': 'MSFT', 'name': 'Microsoft Corp', 'weight_pct': 8.4},
+            {'symbol': 'NVDA', 'name': 'NVIDIA Corp', 'weight_pct': 8.1},
+            {'symbol': 'AMZN', 'name': 'Amazon.com Inc', 'weight_pct': 5.3},
+            {'symbol': 'META', 'name': 'Meta Platforms Inc', 'weight_pct': 4.8},
+            {'symbol': 'AVGO', 'name': 'Broadcom Inc', 'weight_pct': 4.4},
+            {'symbol': 'GOOGL', 'name': 'Alphabet Inc (Class A)', 'weight_pct': 2.8},
+            {'symbol': 'GOOG', 'name': 'Alphabet Inc (Class C)', 'weight_pct': 2.7},
+            {'symbol': 'TSLA', 'name': 'Tesla Inc', 'weight_pct': 2.6},
+            {'symbol': 'COST', 'name': 'Costco Wholesale Corp', 'weight_pct': 2.4},
+        ],
+        'sectors': [
+            {'sector': 'Technology', 'weight_pct': 51.2},
+            {'sector': 'Consumer Discretionary', 'weight_pct': 18.5},
+            {'sector': 'Communication Services', 'weight_pct': 15.3},
+            {'sector': 'Health Care', 'weight_pct': 6.2},
+            {'sector': 'Consumer Staples', 'weight_pct': 4.1},
+            {'sector': 'Industrials', 'weight_pct': 3.3},
+        ],
+    },
+    'MAFANG.NS': {
+        'holdings': [
+            {'symbol': 'NVDA', 'name': 'NVIDIA Corp', 'weight_pct': 11.2},
+            {'symbol': 'META', 'name': 'Meta Platforms Inc', 'weight_pct': 10.8},
+            {'symbol': 'AAPL', 'name': 'Apple Inc', 'weight_pct': 10.4},
+            {'symbol': 'AMZN', 'name': 'Amazon.com Inc', 'weight_pct': 10.1},
+            {'symbol': 'MSFT', 'name': 'Microsoft Corp', 'weight_pct': 9.9},
+            {'symbol': 'GOOGL', 'name': 'Alphabet Inc', 'weight_pct': 9.8},
+            {'symbol': 'NFLX', 'name': 'Netflix Inc', 'weight_pct': 9.7},
+            {'symbol': 'AVGO', 'name': 'Broadcom Inc', 'weight_pct': 9.6},
+            {'symbol': 'SNOW', 'name': 'Snowflake Inc', 'weight_pct': 9.3},
+            {'symbol': 'TSLA', 'name': 'Tesla Inc', 'weight_pct': 9.2},
+        ],
+        'sectors': [
+            {'sector': 'Technology', 'weight_pct': 68.5},
+            {'sector': 'Communication Services', 'weight_pct': 21.4},
+            {'sector': 'Consumer Discretionary', 'weight_pct': 10.1},
+        ],
+    },
+    'GOLDBEES.NS': {
+        'holdings': [
+            {'symbol': 'GOLD', 'name': 'Physical Gold Bullion (.995 Purity)', 'weight_pct': 98.6},
+            {'symbol': 'TREPS', 'name': 'TREPS / Cash & Equivalents', 'weight_pct': 1.4},
+        ],
+        'sectors': [
+            {'sector': 'Precious Metals (Gold)', 'weight_pct': 98.6},
+            {'sector': 'Cash & Equivalents', 'weight_pct': 1.4},
+        ],
+    },
+    'SILVERBEES.NS': {
+        'holdings': [
+            {'symbol': 'SILVER', 'name': 'Physical Silver Bullion (.999 Purity)', 'weight_pct': 98.2},
+            {'symbol': 'TREPS', 'name': 'TREPS / Cash & Equivalents', 'weight_pct': 1.8},
+        ],
+        'sectors': [
+            {'sector': 'Precious Metals (Silver)', 'weight_pct': 98.2},
+            {'sector': 'Cash & Equivalents', 'weight_pct': 1.8},
+        ],
+    },
+    'ITBEES.NS': {
+        'holdings': [
+            {'symbol': 'TCS.NS', 'name': 'Tata Consultancy Services', 'weight_pct': 26.4},
+            {'symbol': 'INFY.NS', 'name': 'Infosys Ltd', 'weight_pct': 25.1},
+            {'symbol': 'HCLTECH.NS', 'name': 'HCL Technologies Ltd', 'weight_pct': 10.3},
+            {'symbol': 'WIPRO.NS', 'name': 'Wipro Ltd', 'weight_pct': 7.9},
+            {'symbol': 'TECHM.NS', 'name': 'Tech Mahindra Ltd', 'weight_pct': 7.2},
+            {'symbol': 'LTIM.NS', 'name': 'LTIMindtree Ltd', 'weight_pct': 5.4},
+            {'symbol': 'PERSISTENT.NS', 'name': 'Persistent Systems', 'weight_pct': 4.8},
+            {'symbol': 'COFORGE.NS', 'name': 'Coforge Ltd', 'weight_pct': 4.3},
+            {'symbol': 'MPHASIS.NS', 'name': 'Mphasis Ltd', 'weight_pct': 3.6},
+            {'symbol': 'TATAELXSI.NS', 'name': 'Tata Elxsi Ltd', 'weight_pct': 2.8},
+        ],
+        'sectors': [
+            {'sector': 'IT Consulting & Software', 'weight_pct': 94.5},
+            {'sector': 'Cash & Equivalents', 'weight_pct': 5.5},
+        ],
+    },
+    'CPSEETF.NS': {
+        'holdings': [
+            {'symbol': 'NTPC.NS', 'name': 'NTPC Ltd', 'weight_pct': 20.1},
+            {'symbol': 'POWERGRID.NS', 'name': 'Power Grid Corporation', 'weight_pct': 19.4},
+            {'symbol': 'ONGC.NS', 'name': 'Oil & Natural Gas Corp', 'weight_pct': 18.2},
+            {'symbol': 'COALINDIA.NS', 'name': 'Coal India Ltd', 'weight_pct': 14.8},
+            {'symbol': 'BEL.NS', 'name': 'Bharat Electronics Ltd', 'weight_pct': 11.5},
+            {'symbol': 'OIL.NS', 'name': 'Oil India Ltd', 'weight_pct': 4.9},
+            {'symbol': 'NMDC.NS', 'name': 'NMDC Ltd', 'weight_pct': 4.4},
+            {'symbol': 'SJVN.NS', 'name': 'SJVN Ltd', 'weight_pct': 2.8},
+            {'symbol': 'NLCINDIA.NS', 'name': 'NLC India Ltd', 'weight_pct': 2.1},
+            {'symbol': 'COCHINSHIP.NS', 'name': 'Cochin Shipyard Ltd', 'weight_pct': 1.8},
+        ],
+        'sectors': [
+            {'sector': 'Power & Utilities', 'weight_pct': 42.3},
+            {'sector': 'Oil, Gas & Consumable Fuels', 'weight_pct': 37.9},
+            {'sector': 'Capital Goods & Defence', 'weight_pct': 15.4},
+            {'sector': 'Metals & Mining', 'weight_pct': 4.4},
+        ],
+    },
+    'SETFNN50.NS': {
+        'holdings': [
+            {'symbol': 'BEL.NS', 'name': 'Bharat Electronics Ltd', 'weight_pct': 4.8},
+            {'symbol': 'TRENT.NS', 'name': 'Trent Ltd', 'weight_pct': 4.5},
+            {'symbol': 'HAL.NS', 'name': 'Hindustan Aeronautics Ltd', 'weight_pct': 4.1},
+            {'symbol': 'TATAPOWER.NS', 'name': 'Tata Power Co Ltd', 'weight_pct': 3.8},
+            {'symbol': 'RECLTD.NS', 'name': 'REC Ltd', 'weight_pct': 3.6},
+            {'symbol': 'PFC.NS', 'name': 'Power Finance Corporation', 'weight_pct': 3.4},
+            {'symbol': 'CHOLAFIN.NS', 'name': 'Cholamandalam Investment', 'weight_pct': 3.2},
+            {'symbol': 'SIEMENS.NS', 'name': 'Siemens Ltd', 'weight_pct': 3.1},
+            {'symbol': 'IOC.NS', 'name': 'Indian Oil Corporation', 'weight_pct': 2.9},
+            {'symbol': 'VEDL.NS', 'name': 'Vedanta Ltd', 'weight_pct': 2.8},
+        ],
+        'sectors': [
+            {'sector': 'Financial Services', 'weight_pct': 21.4},
+            {'sector': 'Capital Goods', 'weight_pct': 18.2},
+            {'sector': 'Power & Utilities', 'weight_pct': 11.5},
+            {'sector': 'Automobile & Auto Components', 'weight_pct': 9.8},
+            {'sector': 'Healthcare', 'weight_pct': 8.6},
+            {'sector': 'Metals & Mining', 'weight_pct': 7.5},
+            {'sector': 'Consumer Services', 'weight_pct': 6.8},
+        ],
+    },
+}
+_ETF_CURATED_HOLDINGS['JUNIORBEES.NS'] = _ETF_CURATED_HOLDINGS['SETFNN50.NS']
+
+
+@router.get("/etf-analysis")
+def get_etf_analysis(
+    ticker: str = Query(..., description="ETF ticker, e.g. NIFTYBEES.NS"),
+):
+    """
+    ETF-specific long-term analysis — replaces DCF/Graham/DuPont for ETF tickers.
+    Returns:
+      - ETF identity card (AUM, expense ratio, inception date, benchmark)
+      - 1Y / 3Y / 5Y CAGR (ETF vs benchmark if available)
+      - Annualised volatility, max drawdown, Sharpe ratio (3yr)
+      - 6-point ETF Health Checklist
+      - SIP Suitability Score (0–10)
+      - Yearly returns table
+    """
+    try:
+        ticker_clean = ticker.strip().upper()
+
+        # Reject non-ETF tickers cleanly
+        asset_type = get_asset_type(ticker_clean)
+        if asset_type not in ('ETF', 'MUTUALFUND'):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{ticker_clean} does not appear to be an ETF (detected: {asset_type}). "
+                        "Use /api/valuation for stocks."
+            )
+
+        # ── Metadata from Yahoo Finance ──────────────────────────────────────
+        meta     = get_etf_meta(ticker_clean)
+        info     = get_info(ticker_clean)
+        is_indian = ticker_clean.endswith(".NS") or ticker_clean.endswith(".BO")
+        curr_sym  = "₹" if is_indian else "$"
+        long_name = info.get("longName") or info.get("shortName") or ticker_clean
+
+        # ── Price history (5Y max for all CAGR calculations) ─────────────────
+        df = get_history(ticker_clean, period='5y')
+        if (df is None or df.empty or len(df) < 30) and not (ticker_clean.endswith(".NS") or ticker_clean.endswith(".BO")):
+            # Try appending .NS for Indian ETFs entered without suffix
+            df_ns = get_history(f"{ticker_clean}.NS", period='5y')
+            if df_ns is not None and not df_ns.empty and len(df_ns) >= 30:
+                df = df_ns
+                ticker_clean = f"{ticker_clean}.NS"
+                meta = get_etf_meta(ticker_clean) or meta
+                info = get_info(ticker_clean) or info
+                is_indian = True
+                curr_sym = "₹"
+                long_name = info.get("longName") or info.get("shortName") or ticker_clean
+
+        if df is None or df.empty or len(df) < 30:
+            raise HTTPException(status_code=404, detail=f"Insufficient price history for {ticker_clean}")
+
+        close    = df['Close'].dropna()
+        returns  = close.pct_change().dropna()
+        current_price = float(close.iloc[-1])
+
+        # ── CAGR calculations ─────────────────────────────────────────────────
+        cagr_1y = _compute_cagr(close, 1.0)
+        cagr_3y = _compute_cagr(close, 3.0)
+        cagr_5y = _compute_cagr(close, 5.0)
+
+        # ── Volatility metrics ────────────────────────────────────────────────
+        vol_1y = None
+        if len(returns) >= 252:
+            vol_1y = round(float(returns.iloc[-252:].std() * math.sqrt(252) * 100), 2)
+        elif len(returns) >= 20:
+            vol_1y = round(float(returns.std() * math.sqrt(252) * 100), 2)
+
+        max_dd   = _compute_max_drawdown(close)
+        sharpe   = _compute_sharpe(returns.iloc[-756:] if len(returns) >= 756 else returns)  # 3yr
+
+        # ── Benchmark comparison ──────────────────────────────────────────────
+        bench_ticker  = _ETF_BENCHMARK_MAP.get(ticker_clean)
+        bench_cagr_1y = bench_cagr_3y = bench_cagr_5y = None
+        tracking_error = None
+
+        if bench_ticker:
+            try:
+                df_bench = get_history(bench_ticker, period='5y')
+                if df_bench is not None and not df_bench.empty and len(df_bench) >= 30:
+                    bc = df_bench['Close'].dropna()
+                    bench_cagr_1y = _compute_cagr(bc, 1.0)
+                    bench_cagr_3y = _compute_cagr(bc, 3.0)
+                    bench_cagr_5y = _compute_cagr(bc, 5.0)
+                    br = bc.pct_change().dropna()
+                    tracking_error = _compute_tracking_error(returns, br)
+            except Exception:
+                pass
+
+        # ── Yearly returns table ──────────────────────────────────────────────
+        yearly_returns = []
+        try:
+            df_yr = df.copy()
+            df_yr.index = pd.to_datetime(df_yr.index)
+            df_yr['year'] = df_yr.index.year
+            for yr, grp in df_yr.groupby('year'):
+                first_p = float(grp['Close'].iloc[0])
+                last_p  = float(grp['Close'].iloc[-1])
+                if first_p > 0:
+                    ret_pct = round((last_p / first_p - 1.0) * 100, 2)
+                    yearly_returns.append({'year': int(yr), 'return_pct': ret_pct})
+        except Exception:
+            pass
+
+        # ── 6-Point ETF Health Checklist ─────────────────────────────────────
+        health_checklist = []
+
+        # 1. AUM > INR 500 Cr (or USD 60M equivalent)
+        aum_raw = meta.get('total_assets')
+        if aum_raw is not None:
+            aum_display  = f"{curr_sym}{round(aum_raw / 1e7, 1)} Cr" if is_indian else f"{curr_sym}{round(aum_raw / 1e6, 1)} M"
+            aum_threshold = 5e9 if is_indian else 60e6  # INR 500 Cr = INR 5e9
+            passed_aum    = aum_raw >= aum_threshold
+            health_checklist.append({
+                "metric":    "AUM (Fund Size)",
+                "value":     aum_display,
+                "condition": f">= {curr_sym}500 Cr" if is_indian else ">= $60M",
+                "passed":    passed_aum,
+                "note":      "Small AUM = wider bid-ask spreads and liquidity risk"
+            })
+        else:
+            health_checklist.append({"metric": "AUM (Fund Size)", "value": "N/A", "condition": f">= {curr_sym}500 Cr", "passed": False, "note": "Data not available"})
+
+        # 2. Expense Ratio < 0.5%
+        exp_ratio = meta.get('expense_ratio')
+        if exp_ratio is not None:
+            health_checklist.append({
+                "metric":    "Expense Ratio",
+                "value":     f"{round(exp_ratio * 100, 3)}%",
+                "condition": "< 0.50%",
+                "passed":    exp_ratio < 0.005,
+                "note":      "Lower expense ratio compounds to significantly more wealth over 20 years"
+            })
+        else:
+            health_checklist.append({"metric": "Expense Ratio", "value": "N/A", "condition": "< 0.50%", "passed": False, "note": "Data not available"})
+
+        # 3. Tracking Error < 0.5% annualised
+        if tracking_error is not None:
+            health_checklist.append({
+                "metric":    "Tracking Error (Annual)",
+                "value":     f"{tracking_error}%",
+                "condition": "< 0.50%",
+                "passed":    tracking_error < 0.5,
+                "note":      "Lower = ETF closely replicates its index"
+            })
+        else:
+            health_checklist.append({"metric": "Tracking Error (Annual)", "value": "N/A", "condition": "< 0.50%", "passed": None, "note": "Benchmark data unavailable"})
+
+        # 4. 3Y CAGR > Benchmark 3Y CAGR
+        if cagr_3y is not None and bench_cagr_3y is not None:
+            alpha = round(cagr_3y - bench_cagr_3y, 2)
+            health_checklist.append({
+                "metric":    "3Y CAGR vs Benchmark",
+                "value":     f"{cagr_3y}% vs {bench_cagr_3y}% (alpha: {'+' if alpha >= 0 else ''}{alpha}%)",
+                "condition": ">= Benchmark",
+                "passed":    alpha >= -0.5,   # allow -0.5% tolerance (tracking is expected to be close)
+                "note":      "Alpha should be near 0 for a good index ETF; positive alpha is a bonus"
+            })
+        elif cagr_3y is not None:
+            health_checklist.append({"metric": "3Y CAGR vs Benchmark", "value": f"{cagr_3y}%", "condition": ">= Benchmark", "passed": None, "note": "Benchmark data unavailable"})
+        else:
+            health_checklist.append({"metric": "3Y CAGR vs Benchmark", "value": "N/A (< 3Y history)", "condition": ">= Benchmark", "passed": False, "note": "Insufficient price history"})
+
+        # 5. Sharpe Ratio (3yr) > 0.5
+        if sharpe is not None:
+            health_checklist.append({
+                "metric":    "Sharpe Ratio (3yr)",
+                "value":     str(round(sharpe, 2)),
+                "condition": "> 0.50",
+                "passed":    sharpe > 0.5,
+                "note":      "Measures risk-adjusted return; > 1.0 is excellent"
+            })
+        else:
+            health_checklist.append({"metric": "Sharpe Ratio (3yr)", "value": "N/A", "condition": "> 0.50", "passed": False, "note": "Insufficient data"})
+
+        # 6. NAV Premium/Discount < 0.5%
+        nav = meta.get('nav')
+        if nav and nav > 0 and current_price > 0:
+            prem_disc = round((current_price / nav - 1.0) * 100, 3)
+            health_checklist.append({
+                "metric":    "NAV Premium/Discount",
+                "value":     f"{'+' if prem_disc >= 0 else ''}{prem_disc}%",
+                "condition": "< ±0.50%",
+                "passed":    abs(prem_disc) < 0.5,
+                "note":      "Wide discount/premium indicates illiquidity or mispricing"
+            })
+        else:
+            health_checklist.append({"metric": "NAV Premium/Discount", "value": "N/A", "condition": "< ±0.50%", "passed": None, "note": "NAV data unavailable"})
+
+        # ── SIP Suitability Score (0–10) ─────────────────────────────────────
+        # Weighted composite of health checklist + return consistency
+        sip_score = 0.0
+        weights = {
+            "aum":      1.5,
+            "expense":  2.0,
+            "tracking": 1.5,
+            "cagr":     2.0,
+            "sharpe":   1.5,
+            "nav":      1.0,
+        }
+        checklist_keys = ["aum", "expense", "tracking", "cagr", "sharpe", "nav"]
+        max_possible = sum(weights.values())
+        for key, item in zip(checklist_keys, health_checklist):
+            if item.get("passed") is True:
+                sip_score += weights[key]
+            elif item.get("passed") is None:
+                sip_score += weights[key] * 0.4   # partial credit for unknown
+
+        # Bonus: return consistency (low rolling return std dev is good for SIP)
+        try:
+            if len(returns) >= 252:
+                try:
+                    monthly_returns = returns.resample('ME').apply(lambda x: (1 + x).prod() - 1)
+                except (ValueError, Exception):
+                    monthly_returns = returns.resample('M').apply(lambda x: (1 + x).prod() - 1)
+                consistency_bonus = max(0.0, 0.5 - float(monthly_returns.std()) * 5)
+                sip_score = min(10.0, sip_score + consistency_bonus)
+        except Exception:
+            pass
+
+        sip_score = round(min(10.0, sip_score / max_possible * 10.0), 1)
+        if sip_score >= 8.0:
+            sip_label = "Excellent SIP Candidate"
+        elif sip_score >= 6.0:
+            sip_label = "Good for SIP"
+        elif sip_score >= 4.0:
+            sip_label = "Moderate — Review Before SIP"
+        else:
+            sip_label = "Not Recommended for SIP"
+
+        # ── Rolling Returns (3-Year Rolling CAGR) ─────────────────────────────
+        rolling_returns = _compute_rolling_returns(close, window_days=756)
+
+        # ── Top Holdings & Sector Exposure ────────────────────────────────────
+        holdings_data = get_etf_holdings(ticker_clean)
+        top_holdings = holdings_data.get("holdings", [])
+        sector_exposure = holdings_data.get("sectors", [])
+
+        # Fallback to curated holdings for Indian ETFs (supports with/without .NS/.BO)
+        if not top_holdings:
+            base_sym = ticker_clean.replace('.NS', '').replace('.BO', '')
+            curated = (
+                _ETF_CURATED_HOLDINGS.get(ticker_clean)
+                or _ETF_CURATED_HOLDINGS.get(f"{base_sym}.NS")
+                or _ETF_CURATED_HOLDINGS.get(base_sym)
+            )
+            if curated:
+                top_holdings = curated.get("holdings", [])
+                if not sector_exposure:
+                    sector_exposure = curated.get("sectors", [])
+
+        # ── Count passes ─────────────────────────────────────────────────────
+        passed_count = sum(1 for item in health_checklist if item.get("passed") is True)
+        health_score_label = f"{passed_count}/{len(health_checklist)} Checks Passed"
+
+        return {
+            "ticker":      ticker_clean,
+            "long_name":   long_name,
+            "asset_type":  asset_type,
+            "currency_symbol": curr_sym,
+            "current_price":   round(current_price, 2),
+
+            # ETF identity
+            "etf_meta": {
+                **meta,
+                "benchmark_ticker": bench_ticker,
+                "aum_display":     f"{curr_sym}{round(aum_raw / 1e7, 1)} Cr" if (aum_raw and is_indian) else (f"{curr_sym}{round(aum_raw / 1e6, 1)} M" if aum_raw else None),
+                "expense_ratio_pct": round(exp_ratio * 100, 3) if exp_ratio else None,
+            },
+
+            # Performance metrics
+            "performance": {
+                "cagr_1y":       cagr_1y,
+                "cagr_3y":       cagr_3y,
+                "cagr_5y":       cagr_5y,
+                "bench_cagr_1y": bench_cagr_1y,
+                "bench_cagr_3y": bench_cagr_3y,
+                "bench_cagr_5y": bench_cagr_5y,
+                "vol_1y":        vol_1y,
+                "max_drawdown":  max_dd,
+                "sharpe_3y":     sharpe,
+                "tracking_error_annual": tracking_error,
+                "ytd_return":    round(meta.get('ytd_return') * 100, 2) if meta.get('ytd_return') else None,
+                "three_year_avg": round(meta.get('three_year_avg_return') * 100, 2) if meta.get('three_year_avg_return') else None,
+                "five_year_avg":  round(meta.get('five_year_avg_return') * 100, 2) if meta.get('five_year_avg_return') else None,
+            },
+
+            # Portfolio breakdown
+            "top_holdings":    top_holdings,
+            "sector_exposure": sector_exposure,
+
+            # Rolling returns distribution
+            "rolling_returns": rolling_returns,
+
+            # Health & scoring
+            "health_checklist": health_checklist,
+            "health_score_label": health_score_label,
+            "sip_score":    sip_score,
+            "sip_label":    sip_label,
+
+            # Historical yearly returns
+            "yearly_returns": yearly_returns,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ETF analysis failed: {str(e)}")
