@@ -267,12 +267,12 @@ export default function Backtesting({ ticker }) {
             <div>
               <div className="flex items-center gap-1.5 mb-0.5">
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">
-                  Strategy Alpha vs Buy &amp; Hold
+                  Excess Return vs Buy &amp; Hold
                 </p>
                 <InfoBadge infoKey="strategy_alpha" />
               </div>
               <p className={`text-2xl font-black ${s.alpha >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {pctSign(s.alpha)}{fmt(s.alpha)}%
+                {pctSign(s.alpha)}{fmt(s.alpha)} pp
               </p>
               <p className="text-[10px] text-slate-400 mt-0.5">
                 Strategy: {pctSign(s.total_return_pct)}{fmt(s.total_return_pct)}% vs B&amp;H: {pctSign(s.bh_return_pct)}{fmt(s.bh_return_pct)}%

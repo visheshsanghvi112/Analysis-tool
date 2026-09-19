@@ -69,4 +69,5 @@ htmlcov/
 *.tmp
 
 # Local Workspace Brain
-brain/
+brain/
+scratch/

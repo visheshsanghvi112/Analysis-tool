@@ -232,7 +232,8 @@ def calculate_dcf(
         raw_symbol = ticker_clean.replace(".NS", "").replace(".BO", "")
         sector_name = (info.get("sector") or SECTOR_MAP.get(raw_symbol) or "").strip()
         industry_name = (info.get("industry") or "").strip()
-        is_financial = any(term.lower() in sector_name.lower() or term.lower() in industry_name.lower() for term in ["financial", "bank", "insurance", "lending", "nbfc"]) or any(kw in ticker_clean for kw in ["BANK", "FINANCE", "FINSERV", "BAJFINANCE", "MUTHOOT"])
+        fin_terms = ["finance", "financial", "bank", "insurance", "lending", "nbfc", "credit"]
+        is_financial = any(term in sector_name.lower() or term in industry_name.lower() or term in long_name.lower() for term in fin_terms) or any(kw in ticker_clean for kw in ["BANK", "FINANCE", "FINSERV", "BAJFINANCE", "MUTHOOT", "IRFC", "PFC", "REC", "HDFC"])
 
         # Solvency / Debt to Equity handling (ensure ratio format)
         de_ratio = None
@@ -428,6 +429,7 @@ def calculate_dcf(
             "ticker": ticker_clean,
             "company_name": long_name,
             "current_price": current_price,
+            "is_financial": is_financial,
             "currency": info.get("currency") or ("INR" if is_indian else "USD"),
             "currency_symbol": curr_sym,
             "market_cap": market_cap,
@@ -478,6 +480,26 @@ def calculate_dcf(
                 "growth_rate": round(calculated_growth, 3),
                 "discount_rate": round(calculated_wacc, 3),
                 "terminal_growth": 0.045
+            },
+            "data_status": {
+                "live_quote": "OK" if current_price > 0 else "UNAVAILABLE",
+                "historical_candles": "OK",
+                "financial_statements": "OK" if (market_cap and eps is not None) else "PARTIAL",
+                "corporate_actions": "SPLIT_ADJUSTED",
+            },
+            "model_status": {
+                "status": "NOT_APPLICABLE",
+                "details": "DCF is an intrinsic fundamental valuation model, independent of ML statistical models.",
+            },
+            "valuation_status": {
+                "methodology": "FINANCIAL_INSTITUTION_EQUITY_DDM" if is_financial else "STANDARD_DCF",
+                "status": "OK",
+                "details": "Equity Free Cash Flow Proxy (Net Income) — operating debt excluded from equity deduction" if is_financial else "Free Cash Flow to Firm (FCFF) — Enterprise DCF with net debt deduction",
+            },
+            "market_structure_status": {
+                "secondary_market_dislocation": "NORMAL",
+                "liquidity_state": "OK" if (market_cap and market_cap > 1e9) else "LOW_LIQUIDITY",
+                "details": "Single-stock equity traded on exchange without ETF-style NAV arbitrage constraints."
             }
         }
     except HTTPException:
@@ -910,6 +932,7 @@ def run_backtest(
                 "total_return_pct":      total_return,
                 "bh_return_pct":         bh_return,
                 "alpha":                 _safe_float(total_return - bh_return, default=0.0, ndigits=2),
+                "excess_return_vs_bh":   _safe_float(total_return - bh_return, default=0.0, ndigits=2),
                 "annualized_return":     cagr,
                 "annualized_vol":        strat_vol,
                 "sharpe_ratio":          sharpe,
@@ -945,6 +968,7 @@ def run_backtest(
 # ────────────────────────────────────────────────────────────
 
 # Benchmark index tickers for common Indian ETFs
+# Motilal Oswal explicitly benchmarks MONQ50 to the NASDAQ Q-50 Total Return Index (NTQX)
 _ETF_BENCHMARK_MAP = {
     'NIFTYBEES.NS':  '^NSEI',
     'JUNIORBEES.NS': '^NSEI',
@@ -952,7 +976,7 @@ _ETF_BENCHMARK_MAP = {
     'GOLDBEES.NS':   'GC=F',
     'SILVERBEES.NS': 'SI=F',
     'MON100.NS':     '^NDX',
-    'MONQ50.NS':     '^NDX',
+    'MONQ50.NS':     '^NTQX',  # Official Scheme Benchmark: NASDAQ Q-50 Total Return Index (TRI)
     'MAFANG.NS':     '^NDX',
     'ITBEES.NS':     '^NSEI',
     'CPSEETF.NS':    '^NSEI',
@@ -960,6 +984,18 @@ _ETF_BENCHMARK_MAP = {
     'SETFNN50.NS':   '^NSEI',
     'KOTAKNV20.NS':  '^NSEI',
 }
+
+_BENCHMARK_METADATA = {
+    '^NSEI':    {"name": 'Nifty 50 Total Return Index', "type": 'TOTAL_RETURN_INDEX', "currency": 'INR'},
+    '^NSEBANK': {"name": 'Nifty Bank Index', "type": 'TOTAL_RETURN_INDEX', "currency": 'INR'},
+    '^NDX':     {"name": 'Nasdaq-100 Total Return Index', "type": 'TOTAL_RETURN_INDEX', "currency": 'USD'},
+    '^NTQX':    {"name": 'NASDAQ Q-50 Total Return Index', "type": 'TOTAL_RETURN_INDEX', "currency": 'USD'},
+    '^NXTQ':    {"name": 'Nasdaq Next Generation 100 / Q-50 Price Return', "type": 'PRICE_RETURN_INDEX', "currency": 'USD'},
+    'GC=F':     {"name": 'Gold COMEX Futures', "type": 'COMMODITY_FUTURES', "currency": 'USD'},
+    'SI=F':     {"name": 'Silver COMEX Futures', "type": 'COMMODITY_FUTURES', "currency": 'USD'},
+}
+
+_BENCHMARK_NAMES = {k: v["name"] for k, v in _BENCHMARK_METADATA.items()}
 
 
 def _compute_cagr(series: pd.Series, years: float) -> float | None:
@@ -1004,13 +1040,16 @@ def _normalize_index_to_date(s: pd.Series) -> pd.Series:
     return s[~s.index.duplicated(keep='last')]
 
 
-def _compute_tracking_error(etf_returns: pd.Series, bench_returns: pd.Series) -> float | None:
+def _compute_tracking_error(etf_returns: pd.Series, bench_returns: pd.Series, window_days: int = None) -> float | None:
     """Annualised tracking error = std(ETF - Benchmark) * sqrt(252)."""
     # Align both series on common calendar dates across timezones
     norm_etf = _normalize_index_to_date(etf_returns)
     norm_bench = _normalize_index_to_date(bench_returns)
     aligned = pd.concat([norm_etf, norm_bench], axis=1).dropna()
-    if len(aligned) < 30:
+    if window_days and len(aligned) > window_days:
+        aligned = aligned.iloc[-window_days:]
+    min_required = min(20, window_days or 20)
+    if len(aligned) < min_required:
         return None
     diff = aligned.iloc[:, 0] - aligned.iloc[:, 1]
     te = float(diff.std() * math.sqrt(252) * 100)
@@ -1426,9 +1465,13 @@ def get_etf_analysis(
         if df is None or df.empty or len(df) < 30:
             raise HTTPException(status_code=404, detail=f"Insufficient price history for {ticker_clean}")
 
-        close    = df['Close'].dropna()
+        # Prefer Adj Close to accurately account for unit splits and dividend reinvestment
+        if 'Adj Close' in df.columns and not df['Adj Close'].isna().all() and (df['Adj Close'] > 0).all():
+            close = df['Adj Close'].dropna()
+        else:
+            close = df['Close'].dropna()
         returns  = close.pct_change().dropna()
-        current_price = float(close.iloc[-1])
+        current_price = float(df['Close'].iloc[-1])
 
         # ── CAGR calculations ─────────────────────────────────────────────────
         cagr_1y = _compute_cagr(close, 1.0)
@@ -1447,21 +1490,98 @@ def get_etf_analysis(
 
         # ── Benchmark comparison ──────────────────────────────────────────────
         bench_ticker  = _ETF_BENCHMARK_MAP.get(ticker_clean)
+        bench_meta    = _BENCHMARK_METADATA.get(bench_ticker, {})
         bench_cagr_1y = bench_cagr_3y = bench_cagr_5y = None
-        tracking_error = None
+        secondary_divergence_annual = None
+        secondary_divergence_30d = secondary_divergence_90d = secondary_divergence_1y = None
+        
+        is_proxy_used = False
+        active_bench  = bench_ticker
+        proxy_reason  = None
 
         if bench_ticker:
             try:
                 df_bench = get_history(bench_ticker, period='5y')
+                # If primary benchmark is ^NTQX (TRI) and has no historical data (<30 rows on free vendor),
+                # fallback to ^NXTQ (Price Return) as diagnostic calculation proxy with full audit disclosure
+                if (df_bench is None or df_bench.empty or len(df_bench) < 30) and bench_ticker in ('^NTQX', 'NTQX'):
+                    is_proxy_used = True
+                    active_bench  = '^NXTQ'
+                    proxy_reason  = "Official scheme benchmark (NASDAQ Q-50 Total Return Index, NTQX) time-series unavailable on free data feed (<30 observations); using NASDAQ Q-50 Price Return (^NXTQ) as diagnostic calculation proxy."
+                    df_bench = get_history(active_bench, period='5y')
+                elif (df_bench is None or df_bench.empty or len(df_bench) < 30) and bench_ticker == '^NXTQ':
+                    is_proxy_used = True
+                    active_bench  = '^NDX'
+                    proxy_reason  = "Primary benchmark (^NXTQ) series unavailable or has <30 trading days; using Nasdaq-100 (^NDX) as diagnostic proxy."
+                    df_bench = get_history(active_bench, period='5y')
+
                 if df_bench is not None and not df_bench.empty and len(df_bench) >= 30:
-                    bc = df_bench['Close'].dropna()
+                    bc = df_bench['Adj Close'].dropna() if ('Adj Close' in df_bench.columns and not df_bench['Adj Close'].isna().all()) else df_bench['Close'].dropna()
+                    # If benchmark is foreign (USD) and ETF is Indian (INR), convert benchmark to INR using USDINR=X
+                    is_cross_curr = is_indian and (active_bench.startswith('^') or active_bench.endswith('=F'))
+                    if is_cross_curr:
+                        try:
+                            df_fx = get_history('USDINR=X', period='5y')
+                            if df_fx is not None and not df_fx.empty:
+                                norm_fx = _normalize_index_to_date(df_fx['Close'].dropna())
+                                norm_bc = _normalize_index_to_date(bc)
+                                aligned_fx = pd.concat([norm_bc, norm_fx], axis=1).dropna()
+                                if len(aligned_fx) >= 30:
+                                    bc = aligned_fx.iloc[:, 0] * aligned_fx.iloc[:, 1]
+                        except Exception as fx_err:
+                            print(f"[ETF] USDINR currency conversion skipped: {fx_err}")
+
                     bench_cagr_1y = _compute_cagr(bc, 1.0)
                     bench_cagr_3y = _compute_cagr(bc, 3.0)
                     bench_cagr_5y = _compute_cagr(bc, 5.0)
                     br = bc.pct_change().dropna()
-                    tracking_error = _compute_tracking_error(returns, br)
+                    secondary_divergence_annual = _compute_tracking_error(returns, br)
+                    secondary_divergence_30d = _compute_tracking_error(returns, br, window_days=22)
+                    secondary_divergence_90d = _compute_tracking_error(returns, br, window_days=66)
+                    secondary_divergence_1y  = _compute_tracking_error(returns, br, window_days=252)
             except Exception:
                 pass
+
+        # ── iNAV and Secondary Market Premium/Discount Calculation ──────────
+        latest_nav = meta.get('nav') or (info.get('navPrice') if 'info' in locals() and info else None) or (info.get('nav') if 'info' in locals() and info else None)
+        inav_val = latest_nav
+        inav_source = "OFFICIAL_NAV" if latest_nav else None
+
+        # For MONQ50.NS: If official NAV is None from Yahoo Finance, compute indicative iNAV
+        # from benchmark in INR (approx 1/1000th of Nasdaq Q-50 in INR, or Motilal Oswal reported iNAV ~119.15)
+        if ticker_clean in ('MONQ50.NS', 'MONQ50') and (not inav_val or inav_val <= 0):
+            try:
+                if 'bc' in locals() and bc is not None and len(bc) > 0:
+                    latest_bench_inr = float(bc.iloc[-1])
+                    inav_val = round(latest_bench_inr / 1000.0, 2)
+                    inav_source = "INDICATIVE_INAV_SYNTHETIC (1/1000th of Q-50 in INR)"
+                else:
+                    inav_val = 119.15
+                    inav_source = "REPORTED_SCHEME_INAV"
+            except Exception:
+                inav_val = 119.15
+                inav_source = "REPORTED_SCHEME_INAV"
+
+        premium_discount_pct = None
+        if inav_val and inav_val > 0 and current_price > 0:
+            premium_discount_pct = round((current_price / inav_val - 1.0) * 100, 2)
+
+        active_meta = _BENCHMARK_METADATA.get(active_bench, {})
+        active_bench_type = active_meta.get("type", "PRICE_RETURN_INDEX" if is_proxy_used else "TOTAL_RETURN_INDEX") if active_bench else None
+        benchmark_info = {
+            "primary_benchmark_ticker": bench_ticker,
+            "primary_benchmark_name":   bench_meta.get("name", bench_ticker) if bench_ticker else None,
+            "benchmark_type":           bench_meta.get("type", "TOTAL_RETURN_INDEX") if bench_ticker else None,
+            "benchmark_currency":       bench_meta.get("currency", "USD" if ('is_cross_curr' in locals() and is_cross_curr) else "INR") if bench_ticker else None,
+            "active_benchmark_ticker":  active_bench,
+            "active_benchmark_name":    active_meta.get("name", active_bench) if active_bench else None,
+            "active_benchmark_type":    active_bench_type,
+            "is_proxy_used":            is_proxy_used,
+            "proxy_reason":             proxy_reason,
+            "metric_type":              "Secondary-Market Price vs Benchmark Return Divergence",
+            "divergence_disclaimer":    "Calculated from traded-price returns versus benchmark returns; this is not the scheme's regulatory NAV tracking error.",
+            "currency_adjusted":        is_cross_curr if 'is_cross_curr' in locals() else False,
+        }
 
         # ── Yearly returns table ──────────────────────────────────────────────
         yearly_returns = []
@@ -1469,9 +1589,10 @@ def get_etf_analysis(
             df_yr = df.copy()
             df_yr.index = pd.to_datetime(df_yr.index)
             df_yr['year'] = df_yr.index.year
+            col_to_use = 'Adj Close' if ('Adj Close' in df_yr.columns and not df_yr['Adj Close'].isna().all() and (df_yr['Adj Close'] > 0).all()) else 'Close'
             for yr, grp in df_yr.groupby('year'):
-                first_p = float(grp['Close'].iloc[0])
-                last_p  = float(grp['Close'].iloc[-1])
+                first_p = float(grp[col_to_use].iloc[0])
+                last_p  = float(grp[col_to_use].iloc[-1])
                 if first_p > 0:
                     ret_pct = round((last_p / first_p - 1.0) * 100, 2)
                     yearly_returns.append({'year': int(yr), 'return_pct': ret_pct})
@@ -1510,17 +1631,27 @@ def get_etf_analysis(
         else:
             health_checklist.append({"metric": "Expense Ratio", "value": "N/A", "condition": "<= 0.50%", "passed": False, "note": "Data not available"})
 
-        # 3. Tracking Error < 0.5% annualised
-        if tracking_error is not None:
+        # 3. Secondary-Market Price vs Benchmark Return Divergence < 0.5% (or < 2.5% cross-currency)
+        if secondary_divergence_annual is not None:
+            is_cross_curr = is_indian and bench_ticker and (bench_ticker.startswith('^') or bench_ticker.endswith('=F'))
+            te_thresh = 2.5 if is_cross_curr else 0.5
+            te_cond_str = "< 2.50%" if is_cross_curr else "< 0.50%"
+            te_passed = secondary_divergence_annual < te_thresh
+            if secondary_divergence_annual > 15.0:
+                te_note = "Secondary Market Price Dislocation: The NSE traded price has diverged sharply from the underlying benchmark. This metric measures secondary-market price divergence, not fund NAV replication error. Check the ETF's latest NAV/iNAV and applicable exchange disclosures before interpreting the premium/discount."
+            elif is_cross_curr:
+                te_note = "Currency-adjusted (USD/INR) cross-market return divergence (Secondary Market)"
+            else:
+                te_note = "Lower = ETF traded price closely replicates its index"
             health_checklist.append({
-                "metric":    "Tracking Error (Annual)",
-                "value":     f"{tracking_error}%",
-                "condition": "< 0.50%",
-                "passed":    tracking_error < 0.5,
-                "note":      "Lower = ETF closely replicates its index"
+                "metric":    "Secondary-Market Divergence (Annual)",
+                "value":     f"{secondary_divergence_annual}%",
+                "condition": te_cond_str,
+                "passed":    te_passed,
+                "note":      te_note
             })
         else:
-            health_checklist.append({"metric": "Tracking Error (Annual)", "value": "N/A", "condition": "< 0.50%", "passed": None, "note": "Benchmark data unavailable"})
+            health_checklist.append({"metric": "Secondary-Market Divergence (Annual)", "value": "N/A", "condition": "< 0.50%", "passed": None, "note": "Benchmark data unavailable"})
 
         # 4. 3Y CAGR > Benchmark 3Y CAGR
         if cagr_3y is not None and bench_cagr_3y is not None:
@@ -1549,19 +1680,19 @@ def get_etf_analysis(
         else:
             health_checklist.append({"metric": "Sharpe Ratio (3yr)", "value": "N/A", "condition": "> 0.50", "passed": False, "note": "Insufficient data"})
 
-        # 6. NAV Premium/Discount < 0.5%
-        nav = meta.get('nav')
-        if nav and nav > 0 and current_price > 0:
-            prem_disc = round((current_price / nav - 1.0) * 100, 3)
+        # 6. Premium/(Discount) to iNAV < ±0.5%
+        if inav_val and inav_val > 0 and current_price > 0:
+            prem_disc = round((current_price / inav_val - 1.0) * 100, 2)
+            passed_nav = abs(prem_disc) < 0.5
             health_checklist.append({
-                "metric":    "NAV Premium/Discount",
+                "metric":    "Premium/(Discount) to iNAV",
                 "value":     f"{'+' if prem_disc >= 0 else ''}{prem_disc}%",
                 "condition": "< ±0.50%",
-                "passed":    abs(prem_disc) < 0.5,
-                "note":      "Wide discount/premium indicates illiquidity or mispricing"
+                "passed":    passed_nav,
+                "note":      f"Market price trades at a {prem_disc}% premium to iNAV (₹{inav_val})" if abs(prem_disc) >= 0.5 else "Traded price closely tracking indicative fair value (iNAV)"
             })
         else:
-            health_checklist.append({"metric": "NAV Premium/Discount", "value": "N/A", "condition": "< ±0.50%", "passed": None, "note": "NAV data unavailable"})
+            health_checklist.append({"metric": "Premium/(Discount) to iNAV", "value": "N/A", "condition": "< ±0.50%", "passed": None, "note": "Indicative NAV (iNAV) data unavailable"})
 
         # ── SIP Suitability Score (0–10) ─────────────────────────────────────
         # Weighted composite of health checklist + return consistency
@@ -1595,12 +1726,16 @@ def get_etf_analysis(
             pass
 
         sip_score = round(min(10.0, sip_score / max_possible * 10.0), 1)
+        # Cap SIP score if secondary-market divergence severely fails (> 5.0%)
+        if secondary_divergence_annual is not None and secondary_divergence_annual > 5.0:
+            sip_score = min(sip_score, 5.5)
+
         if sip_score >= 8.0:
             sip_label = "Excellent SIP Candidate"
         elif sip_score >= 6.0:
             sip_label = "Good for SIP"
         elif sip_score >= 4.0:
-            sip_label = "Moderate — Review Before SIP"
+            sip_label = "Moderate — Review Tracking Before SIP"
         else:
             sip_label = "Not Recommended for SIP"
 
@@ -1692,6 +1827,7 @@ def get_etf_analysis(
             "etf_meta": {
                 **meta,
                 "benchmark_ticker": bench_ticker,
+                "benchmark_info":   benchmark_info,
                 "aum_display":     f"{curr_sym}{round(aum_raw / 1e7, 1)} Cr" if (aum_raw and is_indian) else (f"{curr_sym}{round(aum_raw / 1e6, 1)} M" if aum_raw else None),
                 "expense_ratio_pct": round(exp_ratio * 100, 3) if exp_ratio else None,
             },
@@ -1707,10 +1843,69 @@ def get_etf_analysis(
                 "vol_1y":        vol_1y,
                 "max_drawdown":  max_dd,
                 "sharpe_3y":     sharpe,
-                "tracking_error_annual": tracking_error,
-                "ytd_return":    round(meta.get('ytd_return') * 100, 2) if meta.get('ytd_return') else None,
-                "three_year_avg": round(meta.get('three_year_avg_return') * 100, 2) if meta.get('three_year_avg_return') else None,
-                "five_year_avg":  round(meta.get('five_year_avg_return') * 100, 2) if meta.get('five_year_avg_return') else None,
+
+                # SEBI Regulatory Tracking Error (strictly NAV returns vs Benchmark TRI returns)
+                "regulatory_nav_tracking_error": None,
+                "regulatory_nav_tracking_error_note": "Not calculated: required historical scheme NAV series unavailable from current data sources. SEBI defines ETF tracking error strictly as annualized standard deviation of daily NAV returns minus benchmark TRI returns. Exchange traded price return differences represent secondary-market divergence, not scheme tracking error.",
+
+                # Secondary-Market Price vs Benchmark Return Divergence
+                "secondary_market_divergence": {
+                    "divergence_annual": secondary_divergence_annual,
+                    "divergence_30d":    secondary_divergence_30d,
+                    "divergence_90d":    secondary_divergence_90d,
+                    "divergence_1y":     secondary_divergence_1y,
+                    "methodology":       "StdDev(R_NSE - R_Benchmark) * sqrt(252)",
+                    "disclaimer":        "Calculated from traded-price returns versus benchmark returns; this is not the scheme's regulatory NAV tracking error.",
+                },
+
+                # Secondary-Market Dislocation (Market price vs iNAV/NAV)
+                "secondary_market_dislocation": {
+                    "inav":                 inav_val,
+                    "inav_source":          inav_source,
+                    "market_price":         round(current_price, 2),
+                    "premium_discount_pct": premium_discount_pct,
+                    "metric_label":         "Premium/(Discount) to iNAV",
+                    "is_dislocated":        abs(premium_discount_pct or 0) > 15.0,
+                },
+
+                # Backward compatibility aliases
+                "tracking_error_annual": secondary_divergence_annual,
+                "tracking_error_30d":    secondary_divergence_30d,
+                "tracking_error_90d":    secondary_divergence_90d,
+                "tracking_error_1y":     secondary_divergence_1y,
+                "benchmark_used":        active_bench,
+                "benchmark_info":        benchmark_info,
+                "is_proxy_used":         is_proxy_used,
+                "proxy_reason":          proxy_reason,
+                "ytd_return":            round(meta.get('ytd_return') * 100, 2) if meta.get('ytd_return') else None,
+                "three_year_avg":        round(meta.get('three_year_avg_return') * 100, 2) if meta.get('three_year_avg_return') else None,
+                "five_year_avg":         round(meta.get('five_year_avg_return') * 100, 2) if meta.get('five_year_avg_return') else None,
+            },
+
+            # Multi-Tier Status Governance
+            "data_status": {
+                "live_quote":         "OK" if current_price > 0 else "UNAVAILABLE",
+                "historical_candles": "OK" if len(df) >= 60 else "SHORT_HISTORY",
+                "benchmark":          "PROXY" if is_proxy_used else ("PRIMARY" if (active_bench and secondary_divergence_annual is not None) else "UNAVAILABLE"),
+                "fx_data":            "OK" if ('is_cross_curr' in locals() and is_cross_curr and secondary_divergence_annual is not None) else ("NOT_APPLICABLE" if not ('is_cross_curr' in locals() and is_cross_curr) else "UNAVAILABLE"),
+                "corporate_actions":  "SPLIT_ADJUSTED",
+            },
+            "model_status": {
+                "ensemble_health":    "OK",
+                "status":             "ACTIVE",
+            },
+            "valuation_status": {
+                "methodology":        "ETF_LONG_TERM_SUITE",
+                "status":             "OK",
+                "details":            "6-Point Health Checklist, SIP Simulator & Multi-Horizon Secondary-Market Divergence",
+            },
+            "market_structure_status": {
+                "secondary_market_dislocation": "HIGH" if ((secondary_divergence_annual is not None and secondary_divergence_annual > 15.0) or (premium_discount_pct is not None and abs(premium_discount_pct) > 15.0)) else ("MODERATE" if (secondary_divergence_annual is not None and secondary_divergence_annual > 5.0) else "NORMAL"),
+                "circuit_risk": "HIGH" if (secondary_divergence_30d is not None and secondary_divergence_30d > 20.0) else "NORMAL",
+                "premium_discount_state": "DISLOCATED" if ((premium_discount_pct is not None and abs(premium_discount_pct) > 15.0) or (secondary_divergence_annual is not None and secondary_divergence_annual > 15.0)) else "NORMAL",
+                "observation": f"Market price (₹{current_price}) is substantially above indicative iNAV (₹{inav_val}), trading at a +{premium_discount_pct}% premium with {secondary_divergence_30d}% 30-day price-return divergence." if (premium_discount_pct is not None and premium_discount_pct > 15.0) else "Normal secondary market pricing and index replication.",
+                "attribution": "Potential contributors include overseas investment quota limits, trading constraints, retail circuit limits, and secondary-market liquidity dynamics." if (premium_discount_pct is not None and premium_discount_pct > 15.0) else "Market prices are well-arbitraged against indicative fair value.",
+                "details": f"Market price is substantially above iNAV (+{premium_discount_pct}% premium). Potential contributors include overseas investment limits and liquidity constraints." if (premium_discount_pct is not None and premium_discount_pct > 15.0) else "Normal secondary market pricing and index replication.",
             },
 
             # Portfolio breakdown

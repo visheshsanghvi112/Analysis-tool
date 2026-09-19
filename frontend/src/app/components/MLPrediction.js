@@ -15,6 +15,9 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'unde
 function SHAPWaterfallChart({ features, shapPowered }) {
   if (!features || features.length === 0) return null;
 
+  // Check if features are truly signed directional values
+  const hasDirection = Boolean(shapPowered && features.some(f => f.is_signed !== false && f.value !== f.abs_value));
+
   // Normalise bars to the largest absolute value = 100%
   const maxAbs = Math.max(...features.map(f => f.abs_value), 1e-9);
 
@@ -33,40 +36,55 @@ function SHAPWaterfallChart({ features, shapPowered }) {
           </div>
           <div>
             <p className="text-[11px] font-bold text-white">
-              {shapPowered ? 'SHAP Feature Contributions' : 'Feature Importance'}
+              {hasDirection ? 'SHAP Feature Contributions' : 'Feature Importance (Impact Weight)'}
             </p>
             <p className="text-[9px] text-slate-500">
-              {shapPowered
-                ? 'How each feature pushed this prediction'
-                : 'Tree-based feature importance (install shap for signed values)'}
+              {hasDirection
+                ? 'How each feature pushed this prediction (buy vs sell direction)'
+                : 'Key technical drivers influencing ensemble decision trees (magnitude of impact)'}
             </p>
           </div>
         </div>
-        {/* Net bias pill */}
-        <div className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
-          netBias === 'bullish'
-            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-            : netBias === 'bearish'
-            ? 'bg-rose-500/10 border-rose-500/30 text-rose-400'
-            : 'bg-slate-500/10 border-slate-500/30 text-slate-400'
-        }`}>
-          Net {netBias}
-        </div>
+        {/* Bias pill */}
+        {hasDirection ? (
+          <div className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
+            netBias === 'bullish'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+              : netBias === 'bearish'
+              ? 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+              : 'bg-slate-500/10 border-slate-500/30 text-slate-400'
+          }`}>
+            Net {netBias}
+          </div>
+        ) : (
+          <div className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border bg-violet-500/10 border-violet-500/30 text-violet-300">
+            Influence Weight
+          </div>
+        )}
       </div>
 
       {/* Legend */}
       <div className="flex items-center gap-4 px-3 pt-2.5 pb-1">
-        <div className="flex items-center gap-1.5">
-          <div className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
-          <span className="text-[9px] text-slate-400">Bullish push</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="h-2.5 w-2.5 rounded-sm bg-rose-500" />
-          <span className="text-[9px] text-slate-400">Bearish push</span>
-        </div>
+        {hasDirection ? (
+          <>
+            <div className="flex items-center gap-1.5">
+              <div className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
+              <span className="text-[9px] text-slate-400">Bullish push</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-2.5 w-2.5 rounded-sm bg-rose-500" />
+              <span className="text-[9px] text-slate-400">Bearish push</span>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-sm bg-violet-500" />
+            <span className="text-[9px] text-slate-400">Tree Decision Impact</span>
+          </div>
+        )}
         <div className="ml-auto flex items-center gap-1 text-[9px] text-slate-500">
           <Info className="h-3 w-3" />
-          Bar width = relative impact
+          Bar width = relative importance
         </div>
       </div>
 
@@ -74,14 +92,16 @@ function SHAPWaterfallChart({ features, shapPowered }) {
       <div className="px-3 pb-3 space-y-2 mt-1">
         {features.map((feat, idx) => {
           const barPct = (feat.abs_value / maxAbs) * 100;
-          const positive = isBullish(feat.value);
-          const barColor = positive
-            ? 'bg-gradient-to-r from-emerald-600 to-emerald-400'
-            : 'bg-gradient-to-r from-rose-600 to-rose-400';
-          const textColor = positive ? 'text-emerald-400' : 'text-rose-400';
-          const valStr = positive
-            ? `+${feat.abs_value.toFixed(4)}`
-            : `-${feat.abs_value.toFixed(4)}`;
+          const positive = hasDirection ? isBullish(feat.value) : true;
+          const barColor = hasDirection
+            ? (positive ? 'bg-gradient-to-r from-emerald-600 to-emerald-400' : 'bg-gradient-to-r from-rose-600 to-rose-400')
+            : 'bg-gradient-to-r from-violet-600 to-indigo-400';
+          const textColor = hasDirection
+            ? (positive ? 'text-emerald-400' : 'text-rose-400')
+            : 'text-violet-300';
+          const valStr = hasDirection
+            ? (positive ? `+${feat.abs_value.toFixed(4)}` : `-${feat.abs_value.toFixed(4)}`)
+            : feat.abs_value.toFixed(4);
 
           return (
             <div key={feat.name}>
@@ -89,9 +109,11 @@ function SHAPWaterfallChart({ features, shapPowered }) {
               <div className="flex items-center justify-between mb-0.5">
                 <div className="flex items-center gap-1.5">
                   <span className={`text-[8px] font-bold w-4 text-center ${
-                    positive ? 'text-emerald-500' : 'text-rose-500'
+                    hasDirection
+                      ? (positive ? 'text-emerald-500' : 'text-rose-500')
+                      : 'text-violet-400'
                   }`}>
-                    {positive ? '▲' : '▼'}
+                    {hasDirection ? (positive ? '▲' : '▼') : '•'}
                   </span>
                   <span className="text-[10px] text-slate-300 font-medium">{feat.label}</span>
                 </div>
@@ -104,9 +126,9 @@ function SHAPWaterfallChart({ features, shapPowered }) {
                   style={{
                     width: `${barPct}%`,
                     transition: `width 0.5s cubic-bezier(0.4,0,0.2,1) ${idx * 60}ms`,
-                    boxShadow: positive
-                      ? '0 0 6px rgba(52,211,153,0.35)'
-                      : '0 0 6px rgba(251,113,133,0.35)',
+                    boxShadow: hasDirection
+                      ? (positive ? '0 0 6px rgba(52,211,153,0.35)' : '0 0 6px rgba(251,113,133,0.35)')
+                      : '0 0 6px rgba(139,92,246,0.35)',
                   }}
                 />
               </div>
@@ -117,18 +139,27 @@ function SHAPWaterfallChart({ features, shapPowered }) {
 
       {/* Summary row */}
       <div className="flex items-center justify-between px-3 py-2 border-t border-white/[0.04] bg-white/[0.01]">
-        <div className="flex items-center gap-3 text-[9px]">
-          <span className="text-slate-500">Bullish weight:</span>
-          <span className="text-emerald-400 font-bold">
-            {totalPositive > 0 ? ((totalPositive / (totalPositive + totalNegative)) * 100).toFixed(0) : 0}%
-          </span>
-        </div>
-        <div className="flex items-center gap-3 text-[9px]">
-          <span className="text-slate-500">Bearish weight:</span>
-          <span className="text-rose-400 font-bold">
-            {totalNegative > 0 ? ((totalNegative / (totalPositive + totalNegative)) * 100).toFixed(0) : 0}%
-          </span>
-        </div>
+        {hasDirection ? (
+          <>
+            <div className="flex items-center gap-3 text-[9px]">
+              <span className="text-slate-500">Bullish weight:</span>
+              <span className="text-emerald-400 font-bold">
+                {totalPositive > 0 ? ((totalPositive / (totalPositive + totalNegative)) * 100).toFixed(0) : 0}%
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-[9px]">
+              <span className="text-slate-500">Bearish weight:</span>
+              <span className="text-rose-400 font-bold">
+                {totalNegative > 0 ? ((totalNegative / (totalPositive + totalNegative)) * 100).toFixed(0) : 0}%
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-between w-full text-[9px] text-slate-400">
+            <span>Ranked by Gini Impurity Reduction</span>
+            <span className="text-slate-500">Install SHAP for signed directional push</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -834,10 +865,22 @@ export default function MLPrediction({ ticker }) {
               <div className="space-y-2">
                 {Object.entries(prediction.models).map(([name, val]) => (
                   <div key={name} className="flex items-center justify-between text-xs border-b border-white/[0.04] pb-2 last:border-0 last:pb-0">
-                    <span className="text-slate-400 font-medium capitalize flex items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
-                      {name.replace(/_/g, ' ')}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`h-1.5 w-1.5 rounded-full ${val.status === 'DEGRADED_OUTLIER' ? 'bg-amber-400' : 'bg-purple-500'}`} />
+                      <span className="text-slate-300 font-medium capitalize">
+                        {name.replace(/_/g, ' ')}
+                      </span>
+                      {val.is_clipped && (
+                        <span className="text-[8px] bg-amber-500/10 text-amber-300 px-1.5 py-0.2 rounded border border-amber-500/20 font-mono" title={`Raw prediction: ${val.raw_return}% (bounded to avoid runaway)`}>
+                          Clipped ({val.raw_return}%)
+                        </span>
+                      )}
+                      {val.status === 'DEGRADED_OUTLIER' && (
+                        <span className="text-[8px] bg-rose-500/10 text-rose-300 px-1.5 py-0.2 rounded border border-rose-500/20 font-mono" title="Excluded from meta-stacker to prevent ensemble distortion">
+                          Excluded
+                        </span>
+                      )}
+                    </div>
                     <div className="text-right">
                       <span className="font-bold text-white block">{currSym}{val.predicted_price.toLocaleString()}</span>
                       <span className={`text-[10px] font-semibold ${val.predicted_return >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>

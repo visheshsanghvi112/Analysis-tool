@@ -97,8 +97,11 @@ export default function LongTermAnalysis({ ticker }) {
     const pvTerminalValue = terminalValue / Math.pow(1 + d, 5);
 
     const enterpriseValue = pvFcfSum + pvTerminalValue;
-    const equityValue = enterpriseValue + cash - debt;
-    const intrinsicValue = equityValue / shares;
+    // For Financial Institutions & NBFCs: Starting flow is Equity Cash Flow (Net Income proxy),
+    // and debt represents operational borrowing (funds to lend). Debt is NOT subtracted from Equity Value.
+    const isFinancial = Boolean(data.is_financial);
+    const equityValue = isFinancial ? enterpriseValue : (enterpriseValue + cash - debt);
+    const intrinsicValue = shares > 0 ? (equityValue / shares) : 0;
 
     return {
       intrinsicValue: Math.max(0, intrinsicValue),
@@ -106,7 +109,8 @@ export default function LongTermAnalysis({ ticker }) {
       equityValue,
       pvFcfSum,
       pvTerminalValue,
-      projections
+      projections,
+      isFinancial
     };
   };
 
@@ -419,10 +423,21 @@ export default function LongTermAnalysis({ ticker }) {
 
           {/* Quick math breakdown disclosure */}
           <div className="mt-4 p-3 bg-white/[0.01] border border-white/[0.03] rounded-lg text-[10px] text-slate-300 leading-relaxed break-words">
-            <span className="font-bold text-slate-200 block mb-1">DCF Valuation Method:</span>
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-bold text-slate-200 block">DCF Valuation Method:</span>
+              {data.is_financial && (
+                <span className="text-[9px] bg-sky-500/10 text-sky-400 px-1.5 py-0.5 rounded border border-sky-500/20 font-semibold">
+                  Financial Institution / NBFC Equity Model
+                </span>
+              )}
+            </div>
             <ul className="list-disc pl-4 space-y-1">
-              <li><strong>Enterprise Value:</strong> PV of cash flows (Yr 1-5) + PV of terminal value.</li>
-              <li><strong>Equity Value:</strong> Enterprise Value + Cash ({formatVal(data.total_cash)}) - Debt ({formatVal(data.total_debt)}).</li>
+              <li><strong>{data.is_financial ? 'Present Value of Equity Flows:' : 'Enterprise Value:'}</strong> PV of cash flows (Yr 1-5) + PV of terminal value ({formatVal(dcfResults?.enterpriseValue)}).</li>
+              {data.is_financial ? (
+                <li><strong>Equity Value:</strong> Equal to Present Value of Equity Cash Flows (Net Income). Debt is operational borrowing (bonds/loans) and is not deducted.</li>
+              ) : (
+                <li><strong>Equity Value:</strong> Enterprise Value + Cash ({formatVal(data.total_cash)}) - Debt ({formatVal(data.total_debt)}).</li>
+              )}
               <li><strong>Intrinsic Value:</strong> Equity Value / Shares Outstanding ({data.shares_outstanding ? (data.shares_outstanding/1e9).toFixed(2) + 'B' : 'N/A'}).</li>
             </ul>
           </div>

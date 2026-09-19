@@ -659,7 +659,8 @@ export default function ETFLongTermPanel({ ticker }) {
           health_score_label, sip_score, sip_label,
           yearly_returns, currency_symbol,
           top_holdings, sector_exposure, rolling_returns,
-          historical_sip, liquidity } = data;
+          historical_sip, liquidity,
+          market_structure_status } = data;
 
   const curr = currency_symbol || '₹';
 
@@ -675,9 +676,28 @@ export default function ETFLongTermPanel({ ticker }) {
           <h3 className="text-sm sm:text-base font-bold text-white leading-tight">{long_name}</h3>
           <p className="text-[10px] text-slate-400 mt-0.5">ETF Long-Term Analysis</p>
           {etf_meta?.benchmark_ticker && (
-            <p className="text-[9px] text-slate-600 mt-0.5">
-              Benchmark: <span className="text-slate-400">{etf_meta.benchmark_ticker}</span>
-            </p>
+            <div className="flex flex-col gap-1 mt-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[9px] text-slate-400">
+                  Official Benchmark: <span className="font-semibold text-slate-200">{etf_meta?.benchmark_info?.primary_benchmark_name || etf_meta.benchmark_ticker}</span>
+                  {etf_meta?.benchmark_info?.benchmark_type && (
+                    <span className="ml-1 text-[8px] px-1.5 py-0.2 rounded bg-white/[0.06] text-slate-300 font-medium">
+                      {etf_meta.benchmark_info.benchmark_type === 'TOTAL_RETURN_INDEX' ? 'Total Return (TRI)' : etf_meta.benchmark_info.benchmark_type}
+                    </span>
+                  )}
+                </p>
+              </div>
+              {etf_meta?.benchmark_info?.is_proxy_used && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <p className="text-[9px] text-amber-400/90">
+                    Calculation Series: <span className="font-semibold text-amber-300">{etf_meta?.benchmark_info?.active_benchmark_name || etf_meta?.benchmark_info?.active_benchmark_ticker} — Price Return Proxy</span>
+                  </p>
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[8px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                    ⚠️ Proxy diagnostic only
+                  </span>
+                </div>
+              )}
+            </div>
           )}
         </div>
         <div className="ml-auto text-right shrink-0">
@@ -687,6 +707,50 @@ export default function ETFLongTermPanel({ ticker }) {
           </p>
         </div>
       </div>
+
+      {/* Benchmark Proxy Notice Callout if active */}
+      {etf_meta?.benchmark_info?.is_proxy_used && (
+        <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-500/[0.06] border border-amber-500/20 text-[10px] text-amber-300">
+          <HelpCircle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-semibold text-amber-200">
+              Benchmark Proxy Diagnostic Notice: {etf_meta?.benchmark_info?.primary_benchmark_name || etf_meta?.benchmark_ticker} (TRI) vs {etf_meta?.benchmark_info?.active_benchmark_name || etf_meta?.benchmark_info?.active_benchmark_ticker} (Price Return)
+            </p>
+            <p className="text-amber-300/85 leading-relaxed">
+              {etf_meta.benchmark_info.proxy_reason || "Official scheme benchmark time-series unavailable on current data feed (<30 observations)."}
+              {" "}This calculation is performed against a <strong>Price Return proxy series</strong> for secondary-market diagnostic purposes only. It is <strong>not</strong> the scheme&apos;s official Total Return Index performance or regulatory NAV tracking error.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Market Structure Dislocation Notice Callout if active */}
+      {(market_structure_status?.secondary_market_dislocation === 'HIGH' || performance?.secondary_market_dislocation?.is_dislocated) && (
+        <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-500/[0.08] border border-amber-500/25 text-[10px] text-amber-300">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+          <div className="space-y-1 w-full">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="font-semibold text-amber-200">
+                Secondary Market Price Dislocation — Premium/(Discount) to iNAV
+              </p>
+              {performance?.secondary_market_dislocation?.premium_discount_pct != null && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-200">
+                  {performance.secondary_market_dislocation.premium_discount_pct > 0 ? '+' : ''}
+                  {performance.secondary_market_dislocation.premium_discount_pct}% to iNAV
+                </span>
+              )}
+            </div>
+            <p className="text-amber-200/90 leading-relaxed">
+              <strong>Observation: </strong>
+              {market_structure_status?.observation || "Market price is substantially above indicative iNAV."}
+            </p>
+            <p className="text-amber-300/80 leading-relaxed">
+              <strong>Attribution: </strong>
+              {market_structure_status?.attribution || "Potential contributors include overseas investment quota limits, trading constraints, retail circuit limits, and secondary-market liquidity dynamics."}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ETF Identity Card */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -734,14 +798,68 @@ export default function ETFLongTermPanel({ ticker }) {
         <CAGRBar label="3-Year CAGR"  etf={performance?.cagr_3y} bench={performance?.bench_cagr_3y} />
         <CAGRBar label="5-Year CAGR"  etf={performance?.cagr_5y} bench={performance?.bench_cagr_5y} />
 
-        {performance?.tracking_error_annual != null && (
-          <div className="flex items-center justify-between text-[10px] pt-2 border-t border-white/[0.05] mt-2">
-            <span className="text-slate-500">Tracking Error (Annual)</span>
-            <span className={`font-bold ${
-              performance.tracking_error_annual < 0.5 ? 'text-emerald-400' : 'text-amber-400'
-            }`}>
-              {performance.tracking_error_annual}%
-            </span>
+        {/* Metric Segregation: Secondary-Market Divergence & Regulatory NAV TE */}
+        {(performance?.secondary_market_divergence?.divergence_annual != null || performance?.tracking_error_annual != null) && (
+          <div className="pt-2.5 border-t border-white/[0.05] mt-2.5 space-y-2">
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="text-slate-400 font-medium">
+                Secondary-Market Return Divergence (Annual)
+              </span>
+              <span className={`font-bold ${
+                (performance?.secondary_market_divergence?.divergence_annual ?? performance.tracking_error_annual) < 0.5 ? 'text-emerald-400' :
+                (performance?.secondary_market_divergence?.divergence_annual ?? performance.tracking_error_annual) < 2.5 ? 'text-sky-400' : 'text-amber-400'
+              }`}>
+                {performance?.secondary_market_divergence?.divergence_annual ?? performance.tracking_error_annual}%
+              </span>
+            </div>
+
+            {/* Multi-Horizon Secondary-Market Divergence breakdown */}
+            {(performance?.tracking_error_30d != null || performance?.tracking_error_90d != null || performance?.tracking_error_1y != null) && (
+              <div className="grid grid-cols-3 gap-1 pt-1 pb-0.5 text-center bg-white/[0.02] rounded border border-white/[0.04]">
+                <div>
+                  <p className="text-[8px] text-slate-500 uppercase">30D Divergence</p>
+                  <p className="text-[9px] font-semibold text-slate-300">
+                    {performance.tracking_error_30d != null ? `${performance.tracking_error_30d}%` : '–'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[8px] text-slate-500 uppercase">90D Divergence</p>
+                  <p className="text-[9px] font-semibold text-slate-300">
+                    {performance.tracking_error_90d != null ? `${performance.tracking_error_90d}%` : '–'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[8px] text-slate-500 uppercase">1Y Divergence</p>
+                  <p className="text-[9px] font-semibold text-slate-300">
+                    {performance.tracking_error_1y != null ? `${performance.tracking_error_1y}%` : '–'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Regulatory NAV Tracking Error disclosure */}
+            <div className="flex items-center justify-between text-[10px] pt-1 text-slate-500">
+              <span>Regulatory NAV Tracking Error (SEBI Definition)</span>
+              <span className="font-semibold text-slate-400 italic">
+                {performance?.regulatory_nav_tracking_error != null
+                  ? `${performance.regulatory_nav_tracking_error}%`
+                  : 'Not calculated (scheme NAV series unavailable)'}
+              </span>
+            </div>
+
+            {/* Premium/(Discount) to iNAV */}
+            {performance?.secondary_market_dislocation?.premium_discount_pct != null && (
+              <div className="flex items-center justify-between text-[10px] pt-0.5">
+                <span className="text-slate-500">Premium/(Discount) to iNAV</span>
+                <span className={`font-bold ${
+                  Math.abs(performance.secondary_market_dislocation.premium_discount_pct) < 0.5 ? 'text-emerald-400' :
+                  Math.abs(performance.secondary_market_dislocation.premium_discount_pct) < 2.0 ? 'text-sky-400' : 'text-amber-400'
+                }`}>
+                  {performance.secondary_market_dislocation.premium_discount_pct > 0 ? '+' : ''}
+                  {performance.secondary_market_dislocation.premium_discount_pct}%
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -796,9 +914,8 @@ export default function ETFLongTermPanel({ ticker }) {
       </div>
 
       {/* Disclaimer */}
-      <p className="text-[9px] text-slate-600 text-center">
-        For educational purposes only. Past performance does not guarantee future returns.
-        Always consult a SEBI-registered investment advisor before investing.
+      <p className="text-[9px] text-slate-600 text-center leading-relaxed">
+        StockIQ Pro is a personal quantitative stock and ETF analytics research platform. Calculations reference external regulatory definitions (e.g. SEBI ETF tracking error) for methodological consistency. For educational and analytical purposes only. Past performance does not guarantee future returns.
       </p>
 
     </div>

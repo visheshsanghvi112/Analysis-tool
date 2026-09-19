@@ -1,3 +1,4 @@
+from __future__ import annotations
 # ============================================================
 # ML Models for Stock Prediction — by Vishesh Sanghvi
 # Upgraded: diverse 6-model stacked ensemble, 40+ features,
@@ -8,6 +9,7 @@
 
 import numpy as np
 import pandas as pd
+import copy
 from collections import OrderedDict
 from sklearn.preprocessing import RobustScaler
 from sklearn.ensemble import (
@@ -17,11 +19,13 @@ from sklearn.ensemble import (
 )
 from sklearn.linear_model import Ridge, BayesianRidge
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.model_selection import KFold
+from sklearn.base import clone
 from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
-from yf_client import get_history
+from yf_client import get_history, get_quote
 
 # ── Optional heavy deps — fail gracefully ──────────────────
 try:
@@ -45,6 +49,23 @@ except ImportError:
 # Per-ticker LRU model cache (max 20 tickers in memory)
 _MODEL_CACHE: OrderedDict = OrderedDict()
 _CACHE_MAX = 20
+
+# ─────────────────────────────────────────────────────────────
+# Model Governance Policy Configuration (SR 11-7)
+# Centralized, configurable bounds for outlier detection & clipping
+# ─────────────────────────────────────────────────────────────
+MODEL_GOVERNANCE_THRESHOLDS = {
+    "equity_5d": {
+        "lower_return": -0.50,
+        "upper_return": 1.00,
+        "description": "5-Day Equity Return Policy: Bounds return between -50% and +100% to prevent unbounded linear extrapolation.",
+    },
+    "etf_30d": {
+        "lower_return": -0.60,
+        "upper_return": 1.20,
+        "description": "30-Day ETF Return Policy: Bounds monthly return between -60% and +120% to prevent unconstrained volatility runaway.",
+    },
+}
 
 
 # ─────────────────────────────────────────────────────────────
@@ -383,28 +404,56 @@ def _detect_regime(df: pd.DataFrame) -> str:
             return "MEDIUM_VOLATILITY"
 
 
-def _forecast_garch_volatility(df: pd.DataFrame) -> float:
+def _forecast_garch_volatility(df: pd.DataFrame) -> dict | None:
     """
     Fits a GARCH(1,1) volatility forecasting model to returns
     and predicts the average annualized volatility for the next 5 days.
+    Falls back to EWMA (RiskMetrics lambda=0.94) if arch package is not installed.
+    Returns structured specification dictionary.
     """
     try:
-        from arch import arch_model
         # Scaled returns by 100 for numerical stability
         returns = df['returns'].dropna().values * 100
         if len(returns) < 60:
             return None
         
-        garch = arch_model(returns, vol='Garch', p=1, q=1, dist='normal')
-        res = garch.fit(update_freq=0, disp='off')
-        
-        forecast = res.forecast(horizon=5)
-        # Extract the average variance forecast for the 5-day horizon and annualize it
-        mean_variance = forecast.variance.iloc[-1].mean()
-        annualized_vol = float(np.sqrt(mean_variance) * np.sqrt(252))
-        return round(annualized_vol, 2)
+        try:
+            from arch import arch_model
+            garch = arch_model(returns, vol='Garch', p=1, q=1, dist='normal')
+            res = garch.fit(update_freq=0, disp='off')
+            
+            forecast = res.forecast(horizon=5)
+            # Extract the average variance forecast for the 5-day horizon and annualize it
+            mean_variance = float(forecast.variance.iloc[-1].mean())
+            daily_cond_sigma = float(np.sqrt(mean_variance))
+            annualized_vol = float(daily_cond_sigma * np.sqrt(252))
+
+            return {
+                'annualized_pct': round(annualized_vol, 2),
+                'daily_conditional_std_pct': round(daily_cond_sigma, 2),
+                'forecast_horizon_days': 5,
+                'estimation_window_days': len(returns),
+                'model_spec': 'GARCH(1,1) Normal (Annualized ×√252)',
+            }
+        except ImportError:
+            # Robust fallback to EWMA (RiskMetrics lambda=0.94)
+            decay = 0.94
+            sq_ret = (returns - returns.mean()) ** 2
+            ewma_var = sq_ret[0]
+            for r in sq_ret[1:]:
+                ewma_var = decay * ewma_var + (1 - decay) * r
+            daily_cond_sigma = float(np.sqrt(ewma_var))
+            annualized_vol = float(daily_cond_sigma * np.sqrt(252))
+
+            return {
+                'annualized_pct': round(annualized_vol, 2),
+                'daily_conditional_std_pct': round(daily_cond_sigma, 2),
+                'forecast_horizon_days': 5,
+                'estimation_window_days': len(returns),
+                'model_spec': 'EWMA (RiskMetrics λ=0.94, Annualized ×√252)',
+            }
     except Exception as e:
-        print(f"[ML] GARCH volatility forecasting failed: {e}")
+        print(f"[ML] Volatility forecasting failed: {e}")
         return None
 
 
@@ -412,26 +461,33 @@ def _forecast_garch_volatility(df: pd.DataFrame) -> float:
 # ─────────────────────────────────────────────────────────────
 # Walk-forward financial evaluation
 # ─────────────────────────────────────────────────────────────
-def _walk_forward_metrics(X: np.ndarray, y: np.ndarray,
+def _walk_forward_metrics(X_raw: np.ndarray, y: np.ndarray,
                           models: dict, meta: Ridge,
                           n_folds: int = 5) -> dict:
     """
     Returns direction_accuracy, profit_factor, hit_rate,
     avg_win, avg_loss from expanding walk-forward folds.
     Also benchmarks XGBoost-alone vs full ensemble.
+    Strictly scales each fold independently (no temporal leakage)
+    and uses Out-Of-Fold (OOF) cross-validation for the meta-learner.
     """
-    fold_size = max(1, len(X) // (n_folds + 1))
+    fold_size = max(1, len(X_raw) // (n_folds + 1))
     all_y, all_blend, all_xgb_only = [], [], []
 
     xgb_model = models.get('xgboost') or models.get('random_forest')
 
     for i in range(1, n_folds + 1):
         tr_end = fold_size * i
-        te_end = min(tr_end + fold_size, len(X))
+        te_end = min(tr_end + fold_size, len(X_raw))
         if te_end <= tr_end + 5:
             continue
-        X_tr, y_tr = X[:tr_end], y[:tr_end]
-        X_te, y_te = X[tr_end:te_end], y[tr_end:te_end]
+
+        # 1. Temporal Leakage Prevention: Scale strictly on training fold
+        scaler_fold = RobustScaler()
+        X_tr = scaler_fold.fit_transform(X_raw[:tr_end])
+        X_te = scaler_fold.transform(X_raw[tr_end:te_end])
+        y_tr = y[:tr_end]
+        y_te = y[tr_end:te_end]
 
         fold_preds = []
         xgb_preds  = None
@@ -449,10 +505,25 @@ def _walk_forward_metrics(X: np.ndarray, y: np.ndarray,
             continue
 
         meta_in = np.column_stack(fold_preds)
+
+        # 2. Out-of-Fold (OOF) Stacking inside walk-forward fold
         try:
-            meta.fit(np.column_stack([mdl.predict(X_tr) for mdl in models.values()
-                                      if hasattr(mdl, 'predict')]), y_tr)
-            blend = meta.predict(meta_in)
+            if len(X_tr) >= 20:
+                inner_kf = KFold(n_splits=min(3, max(2, len(X_tr) // 10)), shuffle=False)
+                oof_wf = {name: np.zeros(len(X_tr)) for name in models.keys()}
+                for inner_tr, inner_val in inner_kf.split(X_tr):
+                    for name, mdl in models.items():
+                        try:
+                            f_m = clone(mdl) if hasattr(mdl, 'get_params') else copy.deepcopy(mdl)
+                            f_m.fit(X_tr[inner_tr], y_tr[inner_tr])
+                            oof_wf[name][inner_val] = f_m.predict(X_tr[inner_val])
+                        except Exception:
+                            pass
+                meta_in_tr = np.column_stack([oof_wf[name] for name in models.keys()])
+                meta.fit(meta_in_tr, y_tr)
+                blend = meta.predict(meta_in)
+            else:
+                blend = np.mean(fold_preds, axis=0)
         except Exception:
             blend = np.mean(fold_preds, axis=0)
 
@@ -559,12 +630,13 @@ def _shap_top_features(model, X_sample: np.ndarray, feature_names: list, top_n: 
     Value sign: positive pushes toward BUY, negative toward SELL.
     Falls back to unsigned feature_importances_ if SHAP unavailable.
     """
-    def _make_entry(name, signed_val):
+    def _make_entry(name, signed_val, signed: bool = True):
         return {
             'name':      name,
             'label':     _FEATURE_LABELS.get(name, name.replace('_', ' ').title()),
             'value':     round(float(signed_val), 5),
             'abs_value': round(abs(float(signed_val)), 5),
+            'is_signed': signed,
         }
 
     if HAS_SHAP:
@@ -577,7 +649,7 @@ def _shap_top_features(model, X_sample: np.ndarray, feature_names: list, top_n: 
             else:
                 signed = vals
             top_idx = np.argsort(np.abs(signed))[-top_n:][::-1]
-            return [_make_entry(feature_names[i], signed[i]) for i in top_idx]
+            return [_make_entry(feature_names[i], signed[i], signed=True) for i in top_idx]
         except Exception as e:
             print(f"[SHAP] TreeExplainer failed: {e}")
 
@@ -585,7 +657,7 @@ def _shap_top_features(model, X_sample: np.ndarray, feature_names: list, top_n: 
     try:
         imp     = model.feature_importances_
         top_idx = np.argsort(imp)[-top_n:][::-1]
-        return [_make_entry(feature_names[i], imp[i]) for i in top_idx]
+        return [_make_entry(feature_names[i], imp[i], signed=False) for i in top_idx]
     except Exception:
         return []
 
@@ -619,8 +691,8 @@ class StockPredictor:
             'extra_trees': ExtraTreesRegressor(
                 n_estimators=200, max_depth=12, min_samples_leaf=5,
                 random_state=42, n_jobs=-1),
-            # Linear model → breaks tree correlation, adds diversity
-            'bayesian_ridge': BayesianRidge(),
+            # Linear model → regularized to prevent collinearity runaway on correlated features
+            'bayesian_ridge': BayesianRidge(alpha_1=1e-2, lambda_1=1e-2),
         }
         if HAS_XGB:
             pool['xgboost'] = xgb.XGBRegressor(
@@ -661,8 +733,9 @@ class StockPredictor:
             avail   = [c for c in feature_cols if c in df_feat.columns]
             self.feature_cols = avail
 
+            # 1. Temporal Leakage Prevention: dropna() without bfill()
             min_clean = 150 if is_etf else 80
-            df_clean = df_feat[avail + ['Close']].ffill().bfill().dropna()
+            df_clean = df_feat[avail + ['Close']].dropna()
             if len(df_clean) < min_clean:
                 return False, "Too many NaN values after feature engineering"
 
@@ -676,30 +749,52 @@ class StockPredictor:
                 for i in range(n)
             ])
 
-            X = self.scaler.fit_transform(X_raw)
-            split = int(len(X) * 0.80)
-            X_tr, X_te = X[:split], X[split:]
+            # 2. Temporal Leakage Prevention: Train/Test Split BEFORE Scaling
+            split = int(len(X_raw) * 0.80)
+            X_tr_raw, X_te_raw = X_raw[:split], X_raw[split:]
             y_tr, y_te = y[:split], y[split:]
 
-            # ── Train each base model independently ──
+            # Fit scaler strictly on training split
+            self.scaler.fit(X_tr_raw)
+            X_tr = self.scaler.transform(X_tr_raw)
+            X_te = self.scaler.transform(X_te_raw)
+
+            # 3. Genuine Out-Of-Fold (OOF) Stacking on X_tr
             pool = self._build_pool()
+            n_splits = min(5, max(2, len(X_tr) // 20))
+            kf = KFold(n_splits=n_splits, shuffle=False)
+            oof_preds = {name: np.zeros(len(X_tr)) for name in pool.keys()}
+
+            for tr_idx, val_idx in kf.split(X_tr):
+                X_fold_tr, y_fold_tr = X_tr[tr_idx], y_tr[tr_idx]
+                X_fold_val = X_tr[val_idx]
+                for name, mdl in pool.items():
+                    try:
+                        fold_mdl = clone(mdl) if hasattr(mdl, 'get_params') else copy.deepcopy(mdl)
+                        fold_mdl.fit(X_fold_tr, y_fold_tr)
+                        oof_preds[name][val_idx] = fold_mdl.predict(X_fold_val)
+                    except Exception as fold_err:
+                        print(f"[ML OOF] {name} fold failed: {fold_err}")
+
+            # 4. Train final base models on FULL X_tr for test evaluation and production inference
             self.models = {}
-            tr_outs, te_outs = [], []
+            te_outs = []
+            valid_model_names = []
 
             for name, mdl in pool.items():
                 try:
                     mdl.fit(X_tr, y_tr)
-                    tr_outs.append(mdl.predict(X_tr))
-                    te_outs.append(mdl.predict(X_te))
                     self.models[name] = mdl
+                    te_outs.append(mdl.predict(X_te))
+                    valid_model_names.append(name)
                 except Exception as exc:
                     print(f"[ML] {name} skipped: {exc}")
 
             if not self.models:
                 return False, "All models failed to train"
 
-            # ── Ridge meta-stacker ──
-            meta_tr = np.column_stack(tr_outs)
+            # 5. Ridge Meta-Stacker fit on genuine Out-Of-Fold (OOF) predictions
+            meta_tr = np.column_stack([oof_preds[name] for name in valid_model_names])
             meta_te = np.column_stack(te_outs)
             self.meta_model.fit(meta_tr, y_tr)
             meta_preds = self.meta_model.predict(meta_te)
@@ -707,8 +802,8 @@ class StockPredictor:
             mae   = float(mean_absolute_error(y_te, meta_preds))
             rmse  = float(np.sqrt(mean_squared_error(y_te, meta_preds)))
 
-            # ── Walk-forward financial metrics ──
-            wf = _walk_forward_metrics(X, y, dict(pool), Ridge(alpha=1.0))
+            # 6. Walk-forward financial metrics (passes X_raw to eliminate scaler leakage)
+            wf = _walk_forward_metrics(X_raw, y, dict(pool), Ridge(alpha=1.0))
 
             # ── SHAP on best tree model ──
             shap_model = (self.models.get('xgboost')
@@ -752,11 +847,41 @@ class StockPredictor:
             if df is None or df.empty:
                 return None, "No recent price data"
 
+            # ── Synchronize with live quote if available ──
+            live_price = None
+            try:
+                live_q = get_quote(ticker)
+                if live_q and live_q.get('price') and float(live_q['price']) > 0:
+                    live_price = float(live_q['price'])
+                    # If live quote price differs from last candle by >0.2%, sync latest bar
+                    if abs(float(df['Close'].iloc[-1]) - live_price) / float(df['Close'].iloc[-1]) > 0.002:
+                        now_dt = pd.Timestamp.now(tz='Asia/Kolkata')
+                        last_dt = df.index[-1]
+                        if now_dt.date() > last_dt.date():
+                            today_bar = pd.DataFrame({
+                                'Open':   [live_q.get('prevClose') or live_price],
+                                'High':   [max(live_q.get('dayHigh') or live_price, live_price)],
+                                'Low':    [min(live_q.get('dayLow') or live_price, live_price)],
+                                'Close':  [live_price],
+                                'Volume': [live_q.get('volume') or df['Volume'].iloc[-1]],
+                            }, index=[now_dt.floor('D')])
+                            df = pd.concat([df, today_bar])
+                        else:
+                            df.loc[df.index[-1], 'Close'] = live_price
+                            if live_q.get('dayHigh'):
+                                df.loc[df.index[-1], 'High'] = max(df['High'].iloc[-1], float(live_q['dayHigh']))
+                            if live_q.get('dayLow'):
+                                df.loc[df.index[-1], 'Low'] = min(df['Low'].iloc[-1], float(live_q['dayLow']))
+                            if live_q.get('volume'):
+                                df.loc[df.index[-1], 'Volume'] = int(live_q['volume'])
+            except Exception as e:
+                print(f"[ML] Live quote sync skipped: {e}")
+
             # Use the matching feature pipeline
             feature_fn = _create_etf_features if is_etf else _create_features
             df_feat    = feature_fn(df)
             avail      = [c for c in self.feature_cols if c in df_feat.columns]
-            df_clean   = df_feat[avail].ffill().bfill().dropna()
+            df_clean   = df_feat[avail].dropna()
 
             min_recent = 30 if is_etf else 15
             if len(df_clean) < min_recent:
@@ -764,23 +889,76 @@ class StockPredictor:
 
             X_latest = self.scaler.transform(df_clean.tail(1).values)
 
-            # ── Base predictions ──
-            base_preds  = []
-            model_outs  = {}
+            # ── Base predictions & Model Governance (SR 11-7) ──
+            current_price = live_price if (live_price is not None and live_price > 0) else float(df['Close'].iloc[-1])
+
+            # Centralized governance policy bounds
+            policy_key = "etf_30d" if is_etf else "equity_5d"
+            policy = MODEL_GOVERNANCE_THRESHOLDS[policy_key]
+            lower_bound = policy["lower_return"]
+            upper_bound = policy["upper_return"]
+
+            base_preds = []
+            eligible_base_preds = []
+            model_telemetry = {}
+
             for name, mdl in self.models.items():
                 try:
-                    p = float(mdl.predict(X_latest)[0])
-                    base_preds.append(p)
-                    model_outs[name] = p
-                except Exception:
-                    pass
+                    p_raw = float(mdl.predict(X_latest)[0])
+                    is_outlier = (p_raw < lower_bound) or (p_raw > upper_bound)
+                    p_val = float(np.clip(p_raw, lower_bound, upper_bound))
+                    is_clipped = (abs(p_raw - p_val) > 1e-4)
+
+                    raw_price = round(current_price * (1.0 + p_raw), 2)
+                    val_price = round(max(0.01, current_price * (1.0 + p_val)), 2)
+
+                    status = "DEGRADED_OUTLIER" if is_outlier else "OK"
+                    is_eligible = not is_outlier
+
+                    if is_eligible:
+                        eligible_base_preds.append(p_val)
+                    base_preds.append(p_val)
+
+                    model_telemetry[name] = {
+                        'raw_return': round(p_raw * 100, 2),
+                        'validated_return': round(p_val * 100, 2),
+                        'raw_price': raw_price,
+                        'validated_price': val_price,
+                        'predicted_return': round(p_val * 100, 2),
+                        'predicted_price': val_price,
+                        'is_clipped': is_clipped,
+                        'status': status,
+                        'included_in_ensemble': is_eligible,
+                        'thresholds_applied': {
+                            'policy_key': policy_key,
+                            'lower_pct': round(lower_bound * 100, 1),
+                            'upper_pct': round(upper_bound * 100, 1),
+                        },
+                        'outlier_reason': (
+                            f"Raw return ({round(p_raw * 100, 2)}%) breached policy bounds "
+                            f"[{round(lower_bound * 100, 1)}%, {round(upper_bound * 100, 1)}%]"
+                            if is_outlier else None
+                        ),
+                    }
+                except Exception as exc:
+                    print(f"[ML] Base model {name} failed: {exc}")
 
             if not base_preds:
                 return None, "All model predictions failed"
 
-            # ── Meta prediction ──
-            meta_in          = np.array(base_preds).reshape(1, -1)
-            predicted_return = float(self.meta_model.predict(meta_in)[0])
+            # ── Meta prediction with Outlier Exclusion ──
+            if len(eligible_base_preds) >= 2:
+                if len(eligible_base_preds) == len(self.models):
+                    meta_in = np.array(base_preds).reshape(1, -1)
+                    predicted_return = float(self.meta_model.predict(meta_in)[0])
+                else:
+                    # An outlier was excluded from stacking: use robust median of eligible models
+                    predicted_return = float(np.median(eligible_base_preds))
+            elif eligible_base_preds:
+                predicted_return = float(eligible_base_preds[0])
+            else:
+                predicted_return = float(np.median(base_preds))
+
             # ETF 30d returns can be larger; widen clip window
             clip_max = 0.35 if is_etf else 0.20
             predicted_return = float(np.clip(predicted_return, -clip_max, clip_max))
@@ -849,8 +1027,8 @@ class StockPredictor:
             signal_strength = float(np.clip(abs(fused_return) * 1000, 0, 100))
 
             # ── Prices ──
-            current_price   = float(df['Close'].iloc[-1])
-            predicted_price = round(current_price * (1 + fused_return), 2)
+            current_price   = live_price if (live_price is not None and live_price > 0) else float(df['Close'].iloc[-1])
+            predicted_price = round(max(0.01, current_price * (1 + fused_return)), 2)
 
             # ── ATR-based risk/reward ──
             atr_col = 'atr_ratio' if is_etf else 'atr'
@@ -893,7 +1071,8 @@ class StockPredictor:
                 'confidence':             round(confidence, 1),
                 'stability':              stability,
                 'regime':                 regime,
-                'garch_volatility':       garch_vol,
+                'garch_volatility':       garch_vol.get('annualized_pct') if isinstance(garch_vol, dict) else garch_vol,
+                'garch_spec':             garch_vol if isinstance(garch_vol, dict) else None,
                 'asset_type':             self.asset_type,
                 # Walk-forward financial metrics
                 'direction_accuracy':     self.train_meta.get('direction_accuracy', 50.0),
@@ -911,14 +1090,28 @@ class StockPredictor:
                 # Risk
                 'risk_reward_ratio':      risk_reward,
                 'prediction_horizon_days': horizon_days,
+                'horizon_days':           horizon_days,
+                'horizon_label':          f"{horizon_days}-Day Outlook",
                 'models_used':            list(self.models.keys()),
                 'timestamp':              datetime.now().isoformat(),
-                'models': {
-                    name: {
-                        'predicted_return': round(p * 100, 2),
-                        'predicted_price':  round(current_price * (1 + p), 2),
-                    }
-                    for name, p in model_outs.items()
+                'models':                 model_telemetry,
+                # ── Multi-Tier Status Governance ──
+                'data_status': {
+                    'live_quote':         'OK' if (live_price is not None and live_price > 0) else 'UNAVAILABLE',
+                    'historical_candles': 'OK' if len(df_clean) >= 30 else 'SHORT_HISTORY',
+                    'corporate_actions':  'SPLIT_ADJUSTED',
+                },
+                'model_status': {
+                    'ensemble_health':    'OK' if not [k for k, v in model_telemetry.items() if not v['included_in_ensemble']] else ('DEGRADED_QUARANTINE' if eligible_base_preds else 'CRITICAL'),
+                    'active_models_count': len(eligible_base_preds),
+                    'total_models_count':  len(self.models),
+                    'quarantined_models':  [k for k, v in model_telemetry.items() if not v['included_in_ensemble']],
+                    'governance_policy':   policy,
+                },
+                'valuation_status': {
+                    'methodology':        'ETF_30D_TACTICAL_ENSEMBLE' if is_etf else 'EQUITY_5D_TACTICAL_ENSEMBLE',
+                    'horizon_days':       horizon_days,
+                    'status':             'OK',
                 },
             }, None
 

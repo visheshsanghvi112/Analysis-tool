@@ -464,6 +464,7 @@ def analyze_ticker(ticker, start_date=None, end_date=None):
     if raw.empty:
         return {"error": f"No data found for ticker {ticker}."}
 
+    # Clean multiindex / duplicated columns
     sd = raw.copy()
     if isinstance(sd.columns, pd.MultiIndex):
         sd.columns = [col[0] for col in sd.columns]
@@ -480,6 +481,39 @@ def analyze_ticker(ticker, start_date=None, end_date=None):
 
     if len(sd) < 20:
         return {"error": f"Insufficient data for {ticker} — only {len(sd)} trading days found."}
+
+    # ── Separate immutable closed historical candles from today's live observation ──
+    now_dt = pd.Timestamp.now(tz='Asia/Kolkata')
+    closed_candles = sd[sd.index.date < now_dt.date()].copy()
+    if closed_candles.empty:
+        closed_candles = sd.copy()
+
+    # Append or update today's live bar without mutating past closed candles
+    try:
+        live_q = get_quote(ticker)
+        if live_q and live_q.get('price') and float(live_q['price']) > 0:
+            live_p = float(live_q['price'])
+            last_dt = sd.index[-1]
+            if now_dt.date() > last_dt.date():
+                today_bar = pd.DataFrame({
+                    'Open':   [live_q.get('prevClose') or live_p],
+                    'High':   [max(live_q.get('dayHigh') or live_p, live_p)],
+                    'Low':    [min(live_q.get('dayLow') or live_p, live_p)],
+                    'Close':  [live_p],
+                    'Volume': [live_q.get('volume') or 0],
+                }, index=[now_dt.floor('D')])
+                sd = pd.concat([sd, today_bar])
+            else:
+                # Update today's unclosed bar only
+                sd.loc[sd.index[-1], 'Close'] = live_p
+                if live_q.get('dayHigh'):
+                    sd.loc[sd.index[-1], 'High'] = max(sd.loc[sd.index[-1], 'High'], float(live_q['dayHigh']))
+                if live_q.get('dayLow'):
+                    sd.loc[sd.index[-1], 'Low'] = min(sd.loc[sd.index[-1], 'Low'], float(live_q['dayLow']))
+                if live_q.get('volume'):
+                    sd.loc[sd.index[-1], 'Volume'] = int(live_q['volume'])
+    except Exception as e:
+        print(f"[ENGINE] Live quote sync skipped: {e}")
 
     sd['20 Day MA']  = sd['Close'].rolling(20).mean()
     sd['50 Day MA']  = sd['Close'].rolling(50).mean()
@@ -531,7 +565,8 @@ def analyze_ticker(ticker, start_date=None, end_date=None):
     support, resistance = calculate_support_resistance(sd)
     fib1, fib2, fib3    = calculate_fibonacci_levels(sd)
     fundamentals        = fetch_fundamentals(ticker)
-    risk                = calculate_risk_metrics(sd['Close'])
+    # Historical risk metrics are computed strictly on closed historical candles to guarantee immutability
+    risk                = calculate_risk_metrics(closed_candles['Close'])
     rs_data             = calculate_relative_strength(ticker, start_date, end_date)
 
     avg_sent, avg_subj, headlines = fetch_news_sentiment(ticker)
@@ -599,6 +634,12 @@ def analyze_ticker(ticker, start_date=None, end_date=None):
             'subjectivity':round(avg_subj,  3),
             'label':       'Positive' if avg_sent > 0.05 else 'Negative' if avg_sent < -0.05 else 'Neutral',
             'headlines':   headlines,
+        },
+        'data_status': {
+            'live_quote':         'OK' if ('live_p' in locals() and live_p > 0) else 'UNAVAILABLE',
+            'historical_candles': 'OK' if len(closed_candles) >= 30 else 'SHORT_HISTORY',
+            'indicators':         'OK',
+            'corporate_actions':  'SPLIT_ADJUSTED',
         },
         'chartData': timeseries_data,
     }

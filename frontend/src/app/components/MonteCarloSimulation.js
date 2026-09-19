@@ -569,22 +569,27 @@ export default function MonteCarloSimulation({ ticker }) {
             />
           </div>
 
-          {/* Educational Note */}
+          {/* Educational Note & Cross-Model Comparison */}
           <div className="p-3 bg-white/[0.01] border border-white/[0.04] rounded-lg flex items-start gap-2.5">
             <Info className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
-            <div className="text-[10px] text-slate-400 leading-relaxed">
-              <span className="font-bold text-white">Institutional Methodology:</span> {mode === 'bootstrap' ? (
-                <span>
-                  <strong>Historical Bootstrapping (Non-Parametric)</strong> draws random daily returns directly from {ticker}&apos;s empirical trading history with replacement. 
-                  This inherently preserves real-world fat tails, flash crashes, earnings gaps, and skewness without imposing an artificial Gaussian normal distribution.
-                </span>
-              ) : (
-                <span>
-                  <strong>Geometric Brownian Motion with Student-t Fat Tails (ν=5)</strong> simulates stochastic price paths using standardized Student-t shocks. 
-                  The simulation uses direct log-space stepping to eliminate double volatility drag. To protect against Merton estimation risk, Bayesian shrinkage scales the 
-                  annualized drift (μ = {fmt(stats.ann_drift_pct)}%) toward long-term market equilibrium prior (12%) as the horizon expands.
-                </span>
-              )}
+            <div className="text-[10px] text-slate-400 leading-relaxed space-y-1.5">
+              <div>
+                <span className="font-bold text-white">Institutional Methodology:</span> {mode === 'bootstrap' ? (
+                  <span>
+                    <strong>Historical Bootstrapping (Non-Parametric)</strong> draws random daily returns directly from {ticker}&apos;s empirical trading history with replacement. 
+                    This inherently preserves real-world fat tails, flash crashes, earnings gaps, and skewness without imposing an artificial Gaussian normal distribution.
+                  </span>
+                ) : (
+                  <span>
+                    <strong>Geometric Brownian Motion with Student-t Fat Tails (ν=5)</strong> simulates stochastic price paths using standardized Student-t shocks. 
+                    The simulation uses direct log-space stepping to eliminate double volatility drag. To protect against Merton estimation risk, Bayesian shrinkage scales the 
+                    annualized drift (μ = {fmt(stats.ann_drift_pct)}%) toward long-term market equilibrium prior (12%) as the horizon expands.
+                  </span>
+                )}
+              </div>
+              <div className="pt-1 border-t border-white/[0.04] text-[9px] text-slate-400">
+                <span className="font-bold text-slate-300">Model Horizon Note:</span> Monte Carlo simulates long-term statistical paths over {horizon} days based on annual historical volatility ({fmt(stats.ann_volatility_pct)}%) and equilibrium drift. In contrast, the ML ensemble forecasts short-term tactical price direction (5-day for stocks, 30-day for ETFs) based on technical momentum and mean-reversion signals. Discrepancies between the two reflect differing investment horizons.
+              </div>
             </div>
           </div>
         </div>

@@ -4,18 +4,19 @@
 
 # StockIQ Pro 📈
 
-### *Institutional-Grade Quantitative Intelligence, 100% Live Deep News & Econometric Workstation*
+### *Advanced Quantitative Intelligence, Live Deep News & Econometric Workstation*
 
-**The analytical firepower of top quant desks and hedge funds — calibrated for 7,954 NSE & BSE Equities, ETFs, Indices & Global Assets.**
+**The analytical firepower of modern quantitative research — calibrated for 7,954 NSE & BSE Equities, ETFs, Indices & Global Assets.**
 
 <br/>
 
 [![Next.js](https://img.shields.io/badge/Next.js_16_(Turbopack)-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI_2.4.0-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![FastAPI](https://img.shields.io/badge/FastAPI_0.115.5-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![StockIQ Pro](https://img.shields.io/badge/StockIQ_Pro-v2.4.0-blue?style=for-the-badge)](https://stockiq-pro.vercel.app)
 [![Python](https://img.shields.io/badge/Python_3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Scrapling Engine](https://img.shields.io/badge/Scrapling_Stealth_Engine-06B6D4?style=for-the-badge&logo=cloudflare&logoColor=white)](https://github.com/d4vinci/Scrapling)
-[![Machine Learning](https://img.shields.io/badge/6--Model_Ensemble_Stack-10B981?style=for-the-badge&logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
-[![Tests](https://img.shields.io/badge/Pytest_Suite-25%2F25_Passing_(100%25)-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](https://docs.pytest.org/)
+[![Machine Learning](https://img.shields.io/badge/6--Model_OOF_Ensemble-10B981?style=for-the-badge&logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
+[![Tests](https://img.shields.io/badge/Pytest_Suite-48%2F48_Passing_(100%25)-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](https://docs.pytest.org/)
 [![Deployed on Vercel](https://img.shields.io/badge/Deployed_on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/)
 
 <br/>
@@ -42,7 +43,7 @@ While institutional desks deploy **multi-model stacked ensembles**, **econometri
 
 **StockIQ Pro bridges this chasm.**
 
-Our mission is to give every individual investor the analytical firepower of a multi-million dollar quantitative desk—100% live, mathematically rigorous, and specifically tailored for the Indian financial ecosystem.
+Our mission is to give every individual investor the analytical firepower of a quantitative workstation—with live market data, low-latency in-memory caching, mathematically rigorous models, and deep calibration for the Indian financial ecosystem.
 
 ---
 
@@ -84,9 +85,9 @@ No more frustrating exact-match requirements. StockIQ Pro uses a multi-tier sear
 
 ---
 
-### 3. 🕷️ 100% Live Deep-Reading News Intelligence (Powered by Scrapling)
+### 3. 🕷️ Live Deep-Reading News Intelligence (Powered by Scrapling)
 Unlike ordinary tools that only scan 10-word RSS headlines, StockIQ Pro vendors and embeds **Scrapling**—an advanced web scraper:
-*   **Zero Static / Fake News**: Everything returned is 100% live, dynamically aggregated across **Google News, Moneycontrol, Economic Times, LiveMint, and Business Standard**.
+*   **Dynamic Scraping Engine**: News is dynamically aggregated live across **Google News, Moneycontrol, Economic Times, LiveMint, and Business Standard** with intelligent in-memory caching.
 *   **Bypasses Anti-Bot Shields**: Uses `curl_cffi` TLS JA3/JA4 browser impersonation and HTTP/2 pseudo-headers to bypass Cloudflare Turnstile and Akamai firewalls without getting blocked (`HTTP 403`).
 *   **Reads Full Article Bodies**: Asynchronously downloads and reads full article paragraphs in parallel using `ThreadPoolExecutor` (< 1.8s response time).
 *   **Corporate Catalyst Extraction**: Automatically extracts hard financial metrics:
@@ -105,8 +106,9 @@ Financial markets are noisy and non-linear. Single models quickly overfit. Stock
 4.  **XGBoost Regressor** (Histogram-based gradient boosting with $L_1$/$L_2$ regularization)
 5.  **LightGBM Regressor** (Leaf-wise histogram growth with GOSS)
 6.  **Bayesian Ridge Regressor** (Linear probabilistic prior to prevent regime collapse)
-*   **Stacking Meta-Blender**: A regularized **Ridge Regression** meta-learner combines the predictions using out-of-fold cross-validation.
-*   **Walk-Forward Rolling-Window Validation**: Tested strictly out-of-sample over historical horizons.
+*   **Stacking Meta-Blender**: A regularized **Ridge Regression** meta-learner combines base predictions using genuine **Out-Of-Fold (OOF) cross-validation** with zero in-sample leakage.
+*   **Strict Temporal Leakage Prevention**: Data splits strictly precede feature scaling (`RobustScaler`), ensuring future test variance/median never contaminates training windows, and eliminating lookahead `bfill()` operations.
+*   **Walk-Forward Rolling-Window Validation**: Tested strictly out-of-sample over historical horizons with independent fold-level scaling and OOF meta-learning.
 *   **Asset-Aware Adaptation (Stocks vs ETFs)**:
     *   **Equities**: 5-day horizon, short-term momentum & gap features, news sentiment fusion (80% ML + 20% news), BUY/SELL signal language.
     *   **ETFs**: 30-day forward horizon, 38 long-term trend & macro features (Golden/Death Cross, 26/52 EMA, quarterly momentum, annual drawdown, rebalancing seasonality), ACCUMULATE/AVOID signals, zeroed company news sentiment, and auto-upgraded 5-year training window.
@@ -130,10 +132,10 @@ Financial markets are noisy and non-linear. Single models quickly overfit. Stock
 
 ---
 
-### 6. 💎 Institutional Fundamental Valuation & ETF Long-Term Suite
+### 6. 💎 Fundamental Valuation & ETF Long-Term Suite
 *   **Asset-Adaptive Analysis Workflow**: The workstation automatically bifurcates based on instrument classification:
     *   **For Equities**:
-        *   **10-Step Discounted Cash Flow (DCF)**: Calculates intrinsic value per share with dynamic WACC calculation, terminal growth sensitivity, and margin of safety discounts.
+        *   **10-Step Discounted Cash Flow (DCF)**: Calculates intrinsic value per share with dynamic WACC calculation, terminal growth sensitivity, and margin of safety discounts. For financial institutions (banks/NBFCs), automatically uses an Equity Dividend Discount Model (DDM) preserving operating debt from enterprise deductions.
         *   **Graham Formula & Peter Lynch Fair Value**: Classic value and GARP benchmarks.
         *   **3-Stage & 5-Stage DuPont Analysis**: Decomposes ROE into Operating Margin, Asset Turnover, Leverage, Tax Burden, and Interest Burden.
         *   **Forensic Accounting Checklists**: Altman Z-Score, Beneish M-Score, and Piotroski F-Score.
@@ -142,8 +144,11 @@ Financial markets are noisy and non-linear. Single models quickly overfit. Stock
         *   **Underlying Portfolio Breakdown**: Interactive tabs for **Top 10 Holdings** and **Sector Exposure** with asset weight progress bars. Uses Yahoo's live `topHoldings` module for US/global ETFs (`SPY`, `QQQ`), with verified curated mappings (`_ETF_CURATED_HOLDINGS`) and suffix-agnostic matching for Indian ETFs (`NIFTYBEES`, `BANKBEES`, `MON100`, `MAFANG`, `GOLDBEES`, `ITBEES`, `CPSEETF`, `SETFNN50`).
         *   **3-Year Rolling Returns Distribution**: Eliminates point-to-point end-date bias by computing rolling 3-year CAGR ($R = (P_t / P_{t-756})^{1/3} - 1$) across 5 years of daily data, outputting **Median 3Y CAGR**, min/max historical windows, and the **Probability of Profit** (% positive 3Y periods).
         *   **1Y / 3Y / 5Y CAGR vs Benchmark Index**: Quantifies multi-year compounding and true alpha.
-        *   **Annualised Tracking Error**: $\sigma(\text{ETF} - \text{Benchmark}) \times \sqrt{252}$ to measure index replication efficiency.
-        *   **6-Point ETF Health Checklist**: AUM ($\ge ₹500\text{ Cr}$), Expense Ratio ($< 0.50\%$), Tracking Error ($< 0.50\%$), 3Y CAGR Alpha, Sharpe Ratio ($> 0.50$), and NAV Premium/Discount ($< \pm 0.50\%$).
+        *   **Segregated Tracking & Dislocation Diagnostics**:
+            *   **SEBI Regulatory NAV Tracking Error**: Formally defined as $\text{StdDev}(R_{\text{NAV}} - R_{\text{TRI}}) \times \sqrt{252}$ using official daily scheme NAVs and Total Return Index (TRI) series.
+            *   **Secondary-Market Return Divergence**: $\text{StdDev}(R_{\text{NSE}} - R_{\text{Benchmark}}) \times \sqrt{252}$ to measure exchange price volatility vs index.
+            *   **Premium/(Discount) to iNAV**: $(P_{\text{NSE}} / \text{iNAV} - 1)$ to directly capture fair-value secondary market dislocation.
+        *   **6-Point ETF Health Checklist**: AUM ($\ge ₹500\text{ Cr}$), Expense Ratio ($< 0.50\%$), Return Divergence ($< 0.50\%$), 3Y CAGR Alpha, Sharpe Ratio ($> 0.50$), and Premium/(Discount) to iNAV ($< \pm 0.50\%$).
         *   **SIP Suitability Score (0–10)**: Weighted composite of fund liquidity, expense efficiency, tracking precision, and rolling return consistency for long-term systematic wealth creation.
 
 ---
@@ -157,8 +162,8 @@ Financial markets are noisy and non-linear. Single models quickly overfit. Stock
 
 ---
 
-### 8. ⚡ High-Frequency Intraday Terminal (`/intraday`)
-A dedicated execution-grade workspace for day traders and quantitative technicians:
+### 8. ⚡ Advanced Intraday Analytics Terminal (`/intraday`)
+A dedicated technical analytics workspace for intraday traders and quantitative researchers:
 *   **Live Candlestick Intervals**: High-resolution 1m, 2m, 5m, 15m, 30m, and 60m OHLCV feeds with auto-refresh timers.
 *   **Supertrend Signal Generator**: Multiplier-tuned Average True Range (ATR) trend filter providing unambiguous bullish/bearish directional flips.
 *   **Multi-Timeframe VWAP with Standard Deviation Bands**: Volume-Weighted Average Price with Upper 1/2 and Lower 1/2 standard deviation volatility bands for mean-reversion fades.
@@ -185,7 +190,7 @@ Takes the emotion out of managing underwater portfolio positions:
 
 ---
 
-## ⚡ Sub-Millisecond Performance & Caching Hierarchy
+## ⚡ Low-Latency Architecture & In-Memory Caching Hierarchy
 
 To guarantee rapid response times and eliminate third-party rate limits (HTTP 429), StockIQ Pro implements an in-memory thread-safe **Time-To-Live (TTL) cache**:
 

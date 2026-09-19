@@ -149,10 +149,10 @@ export const INFO_DICTIONARY = {
     interpretation: 'Look for Strategy Alpha > 0%, Sortino Ratio > 1.0, and smaller peak-to-trough drawdown and underwater duration than the market benchmark.'
   },
   strategy_alpha: {
-    title: 'Strategy Alpha vs. Buy & Hold Benchmark',
-    what: 'The net percentage outperformance of the quantitative trading strategy relative to simply holding the underlying stock over the identical lookback window.',
-    why: 'Active trading incurs execution friction and tax events; positive alpha proves the rules systematically bypassed bear markets and preserved capital.',
-    interpretation: 'Alpha > 0% demonstrates the strategy avoided major drawdowns while capturing the core compound growth of the security.'
+    title: 'Excess Return vs. Buy & Hold Benchmark (pp)',
+    what: 'The net percentage point spread (Strategy Return − Buy & Hold Return) measuring outperformance relative to passive holding over the identical lookback window.',
+    why: 'Active trading incurs execution friction and tax events; positive excess return confirms the strategy avoided major drawdowns while preserving compound capital.',
+    interpretation: 'Spread > 0 pp demonstrates the strategy outperformed buy-and-hold investing after trading frictions.'
   },
   monte_carlo_var: {
     title: 'Monte Carlo Value-at-Risk (VaR 95% & 99%)',
