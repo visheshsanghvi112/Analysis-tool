@@ -32,6 +32,9 @@
 #### Enhanced Components
 ✅ **Professional Header** - Sticky header with search and branding  
 ✅ **Live Price Card** - Real-time updates with visual indicators  
+✅ **Asset-Adaptive Workstation** - Switches seamlessly between corporate forensics (stocks) and ETF analytics  
+✅ **ETF Long-Term Panel** - Holdings, sector weightings, 3Y rolling returns distribution, and SIP suitability  
+✅ **Street Consensus vs AI Target** - Institutional price target benchmarking with divergence spreads  
 ✅ **Welcome Section** - Engaging landing page  
 ✅ **Feature Cards** - Status indicators for each feature  
 ✅ **Responsive Footer** - Professional footer with features  
@@ -211,6 +214,9 @@ curl http://localhost:8000/health
 # Test live price endpoint
 curl http://localhost:8000/api/live?ticker=HDFCBANK.NS
 
+# Test ETF analysis endpoint (holdings, sectors & 3Y rolling returns)
+curl "http://localhost:8000/api/etf-analysis?ticker=NIFTYBEES.NS"
+
 # Test rate limiting (run multiple times quickly)
 for i in {1..35}; do curl http://localhost:8000/api/live?ticker=HDFCBANK.NS; done
 ```
@@ -238,7 +244,8 @@ npm run lint
 - [ ] Stock search works
 - [ ] Live price updates
 - [ ] Charts render properly
-- [ ] ML predictions load
+- [ ] ML predictions load (with Street Consensus comparison for equities, 30d horizon for ETFs)
+- [ ] ETF long-term panel displays (AUM, Tracking Error, Holdings, Rolling Returns, SIP Score)
 - [ ] News sentiment displays
 - [ ] Portfolio metrics calculate
 - [ ] Mobile responsive

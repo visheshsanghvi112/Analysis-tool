@@ -110,6 +110,9 @@ Financial markets are noisy and non-linear. Single models quickly overfit. Stock
 *   **Asset-Aware Adaptation (Stocks vs ETFs)**:
     *   **Equities**: 5-day horizon, short-term momentum & gap features, news sentiment fusion (80% ML + 20% news), BUY/SELL signal language.
     *   **ETFs**: 30-day forward horizon, 38 long-term trend & macro features (Golden/Death Cross, 26/52 EMA, quarterly momentum, annual drawdown, rebalancing seasonality), ACCUMULATE/AVOID signals, zeroed company news sentiment, and auto-upgraded 5-year training window.
+*   **Street Consensus vs AI Ensemble Comparison**:
+    *   Directly compares Wall Street & Dalal Street human sell-side analyst consensus (Target Mean, High/Low range, Buy/Hold/Sell counts) side-by-side with StockIQ's 6-model ML ensemble target.
+    *   Detects institutional alignment vs algorithmic alpha opportunities (e.g. flagging where AI detects momentum inflection ahead of sell-side revisions).
 
 ---
 
@@ -136,6 +139,8 @@ Financial markets are noisy and non-linear. Single models quickly overfit. Stock
         *   **Forensic Accounting Checklists**: Altman Z-Score, Beneish M-Score, and Piotroski F-Score.
         *   **Black-Scholes Options Greeks**: $\Delta$, $\Gamma$, $\Theta$, $\mathcal{V}$, and $\rho$.
     *   **For ETFs (`ETFLongTermPanel`)**:
+        *   **Underlying Portfolio Breakdown**: Interactive tabs for **Top 10 Holdings** and **Sector Exposure** with asset weight progress bars. Uses Yahoo's live `topHoldings` module for US/global ETFs (`SPY`, `QQQ`), with verified curated mappings (`_ETF_CURATED_HOLDINGS`) and suffix-agnostic matching for Indian ETFs (`NIFTYBEES`, `BANKBEES`, `MON100`, `MAFANG`, `GOLDBEES`, `ITBEES`, `CPSEETF`, `SETFNN50`).
+        *   **3-Year Rolling Returns Distribution**: Eliminates point-to-point end-date bias by computing rolling 3-year CAGR ($R = (P_t / P_{t-756})^{1/3} - 1$) across 5 years of daily data, outputting **Median 3Y CAGR**, min/max historical windows, and the **Probability of Profit** (% positive 3Y periods).
         *   **1Y / 3Y / 5Y CAGR vs Benchmark Index**: Quantifies multi-year compounding and true alpha.
         *   **Annualised Tracking Error**: $\sigma(\text{ETF} - \text{Benchmark}) \times \sqrt{252}$ to measure index replication efficiency.
         *   **6-Point ETF Health Checklist**: AUM ($\ge ₹500\text{ Cr}$), Expense Ratio ($< 0.50\%$), Tracking Error ($< 0.50\%$), 3Y CAGR Alpha, Sharpe Ratio ($> 0.50$), and NAV Premium/Discount ($< \pm 0.50\%$).

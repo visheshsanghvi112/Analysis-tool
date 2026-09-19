@@ -11,6 +11,7 @@ All security improvements, UI enhancements, and optimizations are complete. Foll
 ### Files Created ✓
 - [x] `frontend/src/app/components/Header.js` - Professional navigation
 - [x] `frontend/src/app/components/ErrorBoundary.js` - Error handling
+- [x] `frontend/src/app/components/ETFLongTermPanel.js` - Institutional ETF analytics, holdings & rolling returns
 - [x] `frontend/src/middleware.js` - Security headers
 - [x] `frontend/vercel.json` - Deployment config
 - [x] `backend/.env.example` - Environment template
@@ -119,9 +120,10 @@ curl https://your-backend-url.com/health
 5. Verify:
    - ✅ Live price loads
    - ✅ Charts render
-   - ✅ ML predictions show
+   - ✅ ML predictions show (with Street Consensus comparison for equities, 30d horizon for ETFs)
    - ✅ News displays
    - ✅ Portfolio metrics load
+   - ✅ ETF analysis renders (for ETFs: AUM, Tracking Error, Top 10 Holdings, 3Y Rolling Returns)
 
 ---
 

@@ -13,7 +13,7 @@
 3. [The 7,954 Instrument Universe & Smart Search Engine](#3-the-7954-instrument-universe--smart-search-engine)
 4. [Machine Learning & Quantitative Analytics Engine](#4-machine-learning--quantitative-analytics-engine)
 5. [Intelligent News Reader & Deep Scraping (Powered by Scrapling)](#5-intelligent-news-reader--deep-scraping-powered-by-scrapling)
-6. [Fundamental Valuation & Risk Forensics](#6-fundamental-valuation--risk-forensics)
+6. [Fundamental Valuation & ETF Institutional Suite](#6-fundamental-valuation--etf-institutional-suite)
 7. [Portfolio Management, Capital Allocation & Wealth Planning](#7-portfolio-management-capital-allocation--wealth-planning)
 8. [High-Frequency Intraday Engine & Technical Indicators](#8-high-frequency-intraday-engine--technical-indicators)
 9. [Frontend User Experience & Interactive Architecture](#9-frontend-user-experience--interactive-architecture)
@@ -49,6 +49,7 @@ graph TD
         subgraph APIRouters [API Routing Layer]
             Routers --> R_Tickers[/api/tickers - Ticker Search & Screener]
             Routers --> R_Analysis[/api/valuation - Fundamental & Technicals]
+            Routers --> R_ETF[/api/etf-analysis - ETF Health, Holdings & Rolling Returns]
             Routers --> R_ML[/api/ml-predict - 6-Model Ensemble & Regimes]
             Routers --> R_News[/api/advanced-news - Scrapling Deep News Reader]
             Routers --> R_Port[/api/portfolio - MPT & Capital Allocation]
@@ -58,6 +59,7 @@ graph TD
         subgraph Services [Domain Services Tier]
             R_Tickers --> S_TickerMgr[TickerManager - 7,954 Master Database]
             R_Analysis --> S_Engine[AnalysisEngine - DCF, DuPont, Greeks]
+            R_ETF --> S_ETF[AnalysisEngine - Tracking Error, Holdings, Rolling Returns]
             R_ML --> S_MLModels[MLEnsemble - XGBoost, LightGBM, HMM, GARCH]
             R_News --> S_NewsReader[IntelligentNewsReader - Scrapling Engine]
             R_Port --> S_CapAlloc[CapitalAllocator - Markowitz, Monte Carlo]
@@ -201,6 +203,23 @@ A regularized **Ridge Regression** meta-model trained via out-of-fold prediction
     *   `State 1`: Choppy / Mean-Reverting Consolidation.
     *   `State 2`: High-Volatility Panic / Regime Distress.
 
+### Asset-Adaptive ML Engine (Equities vs ETFs):
+The ML pipeline detects whether the asset is an equity or an ETF and configures its feature tensor and forecast objectives accordingly:
+
+| Attribute | Single Equity Mode | ETF Long-Term Mode |
+| :--- | :--- | :--- |
+| **Forecast Horizon** | 5 Trading Days (`target_return_5d`) | 30 Trading Days (`target_return_30d`) |
+| **Feature Tensor** | 40+ short-term & medium-term technicals, momentum, order flow proxies | 38 long-term features: Golden Cross (50/200 EMA), 63-day quarterly momentum, 1-year distance to 52W high, annual drawdown, rolling volatility |
+| **Signal Taxonomy** | `STRONG BUY`, `BUY`, `HOLD`, `SELL`, `STRONG SELL` | `ACCUMULATE` (steady SIP accumulation), `HOLD` (fair valuation), `AVOID` (elevated drawdown/regime risk) |
+| **News Sentiment Fusion** | Scrapling deep-scraped article sentiment & catalyst scores | Zeroed / neutral (ETFs track index baskets; single-company headlines are irrelevant noise) |
+
+### Street Analyst Consensus vs 6-Model AI Ensemble:
+For equity instruments, StockIQ Pro benchmarks the 6-model machine learning ensemble against sell-side Wall Street / Dalal Street consensus:
+*   **Sell-Side Consensus Aggregation**: Extracts live institutional price targets (`targetMeanPrice`, `targetHighPrice`, `targetLowPrice`, `numberOfAnalystOpinions`, and `recommendationKey`) via Yahoo Finance.
+*   **Divergence Spread Calculation**: Computes the quantitative spread between algorithmic prediction and institutional human consensus:
+    $$\text{Divergence Spread} = \frac{\text{AI Ensemble Target} - \text{Analyst Mean}}{\text{Current Price}} \times 100\%$$
+*   **Directional Consensus Validation**: Renders an institutional comparison card in the UI indicating whether quantitative AI forecasts and sell-side equity research analysts are directionally aligned (`BUY` vs `Outperform`) or identify an asymmetric pricing gap.
+
 ---
 
 ## 5. Intelligent News Reader & Deep Scraping (Powered by Scrapling)
@@ -245,9 +264,11 @@ Traditional financial scrapers only read 10-word RSS headlines, which are freque
 
 ---
 
-## 6. Fundamental Valuation & Risk Forensics
+## 6. Fundamental Valuation & ETF Institutional Suite
 
-StockIQ Pro computes institutional financial metrics in [`backend/engine.py`](file:///Users/vishesh/Downloads/Analysis-tool/backend/engine.py):
+StockIQ Pro implements an asset-adaptive analysis architecture that routes equities and ETFs to their mathematically appropriate evaluation frameworks:
+
+### Equity Fundamental Valuation & Forensics (`backend/engine.py`):
 
 | Model / Metric | Method / Formula | Practical Utility |
 | :--- | :--- | :--- |
@@ -259,6 +280,35 @@ StockIQ Pro computes institutional financial metrics in [`backend/engine.py`](fi
 | **Beneish M-Score** | 8-variable financial ratio regression model | Detects accounting manipulation ($M > -1.78$ indicates high probability of earnings manipulation). |
 | **Piotroski F-Score** | 9-point binary score across profitability, leverage, and operating efficiency | Flags fundamental business improvement ($8-9$ Strong, $0-2$ Weak). |
 | **Black-Scholes Greeks** | Analytical closed-form solution for European Call/Put options | Computes Delta ($\Delta$), Gamma ($\Gamma$), Theta ($\Theta$), Vega ($\mathcal{V}$), and Rho ($\rho$). |
+
+### ETF Long-Term Intelligence Suite (`/api/etf-analysis` & `ETFLongTermPanel.js`):
+Exchange-Traded Funds represent pooled investment vehicles tracking underlying baskets, making single-company corporate accounting metrics (such as DCF or Beneish M-Score) structurally inapplicable. StockIQ Pro replaces these with institutional ETF analytics:
+
+1.  **Compound Annual Growth Rate (CAGR) vs Benchmark**:
+    Computes 1-Year, 3-Year, and 5-Year CAGR for the ETF against its primary benchmark:
+    $$\text{CAGR} = \left( \frac{P_{\text{end}}}{P_{\text{start}}} \right)^{\frac{1}{t}} - 1, \quad \text{CAGR Alpha} = \text{CAGR}_{\text{etf}} - \text{CAGR}_{\text{bench}}$$
+2.  **Annualised Tracking Error**:
+    Quantifies index replication efficiency and slippage:
+    $$\text{Tracking Error} = \sqrt{252} \times \text{StdDev}\left( R_{\text{etf}, t} - R_{\text{bench}, t} \right)$$
+3.  **3-Year Sharpe Ratio**:
+    Measures excess return per unit of total risk against the risk-free rate ($r_f = 6.5\%$):
+    $$\text{Sharpe} = \frac{\text{CAGR}_{3Y} - r_f}{\sigma_{\text{ann}}}$$
+4.  **Underlying Portfolio Decomposition (Top 10 Holdings & Sector Breakdown)**:
+    - **Live API Extraction**: Extracts underlying holdings and sector distributions via Yahoo Finance (`topHoldings`).
+    - **Curated Indian ETF Portfolio Database**: Maintains a high-fidelity local database (`_ETF_CURATED_HOLDINGS`) for prominent Indian ETFs (`NIFTYBEES`, `BANKBEES`, `JUNIORBEES`, `GOLDBEES`, `SILVERBEES`, `ITBEES`, `MON100`, etc.) with suffix-agnostic lookup (resolves both `NIFTYBEES` and `NIFTYBEES.NS`).
+5.  **3-Year Rolling Returns Distribution (252 × 3 = 756 Trading Days)**:
+    - Analyzes 5 years of daily historical data to compute all overlapping 3-year investment horizons:
+      $$\text{Rolling CAGR}_i = \left( \frac{P_{i}}{P_{i - 756}} \right)^{\frac{1}{3}} - 1$$
+    - Computes **Median 3Y CAGR**, **Minimum 3Y CAGR**, **Maximum 3Y CAGR**, and **Probability of Profit** ($\% \text{ of 3Y periods with positive returns}$).
+6.  **6-Point Institutional Health Checklist**:
+    - **AUM**: Adequate size ($> ₹500\,\text{Cr}$ or $\$500\,\text{M}$) to prevent fund closure.
+    - **Expense Ratio**: Cost efficiency ($\le 0.50\%$).
+    - **Tracking Error**: High replication fidelity ($\le 0.50\%$).
+    - **CAGR Alpha**: Outperformance or neutral tracking vs benchmark ($\ge 0\%$).
+    - **Sharpe Ratio**: Sound risk-adjusted returns ($\ge 0.50$).
+    - **NAV Pricing**: Tight trading spread ($|\text{NAV Premium/Discount}| \le 1.0\%$).
+7.  **SIP Suitability Score (0 to 10)**:
+    Synthesizes expense ratio, tracking error, Sharpe ratio, AUM liquidity, and rolling returns stability into an actionable Systematic Investment Plan suitability rating.
 
 ---
 
