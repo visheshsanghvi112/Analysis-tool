@@ -218,11 +218,19 @@ export default function PortfolioMetrics({ ticker }) {
           {/* Options Pricing */}
           {metrics.options_pricing && !metrics.options_pricing.error && (
             <div>
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <Target className="h-4 w-4 text-purple-400" />
                 <h4 className="font-bold text-sm text-purple-400">Options Analysis</h4>
                 <InfoBadge infoKey="options_pricing" />
                 <span className="text-[10px] text-slate-500 px-2 py-0.5 rounded bg-slate-800">Black-Scholes</span>
+                {(metrics.asset_type === 'ETF' ||
+                  ticker?.toUpperCase().includes('BEES') ||
+                  ticker?.toUpperCase().includes('ETF') ||
+                  ticker?.toUpperCase() === 'MONQ50.NS') && (
+                  <span className="text-[9px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                    Theoretical Synthetic Model (ETFs do not trade F&O on NSE)
+                  </span>
+                )}
               </div>
               
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
@@ -258,6 +266,15 @@ export default function PortfolioMetrics({ ticker }) {
                   <p className="text-[9px] text-slate-600 mt-0.5">Vol sensitivity</p>
                 </div>
               </div>
+
+              {(metrics.asset_type === 'ETF' ||
+                ticker?.toUpperCase().includes('BEES') ||
+                ticker?.toUpperCase().includes('ETF') ||
+                ticker?.toUpperCase() === 'MONQ50.NS') && (
+                <p className="text-[9px] text-slate-500 mt-2">
+                  ℹ️ <strong className="text-slate-400">Synthetic Pricing:</strong> Exchange-traded funds on NSE do not have listed options contracts. These figures represent theoretical Black-Scholes valuations based on 1-year historical volatility for risk hedging reference.
+                </p>
+              )}
             </div>
           )}
 

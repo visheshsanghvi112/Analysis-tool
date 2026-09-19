@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from scipy.optimize import minimize
 from fastapi import APIRouter, Query, HTTPException, Request
 
-from yf_client import get_quote, get_history
+from yf_client import get_quote, get_history, get_asset_type
 from news_intelligence import get_advanced_news_analysis
 from capital_allocator import allocate_capital
 from services.ticker_manager import SECTOR_MAP
@@ -52,6 +52,7 @@ def get_portfolio_metrics(ticker: str = Query(..., description="Stock ticker sym
     """
     try:
         ticker_clean = ticker.strip().upper()
+        asset_type = get_asset_type(ticker_clean)
 
         hist = get_history(ticker_clean, period='1y')
         if hist.empty:
@@ -200,6 +201,7 @@ def get_portfolio_metrics(ticker: str = Query(..., description="Stock ticker sym
         
         return {
             "ticker": ticker_clean,
+            "asset_type": asset_type,
             "currency_symbol": "₹" if is_indian else "$",
             "benchmark_name": bench_name,
             "risk_metrics": {

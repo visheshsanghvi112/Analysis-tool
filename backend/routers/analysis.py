@@ -941,15 +941,142 @@ def _compute_max_drawdown(series: pd.Series) -> float:
     return round(float(dd.min() * 100), 2)
 
 
+def _normalize_index_to_date(s: pd.Series) -> pd.Series:
+    """Strip timezone and floor to calendar day for cross-market alignment."""
+    s = s.copy()
+    idx = pd.to_datetime(s.index)
+    if idx.tz is not None:
+        idx = idx.tz_localize(None)
+    s.index = idx.floor('D')
+    return s[~s.index.duplicated(keep='last')]
+
+
 def _compute_tracking_error(etf_returns: pd.Series, bench_returns: pd.Series) -> float | None:
     """Annualised tracking error = std(ETF - Benchmark) * sqrt(252)."""
-    # Align both series on common dates
-    aligned = pd.concat([etf_returns, bench_returns], axis=1).dropna()
+    # Align both series on common calendar dates across timezones
+    norm_etf = _normalize_index_to_date(etf_returns)
+    norm_bench = _normalize_index_to_date(bench_returns)
+    aligned = pd.concat([norm_etf, norm_bench], axis=1).dropna()
     if len(aligned) < 30:
         return None
     diff = aligned.iloc[:, 0] - aligned.iloc[:, 1]
     te = float(diff.std() * math.sqrt(252) * 100)
     return round(te, 3)
+
+
+def _compute_xirr(cash_flows: list[float], dates: list[pd.Timestamp]) -> float | None:
+    """
+    Computes annualized internal rate of return (XIRR) via bisection.
+    cash_flows: negative for investments, positive for current value.
+    """
+    if len(cash_flows) < 2 or len(dates) < 2:
+        return None
+    t0 = dates[0]
+    days = [(d - t0).days / 365.0 for d in dates]
+
+    def npv(rate: float) -> float:
+        if rate <= -0.999:
+            return 1e12
+        return sum(cf / ((1.0 + rate) ** t) for cf, t in zip(cash_flows, days))
+
+    low, high = -0.99, 10.0
+    try:
+        npv_low = npv(low)
+        npv_high = npv(high)
+        if npv_low * npv_high > 0:
+            return None
+        for _ in range(100):
+            mid = (low + high) / 2.0
+            val = npv(mid)
+            if abs(val) < 1e-4:
+                return round(mid, 4)
+            if npv_low * val < 0:
+                high = mid
+                npv_high = val
+            else:
+                low = mid
+                npv_low = val
+        return round(mid, 4)
+    except Exception:
+        return None
+
+
+def _compute_historical_sip(close_series: pd.Series, monthly_amt: float = 10000.0) -> dict:
+    """
+    Simulates realized monthly SIP over 1Y, 3Y, 5Y vs Lump Sum on historical close prices.
+    Invests on the first trading day of each calendar month.
+    """
+    if close_series is None or len(close_series) < 20:
+        return {}
+
+    norm_close = _normalize_index_to_date(close_series.dropna())
+    if len(norm_close) < 20:
+        return {}
+
+    end_date = norm_close.index[-1]
+    curr_price = float(norm_close.iloc[-1])
+    results = {}
+
+    for horizon_yrs in [1, 3, 5]:
+        start_date = end_date - pd.DateOffset(years=horizon_yrs)
+        sub = norm_close[norm_close.index >= start_date]
+        if len(sub) < 15:
+            continue
+
+        # Group by year-month and pick first trading day of each month
+        sub_df = pd.DataFrame({'price': sub})
+        sub_df['ym'] = sub_df.index.to_period('M')
+        monthly_buys = sub_df.groupby('ym').first()
+
+        total_invested = 0.0
+        total_units = 0.0
+        cf = []
+        cf_dates = []
+
+        for _, row in monthly_buys.iterrows():
+            p = float(row['price'])
+            if p <= 0:
+                continue
+            units = monthly_amt / p
+            total_units += units
+            total_invested += monthly_amt
+            cf.append(-monthly_amt)
+            cf_dates.append(row.name.to_timestamp())
+
+        if total_invested <= 0:
+            continue
+
+        curr_val = total_units * curr_price
+        gain_amt = curr_val - total_invested
+        gain_pct = round((gain_amt / total_invested) * 100.0, 2)
+
+        cf.append(curr_val)
+        cf_dates.append(end_date)
+        xirr_val = _compute_xirr(cf, cf_dates)
+        xirr_pct = round(xirr_val * 100.0, 2) if xirr_val is not None else None
+
+        # Lump sum comparison: invest total_invested on day 1
+        lump_price = float(sub.iloc[0])
+        lump_units = total_invested / lump_price if lump_price > 0 else 0
+        lump_val = lump_units * curr_price
+        lump_gain_pct = round(((lump_val - total_invested) / total_invested) * 100.0, 2) if total_invested > 0 else 0
+        lump_cagr = round(((curr_price / lump_price) ** (1.0 / horizon_yrs) - 1.0) * 100.0, 2) if (lump_price > 0 and curr_price > 0) else None
+
+        results[f"{horizon_yrs}Y"] = {
+            "horizon_years": horizon_yrs,
+            "months_count": len(monthly_buys),
+            "monthly_investment": monthly_amt,
+            "total_invested": round(total_invested, 2),
+            "sip_value": round(curr_val, 2),
+            "sip_gain_pct": gain_pct,
+            "sip_xirr_pct": xirr_pct,
+            "lump_value": round(lump_val, 2),
+            "lump_gain_pct": lump_gain_pct,
+            "lump_cagr": lump_cagr,
+        }
+
+    return results
+
 
 
 def _compute_rolling_returns(close_series: pd.Series, window_days: int = 756) -> dict | None:
@@ -1317,18 +1444,18 @@ def get_etf_analysis(
         else:
             health_checklist.append({"metric": "AUM (Fund Size)", "value": "N/A", "condition": f">= {curr_sym}500 Cr", "passed": False, "note": "Data not available"})
 
-        # 2. Expense Ratio < 0.5%
+        # 2. Expense Ratio <= 0.5%
         exp_ratio = meta.get('expense_ratio')
         if exp_ratio is not None:
             health_checklist.append({
                 "metric":    "Expense Ratio",
                 "value":     f"{round(exp_ratio * 100, 3)}%",
-                "condition": "< 0.50%",
-                "passed":    exp_ratio < 0.005,
+                "condition": "<= 0.50%",
+                "passed":    exp_ratio <= 0.005,
                 "note":      "Lower expense ratio compounds to significantly more wealth over 20 years"
             })
         else:
-            health_checklist.append({"metric": "Expense Ratio", "value": "N/A", "condition": "< 0.50%", "passed": False, "note": "Data not available"})
+            health_checklist.append({"metric": "Expense Ratio", "value": "N/A", "condition": "<= 0.50%", "passed": False, "note": "Data not available"})
 
         # 3. Tracking Error < 0.5% annualised
         if tracking_error is not None:
@@ -1445,6 +1572,58 @@ def get_etf_analysis(
                 if not sector_exposure:
                     sector_exposure = curated.get("sectors", [])
 
+        # ── Realized Historical SIP vs Lump Sum Simulator ────────────────────
+        sip_monthly_amt = 10000.0 if is_indian else 500.0
+        historical_sip = _compute_historical_sip(close, monthly_amt=sip_monthly_amt)
+
+        # ── Liquidity & Execution Quality ─────────────────────────────────────
+        liquidity = {}
+        try:
+            if 'Volume' in df.columns:
+                vol_series = df['Volume'].dropna()
+                vol_30d = vol_series.iloc[-30:] if len(vol_series) >= 30 else vol_series
+                adv_30d = float(vol_30d.mean()) if len(vol_30d) > 0 else 0.0
+                daily_turnover = adv_30d * current_price
+
+                turnover_display_val = daily_turnover / 1e7 if is_indian else daily_turnover / 1e6
+                if is_indian:
+                    if daily_turnover >= 5e7:  # >= ₹5 Cr
+                        liq_grade = "High Liquidity"
+                        liq_advice = "Market orders acceptable for small retail lots. Low impact cost."
+                        liq_color = "emerald"
+                    elif daily_turnover >= 5e6:  # ₹50 Lakh - ₹5 Cr
+                        liq_grade = "Moderate Liquidity"
+                        liq_advice = "Use Limit Orders near LTP / iNAV to avoid slippage."
+                        liq_color = "amber"
+                    else:
+                        liq_grade = "Low Liquidity"
+                        liq_advice = "Caution: Thin volume. Always use Limit Orders. Avoid large market orders."
+                        liq_color = "rose"
+                else:
+                    if daily_turnover >= 1e7:  # >= $10M
+                        liq_grade = "High Liquidity"
+                        liq_advice = "Tight bid-ask spreads. Market orders fine for retail."
+                        liq_color = "emerald"
+                    elif daily_turnover >= 1e6:  # $1M - $10M
+                        liq_grade = "Moderate Liquidity"
+                        liq_advice = "Use Limit Orders to control execution price."
+                        liq_color = "amber"
+                    else:
+                        liq_grade = "Low Liquidity"
+                        liq_advice = "Thin volume. Limit orders strongly advised."
+                        liq_color = "rose"
+
+                liquidity = {
+                    "adv_30d": round(adv_30d),
+                    "daily_turnover": round(daily_turnover, 2),
+                    "daily_turnover_display": f"{curr_sym}{round(turnover_display_val, 2)} Cr" if is_indian else f"{curr_sym}{round(turnover_display_val, 2)} M",
+                    "liquidity_grade": liq_grade,
+                    "liquidity_advice": liq_advice,
+                    "liquidity_color": liq_color,
+                }
+        except Exception:
+            pass
+
         # ── Count passes ─────────────────────────────────────────────────────
         passed_count = sum(1 for item in health_checklist if item.get("passed") is True)
         health_score_label = f"{passed_count}/{len(health_checklist)} Checks Passed"
@@ -1487,6 +1666,12 @@ def get_etf_analysis(
 
             # Rolling returns distribution
             "rolling_returns": rolling_returns,
+
+            # Realized Historical SIP vs Lump Sum
+            "historical_sip": historical_sip,
+
+            # Liquidity & Execution Quality
+            "liquidity": liquidity,
 
             # Health & scoring
             "health_checklist": health_checklist,

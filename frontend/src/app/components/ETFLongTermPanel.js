@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import {
   TrendingUp, TrendingDown, CheckCircle2, XCircle,
   HelpCircle, BarChart3, AlertTriangle, Zap, Target,
+  Coins, Activity,
 } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ||
@@ -20,6 +21,18 @@ const fmt = (v, dec = 2) =>
 
 const pct = (v, dec = 2) =>
   v == null || isNaN(Number(v)) ? '–' : `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(dec)}%`;
+
+const formatMoney = (val, curr = '₹') => {
+  if (val == null || isNaN(Number(val))) return '–';
+  const num = Number(val);
+  if (curr === '₹') {
+    if (num >= 1e7) return `${curr}${(num / 1e7).toFixed(2)} Cr`;
+    if (num >= 1e5) return `${curr}${(num / 1e5).toFixed(2)} L`;
+    return `${curr}${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+  }
+  if (num >= 1e6) return `${curr}${(num / 1e6).toFixed(2)} M`;
+  return `${curr}${num.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+};
 
 // CAGR comparison bar — ETF vs benchmark
 function CAGRBar({ etf, bench, label }) {
@@ -381,6 +394,223 @@ function HoldingsAndSectorsCard({ holdings, sectors }) {
 }
 
 
+// Realized Historical SIP vs Lump Sum Simulator
+function HistoricalSIPCard({ data, curr }) {
+  if (!data || Object.keys(data).length === 0) return null;
+
+  const availableHorizons = Object.keys(data);
+  const [selectedHorizon, setSelectedHorizon] = useState(
+    availableHorizons.includes('3Y') ? '3Y' : availableHorizons[0]
+  );
+
+  const curData = data[selectedHorizon];
+  if (!curData) return null;
+
+  const {
+    months_count,
+    monthly_investment,
+    total_invested,
+    sip_value,
+    sip_gain_pct,
+    sip_xirr_pct,
+    lump_value,
+    lump_gain_pct,
+    lump_cagr,
+  } = curData;
+
+  const sipProfit = sip_value - total_invested;
+  const maxVal = Math.max(sip_value, lump_value, total_invested * 1.2, 1);
+  const investedW = Math.min(100, (total_invested / maxVal) * 100);
+  const sipW = Math.min(100, (sip_value / maxVal) * 100);
+  const lumpW = Math.min(100, (lump_value / maxVal) * 100);
+
+  return (
+    <div className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.06]">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <div className="flex items-center gap-2">
+          <div className="h-7 w-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+            <Coins className="h-3.5 w-3.5 text-violet-400" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+              Historical SIP vs Lump Sum
+            </p>
+            <p className="text-[9px] text-slate-500">
+              Realized returns investing {curr}{monthly_investment?.toLocaleString()}/mo on the 1st of each month
+            </p>
+          </div>
+        </div>
+
+        {/* Horizon Toggle */}
+        <div className="flex items-center rounded-lg bg-white/[0.04] p-0.5 border border-white/[0.06]">
+          {availableHorizons.map((h) => (
+            <button
+              key={h}
+              onClick={() => setSelectedHorizon(h)}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${
+                selectedHorizon === h
+                  ? 'bg-violet-500 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {h} ({data[h]?.months_count}m)
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Grid of SIP Performance */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+        <div className="rounded-lg p-2.5 bg-white/[0.02] border border-white/[0.04] text-center">
+          <p className="text-[8px] text-slate-500 uppercase tracking-wide">Total Invested</p>
+          <p className="text-xs sm:text-sm font-bold mt-0.5 text-slate-200">
+            {formatMoney(total_invested, curr)}
+          </p>
+          <p className="text-[8px] text-slate-500 mt-0.5">{months_count} installments</p>
+        </div>
+
+        <div className="rounded-lg p-2.5 bg-white/[0.02] border border-white/[0.04] text-center">
+          <p className="text-[8px] text-slate-500 uppercase tracking-wide">SIP Current Value</p>
+          <p className="text-xs sm:text-sm font-bold mt-0.5 text-emerald-400">
+            {formatMoney(sip_value, curr)}
+          </p>
+          <p className="text-[8px] text-emerald-400/80 mt-0.5">+{formatMoney(sipProfit, curr)}</p>
+        </div>
+
+        <div className="rounded-lg p-2.5 bg-white/[0.02] border border-white/[0.04] text-center">
+          <p className="text-[8px] text-slate-500 uppercase tracking-wide">SIP Total Gain</p>
+          <p className={`text-xs sm:text-sm font-bold mt-0.5 ${sip_gain_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {pct(sip_gain_pct)}
+          </p>
+          <p className="text-[8px] text-slate-500 mt-0.5">Absolute return</p>
+        </div>
+
+        <div className="rounded-lg p-2.5 bg-white/[0.02] border border-white/[0.04] text-center">
+          <p className="text-[8px] text-slate-500 uppercase tracking-wide">Annualized XIRR</p>
+          <p className={`text-xs sm:text-sm font-bold mt-0.5 ${sip_xirr_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {sip_xirr_pct != null ? `${sip_xirr_pct}%` : '–'}
+          </p>
+          <p className="text-[8px] text-slate-500 mt-0.5">Money-weighted rate</p>
+        </div>
+      </div>
+
+      {/* Lump Sum Comparison Visualizer */}
+      <div className="pt-3 border-t border-white/[0.04] space-y-2">
+        <div className="flex items-center justify-between text-[9px] text-slate-400 font-semibold mb-1">
+          <span>Wealth Accumulation Comparison</span>
+          <span className="text-[8px] text-slate-500">Invested {formatMoney(total_invested, curr)}</span>
+        </div>
+
+        {/* Invested bar */}
+        <div>
+          <div className="flex items-center justify-between text-[8px] text-slate-500 mb-0.5">
+            <span>Capital Invested</span>
+            <span>{formatMoney(total_invested, curr)}</span>
+          </div>
+          <div className="h-1.5 w-full bg-white/[0.04] rounded-full overflow-hidden">
+            <div className="h-full bg-slate-500/60 rounded-full" style={{ width: `${investedW}%` }} />
+          </div>
+        </div>
+
+        {/* SIP Value bar */}
+        <div>
+          <div className="flex items-center justify-between text-[8px] text-emerald-400 mb-0.5">
+            <span className="font-semibold">Monthly SIP Result</span>
+            <span className="font-bold">{formatMoney(sip_value, curr)} ({pct(sip_gain_pct)})</span>
+          </div>
+          <div className="h-1.5 w-full bg-white/[0.04] rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full" style={{ width: `${sipW}%` }} />
+          </div>
+        </div>
+
+        {/* Lump Sum Value bar */}
+        <div>
+          <div className="flex items-center justify-between text-[8px] text-sky-400 mb-0.5">
+            <span className="font-semibold">Day-1 Lump Sum Result</span>
+            <span className="font-bold">{formatMoney(lump_value, curr)} ({pct(lump_gain_pct)} | {lump_cagr != null ? `${lump_cagr}% CAGR` : ''})</span>
+          </div>
+          <div className="h-1.5 w-full bg-white/[0.04] rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-sky-500 to-indigo-400 rounded-full" style={{ width: `${lumpW}%` }} />
+          </div>
+        </div>
+      </div>
+
+      <p className="text-[8px] text-slate-500 mt-2 leading-relaxed">
+        💡 <strong>Key Takeaway:</strong> SIP averages out volatility and protects against market peaks. Lump sum yields higher returns during persistent bull markets, but carries higher timing risk.
+      </p>
+    </div>
+  );
+}
+
+
+// Liquidity & Execution Quality Card
+function LiquidityCard({ data, curr }) {
+  if (!data || !data.adv_30d) return null;
+
+  const {
+    adv_30d,
+    daily_turnover,
+    daily_turnover_display,
+    liquidity_grade,
+    liquidity_advice,
+    liquidity_color,
+  } = data;
+
+  const badgeStyle =
+    liquidity_color === 'emerald'
+      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+      : liquidity_color === 'amber'
+      ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+      : 'bg-rose-500/10 border-rose-500/30 text-rose-400';
+
+  return (
+    <div className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.06]">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <div className="h-7 w-7 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center">
+            <Activity className="h-3.5 w-3.5 text-sky-400" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+              Liquidity & Execution Quality
+            </p>
+            <p className="text-[9px] text-slate-500">
+              30-day trading activity and slippage assessment
+            </p>
+          </div>
+        </div>
+        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${badgeStyle}`}>
+          {liquidity_grade}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <div className="rounded-lg p-2.5 bg-white/[0.02] border border-white/[0.04]">
+          <p className="text-[8px] text-slate-500 uppercase tracking-wide">30-Day ADV (Volume)</p>
+          <p className="text-xs sm:text-sm font-bold mt-0.5 text-slate-200">
+            {Number(adv_30d).toLocaleString()} <span className="text-[9px] text-slate-500 font-normal">shares/day</span>
+          </p>
+        </div>
+        <div className="rounded-lg p-2.5 bg-white/[0.02] border border-white/[0.04]">
+          <p className="text-[8px] text-slate-500 uppercase tracking-wide">Daily Turnover</p>
+          <p className="text-xs sm:text-sm font-bold mt-0.5 text-slate-200">
+            {daily_turnover_display || formatMoney(daily_turnover, curr)} <span className="text-[9px] text-slate-500 font-normal">/day</span>
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-lg p-2 bg-white/[0.02] border border-white/[0.04] flex items-start gap-2">
+        <Zap className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+        <div className="text-[9px] text-slate-400 leading-relaxed">
+          <strong className="text-slate-300">Execution Guidance: </strong>
+          {liquidity_advice}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 // ─────────────────────────────────────────────────────────
 // Main ETF Panel
 // ─────────────────────────────────────────────────────────
@@ -428,7 +658,8 @@ export default function ETFLongTermPanel({ ticker }) {
   const { long_name, etf_meta, performance, health_checklist,
           health_score_label, sip_score, sip_label,
           yearly_returns, currency_symbol,
-          top_holdings, sector_exposure, rolling_returns } = data;
+          top_holdings, sector_exposure, rolling_returns,
+          historical_sip, liquidity } = data;
 
   const curr = currency_symbol || '₹';
 
@@ -527,11 +758,17 @@ export default function ETFLongTermPanel({ ticker }) {
         )}
       </div>
 
+      {/* Liquidity & Execution Quality */}
+      <LiquidityCard data={liquidity} curr={curr} />
+
       {/* 3-Year Rolling Returns Distribution */}
       <RollingReturnsCard data={rolling_returns} />
 
       {/* SIP Score */}
       <SIPMeter score={sip_score ?? 0} label={sip_label ?? ''} />
+
+      {/* Realized Historical SIP vs Lump Sum Backtester */}
+      <HistoricalSIPCard data={historical_sip} curr={curr} />
 
       {/* 6-Point Health Checklist */}
       <div className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.06]">

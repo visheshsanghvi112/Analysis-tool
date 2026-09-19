@@ -192,4 +192,38 @@ def test_advanced_news_endpoint_schema():
     assert "articles" in intel
 
 
+def test_etf_tracking_error_and_sip_computation():
+    from routers.analysis import _compute_tracking_error, _compute_xirr, _compute_historical_sip, _normalize_index_to_date
+    import pandas as pd
+    import numpy as np
 
+    # Test 1: Cross-timezone alignment for tracking error
+    dates_etf = pd.date_range("2024-01-01", periods=100, freq="B", tz="Asia/Kolkata")
+    dates_bench = pd.date_range("2024-01-01", periods=100, freq="B", tz="America/New_York")
+    
+    np.random.seed(42)
+    s_etf = pd.Series(np.random.normal(0.001, 0.01, 100), index=dates_etf)
+    s_bench = pd.Series(np.random.normal(0.001, 0.01, 100), index=dates_bench)
+
+    te = _compute_tracking_error(s_etf, s_bench)
+    assert te is not None
+    assert isinstance(te, float)
+    assert te > 0
+
+    # Test 2: XIRR computation
+    cf = [-1000.0, -1000.0, -1000.0, 3300.0]
+    dt = [pd.Timestamp("2023-01-01"), pd.Timestamp("2023-02-01"), pd.Timestamp("2023-03-01"), pd.Timestamp("2023-04-01")]
+    xirr = _compute_xirr(cf, dt)
+    assert xirr is not None
+    assert xirr > 0
+
+    # Test 3: Historical SIP simulation
+    price_series = pd.Series(
+        np.linspace(100, 200, 300),
+        index=pd.date_range("2023-01-01", periods=300, freq="B")
+    )
+    sip_res = _compute_historical_sip(price_series, monthly_amt=1000.0)
+    assert "1Y" in sip_res
+    assert sip_res["1Y"]["total_invested"] > 0
+    assert sip_res["1Y"]["sip_value"] > sip_res["1Y"]["total_invested"]
+    assert sip_res["1Y"]["sip_xirr_pct"] is not None
