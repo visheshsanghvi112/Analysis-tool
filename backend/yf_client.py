@@ -659,8 +659,11 @@ def get_fundamentals_data(ticker: str) -> dict:
                         "date": datetime.fromtimestamp(ts).strftime("%d %b %Y"),
                         "year": datetime.fromtimestamp(ts).year,
                         "amount": round(float(amount), 2),
+                        "_ts": ts,
                     })
-                div_history = sorted(div_history, key=lambda x: x["date"])
+                div_history = sorted(div_history, key=lambda x: x["_ts"])
+                for d in div_history:
+                    d.pop("_ts", None)
         except Exception:
             pass
 

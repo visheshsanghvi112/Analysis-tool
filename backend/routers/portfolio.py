@@ -354,10 +354,11 @@ def analyze_portfolio(req: PortfolioRequest):
         try:
             tickers_in  = list(returns_map.keys())
             ret_df      = pd.DataFrame(returns_map).dropna()
-            weights     = np.array([
-                next(h["weight_pct"] for h in holdings_out if h["ticker"] == t) / 100
+            raw_weights = np.array([
+                next(h["weight_pct"] for h in holdings_out if h["ticker"] == t) / 100.0
                 for t in tickers_in
             ])
+            weights = (raw_weights / raw_weights.sum()) if raw_weights.sum() > 0 else raw_weights
 
             cov_matrix  = ret_df.cov().values
             port_var    = float(weights @ cov_matrix @ weights)
@@ -716,7 +717,7 @@ def optimize_portfolio(req: PortfolioRequest):
     weights_current = []
     
     for tk in tickers:
-        h = next(item for item in req.holdings if item.ticker == tk)
+        h = next(item for item in req.holdings if (item.ticker or "").strip().upper() == tk)
         val = h.qty * current_prices[tk]
         total_val += val
         weights_current.append(val)

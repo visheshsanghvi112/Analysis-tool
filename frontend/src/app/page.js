@@ -276,6 +276,7 @@ export default function Dashboard() {
   // Asynchronously confirm ETF status from backend if not already matched
   useEffect(() => {
     if (!selectedTicker) {
+      setConfirmedETF(null);
       return;
     }
 
@@ -290,6 +291,8 @@ export default function Dashboard() {
             setConfirmedETF(true);
           } else if (data.longName && /\b(etf|bees)\b/i.test(data.longName)) {
             setConfirmedETF(true);
+          } else {
+            setConfirmedETF(false);
           }
         }
       })
@@ -300,6 +303,7 @@ export default function Dashboard() {
 
   const handleTickerSelect = useCallback((ticker) => {
     setIsLoading(true);
+    setConfirmedETF(null);
     setSelectedTicker(ticker);
     window.scrollTo({ top: 0 });
     setTimeout(() => setIsLoading(false), 400);

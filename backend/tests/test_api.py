@@ -227,3 +227,39 @@ def test_etf_tracking_error_and_sip_computation():
     assert sip_res["1Y"]["total_invested"] > 0
     assert sip_res["1Y"]["sip_value"] > sip_res["1Y"]["total_invested"]
     assert sip_res["1Y"]["sip_xirr_pct"] is not None
+
+
+def test_intraday_session_vwap_reset():
+    from routers.intraday import _calculate_vwap_and_bands
+    import pandas as pd
+    import numpy as np
+
+    # Two distinct trading days with large price jump
+    d1 = pd.date_range('2024-01-01 09:15', '2024-01-01 15:30', freq='5min')
+    d2 = pd.date_range('2024-01-02 09:15', '2024-01-02 15:30', freq='5min')
+    dates = d1.append(d2)
+
+    df = pd.DataFrame({
+        'High': [100.0] * len(d1) + [200.0] * len(d2),
+        'Low': [100.0] * len(d1) + [200.0] * len(d2),
+        'Close': [100.0] * len(d1) + [200.0] * len(d2),
+        'Volume': [1000] * len(dates)
+    }, index=dates)
+
+    vwap = _calculate_vwap_and_bands(df)['vwap']
+    # Day 1 start should be 100.0
+    assert abs(vwap[0] - 100.0) < 1e-4
+    # Day 2 start MUST reset to 200.0, not carry over Day 1's 100.0
+    assert abs(vwap[len(d1)] - 200.0) < 1e-4
+
+
+def test_bank_valuation_health_checklist():
+    from routers.analysis import calculate_dcf
+    res = calculate_dcf('HDFCBANK.NS')
+    assert res is not None
+    assert res['health_score'] >= 7
+    # Verify that ROA condition was appropriately set for banks
+    roa_item = next(item for item in res['health_checklist'] if item['metric'] == 'Return on Assets (ROA)')
+    assert roa_item['condition'] == '>= 1.0%'
+    assert roa_item['passed'] is True
+

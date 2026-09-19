@@ -8,6 +8,7 @@ from fastapi import APIRouter, Query, HTTPException
 
 from yf_client import get_history, get_quote, get_info, get_asset_type, get_etf_meta, get_etf_holdings
 from peer_data import get_peers
+from services.ticker_manager import SECTOR_MAP
 
 router = APIRouter(prefix="/api", tags=["analysis"])
 
@@ -196,6 +197,9 @@ def calculate_dcf(
         # Fetch underlying data fields with NaN/Inf sanitization
         market_cap = _clean_val(info.get("marketCap"))
         shares = _clean_val(info.get("sharesOutstanding")) or 0
+        if (not shares or shares <= 0) and market_cap and current_price and current_price > 0:
+            shares = market_cap / current_price
+
         eps = _clean_val(info.get("trailingEps"))
         book_value = _clean_val(info.get("bookValue"))
         pb = _clean_val(info.get("priceToBook"))
@@ -223,6 +227,12 @@ def calculate_dcf(
         ocf = _clean_val(info.get("operatingCashflow")) or 0.0
         rev = _clean_val(info.get("totalRevenue")) or 0.0
         net_income = _clean_val(info.get("netIncomeToCommon"))
+
+        # Detect banking and financial institutions
+        raw_symbol = ticker_clean.replace(".NS", "").replace(".BO", "")
+        sector_name = (info.get("sector") or SECTOR_MAP.get(raw_symbol) or "").strip()
+        industry_name = (info.get("industry") or "").strip()
+        is_financial = any(term.lower() in sector_name.lower() or term.lower() in industry_name.lower() for term in ["financial", "bank", "insurance", "lending", "nbfc"]) or any(kw in ticker_clean for kw in ["BANK", "FINANCE", "FINSERV", "BAJFINANCE", "MUTHOOT"])
 
         # Solvency / Debt to Equity handling (ensure ratio format)
         de_ratio = None
@@ -274,13 +284,21 @@ def calculate_dcf(
         else:
             health_checklist.append({"metric": "Return on Equity (ROE)", "value": "N/A", "condition": ">= 12%", "passed": False})
             
-        # 2. ROA Check
+        # 2. ROA Check (Banks operate with high financial leverage where ROA >= 1.0% is world-class)
         if roa is not None:
-            passed = roa >= 0.05
+            roa_req = 0.01 if is_financial else 0.05
+            cond_str = ">= 1.0%" if is_financial else ">= 5%"
+            passed = roa >= roa_req
             score += 1 if passed else 0
-            health_checklist.append({"metric": "Return on Assets (ROA)", "value": f"{round(roa*100, 2)}%", "condition": ">= 5%", "passed": passed})
+            health_checklist.append({
+                "metric": "Return on Assets (ROA)",
+                "value": f"{round(roa*100, 2)}%",
+                "condition": cond_str,
+                "passed": passed,
+                "note": "Banking benchmark: >= 1.0% is top tier" if is_financial else None
+            })
         else:
-            health_checklist.append({"metric": "Return on Assets (ROA)", "value": "N/A", "condition": ">= 5%", "passed": False})
+            health_checklist.append({"metric": "Return on Assets (ROA)", "value": "N/A", "condition": ">= 1.0%" if is_financial else ">= 5%", "passed": False})
             
         # 3. NPM Check
         if npm is not None:
@@ -291,7 +309,16 @@ def calculate_dcf(
             health_checklist.append({"metric": "Net Profit Margin", "value": "N/A", "condition": ">= 8%", "passed": False})
             
         # 4. Solvency Check (D/E ratio)
-        if de_ratio is not None:
+        if is_financial:
+            score += 1
+            health_checklist.append({
+                "metric": "Debt to Equity Ratio",
+                "value": "Regulated Institution",
+                "condition": "Capital Adequacy Compliant",
+                "passed": True,
+                "note": "Banks maintain statutory CAR/CRAR ratios rather than industrial debt metrics"
+            })
+        elif de_ratio is not None:
             passed = de_ratio <= 1.0
             score += 1 if passed else 0
             health_checklist.append({"metric": "Debt to Equity Ratio", "value": f"{round(de_ratio, 2)}x", "condition": "<= 1.0x", "passed": passed})
@@ -300,18 +327,33 @@ def calculate_dcf(
             score += 1
             
         # 5. Liquidity Check
-        if curr_ratio is not None:
+        if is_financial:
+            score += 1
+            health_checklist.append({
+                "metric": "Current Ratio",
+                "value": "Statutory LCR / SLR",
+                "condition": "Central Bank Regulated",
+                "passed": True,
+                "note": "Banks adhere to RBI/Fed Liquidity Coverage Ratios (LCR) instead of Current Ratio"
+            })
+        elif curr_ratio is not None:
             passed = curr_ratio >= 1.2
             score += 1 if passed else 0
             health_checklist.append({"metric": "Current Ratio", "value": f"{round(curr_ratio, 2)}x", "condition": ">= 1.2x", "passed": passed})
         else:
             health_checklist.append({"metric": "Current Ratio", "value": "N/A", "condition": ">= 1.2x", "passed": False})
             
-        # 6. Cash Flow Check (FCF)
-        passed_fcf = fcf > 0 or ocf > 0
-        score += 1 if passed_fcf else 0
-        fcf_val_str = f"{curr_sym}{round(fcf/1e9, 2)}B" if fcf else (f"{curr_sym}{round(ocf/1e9, 2)}B (OCF)" if ocf else "Negative/Zero")
-        health_checklist.append({"metric": "Free Cash Flow", "value": fcf_val_str, "condition": "> 0", "passed": passed_fcf})
+        # 6. Cash Flow Check (FCF / Net Income for banks)
+        if is_financial:
+            passed_fcf = (net_income is not None and net_income > 0)
+            score += 1 if passed_fcf else 0
+            fcf_val_str = f"{curr_sym}{round(net_income/1e9, 2)}B (Net Income)" if net_income else "Negative/Zero"
+            health_checklist.append({"metric": "Earnings Generation", "value": fcf_val_str, "condition": "> 0", "passed": passed_fcf})
+        else:
+            passed_fcf = fcf > 0 or ocf > 0
+            score += 1 if passed_fcf else 0
+            fcf_val_str = f"{curr_sym}{round(fcf/1e9, 2)}B" if fcf else (f"{curr_sym}{round(ocf/1e9, 2)}B (OCF)" if ocf else "Negative/Zero")
+            health_checklist.append({"metric": "Free Cash Flow", "value": fcf_val_str, "condition": "> 0", "passed": passed_fcf})
         
         # 7. Valuation (PE ratio check)
         if pe is not None:
@@ -355,21 +397,32 @@ def calculate_dcf(
             calculated_growth = max(0.05, min(0.20, rev_growth))
 
         # Default Cash Flow for DCF
-        default_dcf_flow = fcf
-        flow_type = "Free Cash Flow"
-        if default_dcf_flow <= 0:
-            if info.get("netIncomeToCommon") and info.get("netIncomeToCommon") > 0:
-                default_dcf_flow = info.get("netIncomeToCommon")
-                flow_type = "Net Income"
-            elif ocf > 0:
-                default_dcf_flow = ocf * 0.7
-                flow_type = "70% of Operating Cash Flow"
+        if is_financial:
+            if net_income and net_income > 0:
+                default_dcf_flow = net_income
+                flow_type = "Net Income (Financial Proxy)"
             elif rev > 0:
-                default_dcf_flow = rev * 0.06
-                flow_type = "6% of Revenue (Normalized Proxy)"
+                default_dcf_flow = rev * 0.15
+                flow_type = "15% of Revenue (Financial Proxy)"
             else:
-                default_dcf_flow = (current_price * shares * 0.04) if shares > 0 else 1000000000
-                flow_type = "Estimated 4% Equity Yield"
+                default_dcf_flow = (current_price * shares * 0.05) if shares > 0 else 1000000000
+                flow_type = "Estimated 5% Equity Yield"
+        else:
+            default_dcf_flow = fcf
+            flow_type = "Free Cash Flow"
+            if default_dcf_flow <= 0:
+                if info.get("netIncomeToCommon") and info.get("netIncomeToCommon") > 0:
+                    default_dcf_flow = info.get("netIncomeToCommon")
+                    flow_type = "Net Income"
+                elif ocf > 0:
+                    default_dcf_flow = ocf * 0.7
+                    flow_type = "70% of Operating Cash Flow"
+                elif rev > 0:
+                    default_dcf_flow = rev * 0.06
+                    flow_type = "6% of Revenue (Normalized Proxy)"
+                else:
+                    default_dcf_flow = (current_price * shares * 0.04) if shares > 0 else 1000000000
+                    flow_type = "Estimated 4% Equity Yield"
 
         return {
             "ticker": ticker_clean,
@@ -408,7 +461,7 @@ def calculate_dcf(
             "dupont": dupont,
             "health_score": score,
             "health_checklist": health_checklist,
-            "sector": info.get("sector"),
+            "sector": info.get("sector") or SECTOR_MAP.get(raw_symbol),
             "industry": info.get("industry"),
             "business_summary": info.get("longBusinessSummary"),
             "recommendation_key": info.get("recommendationKey"),

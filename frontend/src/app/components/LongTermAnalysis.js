@@ -166,9 +166,10 @@ export default function LongTermAnalysis({ ticker }) {
   if (!data) return null;
 
   const currentPrice = data.current_price || 0;
-  const marginOfSafety = dcfResults 
+  const rawMos = dcfResults && dcfResults.intrinsicValue > 0
     ? ((dcfResults.intrinsicValue - currentPrice) / dcfResults.intrinsicValue) * 100
-    : 0;
+    : (dcfResults ? -100 : 0);
+  const marginOfSafety = Number.isFinite(rawMos) ? rawMos : -100;
 
   // Compute helper health colors
   const getHealthScoreColor = (score) => {

@@ -47,20 +47,46 @@ def _calculate_vwap_and_bands(df: pd.DataFrame) -> Dict[str, np.ndarray]:
     """
     Computes session-anchored Volume-Weighted Average Price (VWAP)
     and Standard Deviation Volatility Bands (±1σ, ±2σ, ±3σ).
+    Resets at each new trading session/day so multi-day data does not contaminate today's VWAP.
     """
-    tp = (df["High"] + df["Low"] + df["Close"]) / 3.0
+    if df.empty:
+        empty_arr = np.array([])
+        return {
+            "vwap": empty_arr, "upper_1": empty_arr, "lower_1": empty_arr,
+            "upper_2": empty_arr, "lower_2": empty_arr,
+            "upper_3": empty_arr, "lower_3": empty_arr,
+        }
+
+    tp = ((df["High"] + df["Low"] + df["Close"]) / 3.0).values
     vol = df["Volume"].fillna(0).values
-    tp_vals = tp.values
 
-    cum_vol = np.cumsum(vol)
-    cum_vp = np.cumsum(tp_vals * vol)
+    # Identify session boundaries by calendar date
+    dates = pd.to_datetime(df.index).date
+    n = len(df)
+    vwap = np.zeros(n)
+    vwap_std = np.zeros(n)
 
-    vwap = np.where(cum_vol > 0, cum_vp / np.maximum(cum_vol, 1e-9), tp_vals)
+    unique_dates, split_indices = np.unique(dates, return_index=True)
+    session_starts = list(split_indices) + [n]
 
-    # Cumulative variance of typical price around expanding VWAP
-    cum_vol_sq_diff = np.cumsum(vol * (tp_vals - vwap) ** 2)
-    vwap_variance = np.where(cum_vol > 0, cum_vol_sq_diff / np.maximum(cum_vol, 1e-9), 0.0)
-    vwap_std = np.sqrt(np.maximum(vwap_variance, 0.0))
+    for s_idx in range(len(session_starts) - 1):
+        start = session_starts[s_idx]
+        end = session_starts[s_idx + 1]
+
+        s_tp = tp[start:end]
+        s_vol = vol[start:end]
+
+        cum_vol = np.cumsum(s_vol)
+        cum_vp = np.cumsum(s_tp * s_vol)
+
+        s_vwap = np.where(cum_vol > 0, cum_vp / np.maximum(cum_vol, 1e-9), s_tp)
+
+        cum_vol_sq_diff = np.cumsum(s_vol * (s_tp - s_vwap) ** 2)
+        s_var = np.where(cum_vol > 0, cum_vol_sq_diff / np.maximum(cum_vol, 1e-9), 0.0)
+        s_std = np.sqrt(np.maximum(s_var, 0.0))
+
+        vwap[start:end] = s_vwap
+        vwap_std[start:end] = s_std
 
     return {
         "vwap": vwap,
@@ -280,10 +306,18 @@ def _calculate_pivots(daily_df: pd.DataFrame, today_date = None) -> Dict[str, An
 
 def _calculate_orb(df: pd.DataFrame, interval: str) -> Dict[str, Any]:
     """
-    Computes Opening Range Breakout (ORB) boundaries for 15m and 30m intervals.
+    Computes Opening Range Breakout (ORB) boundaries for 15m and 30m intervals
+    anchored to the CURRENT (latest) trading session.
     """
     if df.empty:
         return {"high_15m": 0.0, "low_15m": 0.0, "status": "INSIDE_RANGE", "high_30m": 0.0, "low_30m": 0.0}
+
+    # Extract the latest session's data
+    dates = pd.to_datetime(df.index).date
+    latest_date = dates[-1]
+    today_df = df[dates == latest_date]
+    if today_df.empty:
+        today_df = df
 
     candle_minutes = 5
     if "1m" in interval:
@@ -302,17 +336,17 @@ def _calculate_orb(df: pd.DataFrame, interval: str) -> Dict[str, Any]:
     count_15m = max(1, int(15 / candle_minutes))
     count_30m = max(1, int(30 / candle_minutes))
 
-    orb_15m_slice = df.iloc[:min(len(df), count_15m)]
-    orb_30m_slice = df.iloc[:min(len(df), count_30m)]
+    orb_15m_slice = today_df.iloc[:min(len(today_df), count_15m)]
+    orb_30m_slice = today_df.iloc[:min(len(today_df), count_30m)]
 
     high_15m = float(orb_15m_slice["High"].max())
     low_15m = float(orb_15m_slice["Low"].min())
     high_30m = float(orb_30m_slice["High"].max())
     low_30m = float(orb_30m_slice["Low"].min())
 
-    curr_close = float(df["Close"].iloc[-1])
+    curr_close = float(today_df["Close"].iloc[-1])
 
-    if len(df) < count_15m:
+    if len(today_df) < count_15m:
         status = "FORMING_RANGE"
     elif curr_close > high_15m:
         status = "BULLISH_BREAKOUT"
@@ -327,8 +361,8 @@ def _calculate_orb(df: pd.DataFrame, interval: str) -> Dict[str, Any]:
         "high_30m": _safe_float(high_30m),
         "low_30m": _safe_float(low_30m),
         "status": status,
-        "pct_from_15m_high": _safe_float(((curr_close - high_15m) / high_15m) * 100),
-        "pct_from_15m_low": _safe_float(((curr_close - low_15m) / low_15m) * 100),
+        "pct_from_15m_high": _safe_float(((curr_close - high_15m) / high_15m) * 100) if high_15m > 0 else 0.0,
+        "pct_from_15m_low": _safe_float(((curr_close - low_15m) / low_15m) * 100) if low_15m > 0 else 0.0,
     }
 
 
