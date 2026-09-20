@@ -16,6 +16,7 @@ import {
   Shield,
   ChevronRight,
   Bookmark,
+  Scale,
 } from 'lucide-react';
 
 export default function SideNavDrawer({ isOpen, onClose, onOpenSearch, onOpenWatchlist, currentTicker }) {
@@ -90,6 +91,18 @@ export default function SideNavDrawer({ isOpen, onClose, onOpenSearch, onOpenWat
       badge: null,
     },
   ];
+
+  const handleCommitteeClick = () => {
+    onClose();
+    if (pathname === '/') {
+      const el = document.getElementById('investment-committee-section');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+        return;
+      }
+    }
+    window.location.assign(`/${tickerParam}#investment-committee-section`);
+  };
 
   const handleSipClick = () => {
     onClose();
@@ -272,6 +285,25 @@ export default function SideNavDrawer({ isOpen, onClose, onOpenSearch, onOpenWat
                       Personal Watchlist
                     </div>
                     <div className="text-[10px] text-slate-500">Track pinned tickers &amp; 1-click export</div>
+                  </div>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-300 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+
+              {/* Investment Committee Desk */}
+              <button
+                onClick={handleCommitteeClick}
+                className="w-full text-left flex items-center justify-between px-3 py-2.5 rounded-xl text-slate-300 hover:text-white hover:bg-white/[0.04] transition cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-1.5 rounded-lg bg-white/[0.04] text-indigo-400 group-hover:text-indigo-300">
+                    <Scale className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-slate-200 group-hover:text-white">
+                      Investment Committee Desk
+                    </div>
+                    <div className="text-[10px] text-slate-500">Multi-desk consensus &amp; CRO gate</div>
                   </div>
                 </div>
                 <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-300 group-hover:translate-x-0.5 transition-transform" />

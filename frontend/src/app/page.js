@@ -21,7 +21,7 @@ import InvestmentCommitteeDesk from './components/InvestmentCommitteeDesk';
 import {
   TrendingUp, Brain, Newspaper, PieChart,
   Activity, ArrowRight, CheckCircle, Clock, AlertTriangle,
-  LayoutGrid, BarChart2, Trophy, FileText, Star,
+  LayoutGrid, BarChart2, Trophy, FileText, Star, Scale,
 } from 'lucide-react';
 import InfoBadge from './components/InfoBadge';
 import { API_BASE_URL } from './config';
@@ -476,6 +476,25 @@ export default function Dashboard() {
                   <Activity style={{ width: '13px', height: '13px' }} />
                   <span>⚡ Intraday Trading Desk</span>
                 </Link>
+                <button
+                  onClick={() => {
+                    const el = document.getElementById('investment-committee-section');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    padding: '6px 13px', background: 'rgba(99, 102, 241, 0.1)',
+                    border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: '7px',
+                    color: '#a5b4fc', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.18)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.1)'}
+                  title="Jump to Multi-Desk Investment Committee"
+                >
+                  <Scale style={{ width: '13px', height: '13px' }} />
+                  <span>🏛️ Committee Desk</span>
+                </button>
                 <button
                   onClick={() => setReportModalOpen(true)}
                   style={{
