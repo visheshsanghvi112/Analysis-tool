@@ -17,6 +17,7 @@ import MonteCarloSimulation from './components/MonteCarloSimulation';
 import FundamentalsAnalysis from './components/FundamentalsAnalysis';
 import SIPCalculator from './components/SIPCalculator';
 import ResearchReportModal from './components/ResearchReportModal';
+import InvestmentCommitteeDesk from './components/InvestmentCommitteeDesk';
 import {
   TrendingUp, Brain, Newspaper, PieChart,
   Activity, ArrowRight, CheckCircle, Clock, AlertTriangle,
@@ -510,6 +511,9 @@ export default function Dashboard() {
                     <AdvancedNews ticker={selectedTicker} />
                   </div>
                 </div>
+              </div>
+              <div id="investment-committee-section">
+                <InvestmentCommitteeDesk ticker={selectedTicker} />
               </div>
               <PortfolioMetrics ticker={selectedTicker} />
               <Backtesting ticker={selectedTicker} />
