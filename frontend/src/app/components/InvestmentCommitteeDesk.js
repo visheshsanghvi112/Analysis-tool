@@ -384,6 +384,64 @@ export default function InvestmentCommitteeDesk({ ticker }) {
             </div>
           </div>
 
+          {/* ── Thesis Invalidation Triggers (Evidence-Driven) ─────── */}
+          {data.thesis_invalidation_triggers && data.thesis_invalidation_triggers.length > 0 && (
+            <div className="rounded-2xl border border-white/[0.08] bg-[#0c1017]/90 p-5 shadow-lg relative overflow-hidden">
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  <h4 className="text-xs font-black uppercase tracking-wider text-white">
+                    Thesis Invalidation Triggers (Evidence-Driven)
+                  </h4>
+                  <InfoBadge
+                    title="Thesis Invalidation Triggers"
+                    what="Deterministic mathematical thresholds that automatically invalidate the committee's thesis. Derived strictly from verified metrics (session VWAP, Supertrend, ORB range, CRO risk gate)."
+                    why="Ensures capital protection by defining explicit stop criteria before market entry, rather than relying on discretionary exit rules."
+                    interpretation="If any trigger is breached, the thesis is invalidated and trade risk must be eliminated or reduced."
+                  />
+                </div>
+                <span className="text-[10px] font-mono text-slate-400 hidden sm:inline">
+                  Deterministic Guardrails
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {data.thesis_invalidation_triggers.map((trig, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded-xl border flex items-start gap-2.5 transition ${
+                      trig.severity === 'CRITICAL'
+                        ? 'bg-rose-500/10 border-rose-500/30 text-rose-200'
+                        : trig.severity === 'HIGH'
+                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
+                        : 'bg-white/[0.02] border-white/[0.06] text-slate-300'
+                    }`}
+                  >
+                    <div className={`p-1.5 rounded-lg shrink-0 ${
+                      trig.severity === 'CRITICAL' ? 'bg-rose-500/20 text-rose-400' :
+                      trig.severity === 'HIGH' ? 'bg-amber-500/20 text-amber-400' :
+                      'bg-white/[0.05] text-slate-400'
+                    }`}>
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
+                        <span className="text-[10px] font-mono uppercase font-bold tracking-wider opacity-80">
+                          {trig.type?.replace(/_/g, ' ') || 'TRIGGER'}
+                        </span>
+                        <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-black/40 border border-white/10">
+                          {trig.severity}
+                        </span>
+                      </div>
+                      <p className="text-xs font-semibold leading-snug">
+                        {trig.condition}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* ── Active Conflict Matrix Alerts ───────────────────── */}
           {active_conflicts.length > 0 ? (
             <div className="space-y-3">

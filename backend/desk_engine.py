@@ -764,6 +764,117 @@ def calculate_trade_geometry(ctx: Dict[str, Any], risk_gate: RiskGateResult) -> 
     }
 
 
+def build_thesis_invalidation_triggers(
+    ctx: Dict[str, Any],
+    committee_state: str,
+    action_state: str,
+    risk: RiskGateResult,
+) -> List[Dict[str, Any]]:
+    """
+    Constructs deterministic thesis invalidation triggers from actual available evidence.
+    Does NOT invent levels when underlying metrics are missing.
+    """
+    triggers: List[Dict[str, Any]] = []
+
+    vwap = _num(ctx.get("vwap"))
+    supertrend = ctx.get("supertrend_direction")
+    orb = ctx.get("orb_status")
+    ema21 = _num(ctx.get("ema21"))
+    price = _num(ctx.get("price"))
+
+    if committee_state == "BULLISH" or action_state in ("LONG_BIAS", "WAIT"):
+        if vwap is not None:
+            triggers.append({
+                "condition": f"Price closes below session VWAP ({round(vwap, 2)})",
+                "metric": "vwap",
+                "level": round(vwap, 2),
+                "type": "LEVEL_BREACH",
+                "severity": "CRITICAL" if action_state == "LONG_BIAS" else "HIGH",
+            })
+        if supertrend is not None and str(supertrend).upper() == "BULLISH":
+            triggers.append({
+                "condition": "Supertrend flips BEARISH",
+                "metric": "supertrend_direction",
+                "level": None,
+                "type": "STATE_REVERSAL",
+                "severity": "HIGH",
+            })
+        if orb is not None and str(orb).upper() == "BULLISH_BREAKOUT":
+            triggers.append({
+                "condition": "ORB breakout fails (price pulls back into opening range)",
+                "metric": "orb_status",
+                "level": None,
+                "type": "BREAKOUT_FAILURE",
+                "severity": "HIGH",
+            })
+        if ema21 is not None and price is not None and price >= ema21:
+            triggers.append({
+                "condition": f"Loss of EMA21 dynamic support ({round(ema21, 2)})",
+                "metric": "ema21",
+                "level": round(ema21, 2),
+                "type": "LEVEL_BREACH",
+                "severity": "MEDIUM",
+            })
+        triggers.append({
+            "condition": "CRO risk gate triggers VETO (liquidity breach or extreme volatility)",
+            "metric": "risk_gate",
+            "level": None,
+            "type": "RISK_VETO",
+            "severity": "CRITICAL",
+        })
+    elif committee_state == "BEARISH" or action_state == "SHORT_BIAS":
+        if vwap is not None:
+            triggers.append({
+                "condition": f"Price closes above session VWAP ({round(vwap, 2)})",
+                "metric": "vwap",
+                "level": round(vwap, 2),
+                "type": "LEVEL_BREACH",
+                "severity": "CRITICAL",
+            })
+        if supertrend is not None and str(supertrend).upper() == "BEARISH":
+            triggers.append({
+                "condition": "Supertrend flips BULLISH",
+                "metric": "supertrend_direction",
+                "level": None,
+                "type": "STATE_REVERSAL",
+                "severity": "HIGH",
+            })
+        if orb is not None and str(orb).upper() == "BEARISH_BREAKDOWN":
+            triggers.append({
+                "condition": "ORB breakdown fails (price re-enters opening range)",
+                "metric": "orb_status",
+                "level": None,
+                "type": "BREAKOUT_FAILURE",
+                "severity": "HIGH",
+            })
+        if ema21 is not None and price is not None and price <= ema21:
+            triggers.append({
+                "condition": f"Reclaim of EMA21 dynamic resistance ({round(ema21, 2)})",
+                "metric": "ema21",
+                "level": round(ema21, 2),
+                "type": "LEVEL_BREACH",
+                "severity": "MEDIUM",
+            })
+        triggers.append({
+            "condition": "CRO risk gate triggers VETO",
+            "metric": "risk_gate",
+            "level": None,
+            "type": "RISK_VETO",
+            "severity": "CRITICAL",
+        })
+    else:
+        # CONFLICTED / INSUFFICIENT_DATA
+        triggers.append({
+            "condition": "Committee thesis is currently conflicted or data is insufficient; resolution of active desk conflicts required before directional trade entry",
+            "metric": "consensus",
+            "level": None,
+            "type": "CONFIRMATION_PENDING",
+            "severity": "INFO",
+        })
+
+    return triggers
+
+
 def evaluate_committee(ctx: Dict[str, Any]) -> Dict[str, Any]:
     """
     Evaluate the supplied canonical snapshot.
@@ -847,8 +958,11 @@ def evaluate_committee(ctx: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     geometry = calculate_trade_geometry(normalized, risk)
+    invalidation_triggers = build_thesis_invalidation_triggers(
+        normalized, committee_state, action_state, risk
+    )
 
-    return {
+    result = {
         "engine": "stockiq_deterministic_multidesk",
         "engine_version": "1.0.0",
         "deterministic": True,
@@ -867,6 +981,7 @@ def evaluate_committee(ctx: Dict[str, Any]) -> Dict[str, Any]:
         "conflict_matrix": [asdict(c) for c in conflicts],
         "active_conflicts": [asdict(c) for c in top_conflicts],
         "trade_geometry": geometry,
+        "thesis_invalidation_triggers": invalidation_triggers,
         "audit": {
             "input_keys": sorted(normalized.keys()),
             "missing_fields_by_desk": {
@@ -881,10 +996,18 @@ def evaluate_committee(ctx: Dict[str, Any]) -> Dict[str, Any]:
         },
     }
 
+    if "provenance" in normalized:
+        result["provenance"] = normalized["provenance"]
+    if "market_state" in normalized:
+        result["market_state"] = normalized["market_state"]
+
+    return result
+
 
 __all__ = [
     "DeskContext",
     "build_conflict_matrix",
+    "build_thesis_invalidation_triggers",
     "calculate_trade_geometry",
     "evaluate_committee",
     "evaluate_derivatives_desk",

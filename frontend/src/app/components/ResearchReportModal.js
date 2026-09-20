@@ -15,7 +15,8 @@ import {
   ExternalLink,
   Target,
   Scale,
-  ShieldCheck
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
@@ -413,6 +414,26 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
                       </div>
                     </div>
                   </div>
+
+                  {/* Thesis Invalidation Triggers (Evidence-Driven) */}
+                  {desk.thesis_invalidation_triggers && desk.thesis_invalidation_triggers.length > 0 && (
+                    <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 mb-3 print:border-slate-200">
+                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3 h-3 text-amber-400" />
+                        Thesis Invalidation Triggers (Evidence-Driven)
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                        {desk.thesis_invalidation_triggers.map((trigger, idx) => (
+                          <div key={idx} className="flex items-start gap-1.5 bg-black/20 p-1.5 rounded border border-white/[0.04] print:border-slate-200">
+                            <span className="text-amber-400 font-bold">•</span>
+                            <span className="text-slate-300 print:text-black">
+                              {trigger.condition}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* CRO Gate & Trade Geometry Row */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-white/[0.04] print:border-slate-200 text-center">
