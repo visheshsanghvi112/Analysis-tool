@@ -270,7 +270,7 @@ def evaluate_technical_desk(ctx: Dict[str, Any]) -> DeskResult:
         if rsi >= 80:
             flags.append("EXTREME_RSI")
             points -= 1
-            evidence.append({"factor": "RSI", "status": "EXTENDED", "value": round(rsi, 2), "detail": "RSI is >= 80; trend and extension are separated.")
+            evidence.append({"factor": "RSI", "status": "EXTENDED", "value": round(rsi, 2), "detail": "RSI is >= 80; trend and extension are separated."})
         elif rsi >= 55:
             points += 1
             evidence.append({"factor": "RSI", "status": "BULLISH_MOMENTUM", "value": round(rsi, 2), "detail": "RSI is above 55 without the extreme-extension flag."})
