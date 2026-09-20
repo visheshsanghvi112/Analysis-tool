@@ -8,11 +8,13 @@ and maps it into the canonical DeskContext consumed by desk_engine.
 Data Integrity Guarantees:
 - Zero plausible-looking fake defaults.
 - Intraday horizon consumes canonical 5m candles and session-anchored VWAP.
-- Supertrend uses canonical ATR(10, 3) direction, never EMA20 proxy.
+- Dual context: Intraday execution technicals (5m) + Daily risk regime (1y).
+- Supertrend uses canonical Welles Wilder ATR(10, 3) direction, never EMA20 proxy.
 - ORB uses canonical 15m opening range, never defaulting to INSIDE_RANGE.
-- Quote freshness derives from live quote regularMarketTime, not daily bar index.
-- Market session state is timezone-aware and exchange-holiday aware.
-- Fair value uses canonical DCF/DDM without synthetic cash flow shortcuts.
+- Quote freshness derives from live quote regularMarketTime or price_date.
+- Market session state is timezone-aware and exchange-holiday aware (2026 NSE/US).
+- Fair value uses canonical DCF/DDM without synthetic cash flow shortcuts;
+  OCF is labeled as proxy and not masqueraded as FCFF DCF.
 - P/E and EV/EBITDA percentiles are None until empirical distributions exist.
 - Historical win rate and Kelly are None until empirical setup profiles exist.
 - Derivatives exclude model approximations from empirical evidence.
@@ -67,13 +69,19 @@ def _calculate_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     return tr.rolling(period).mean()
 
 
-def _parse_quote_timestamp(quote: Dict[str, Any]) -> tuple[Optional[str], Optional[float]]:
+def _parse_quote_timestamp(quote: Dict[str, Any]) -> tuple[Optional[str], Optional[float], str]:
     """
-    Extracts regularMarketTime or price_date from quote and computes ISO string & age in seconds.
+    Extracts regularMarketTime or price_date from quote and computes ISO string, age in seconds,
+    and the exact source field used.
     """
-    raw_time = quote.get("regularMarketTime") or quote.get("price_date")
+    raw_time = quote.get("regularMarketTime")
+    source = "regularMarketTime"
     if raw_time is None:
-        return None, None
+        raw_time = quote.get("price_date")
+        source = "price_date"
+
+    if raw_time is None:
+        return None, None, "none"
 
     now_utc = datetime.now(timezone.utc)
     try:
@@ -86,12 +94,12 @@ def _parse_quote_timestamp(quote: Dict[str, Any]) -> tuple[Optional[str], Option
         elif isinstance(raw_time, datetime):
             dt = raw_time if raw_time.tzinfo else raw_time.replace(tzinfo=timezone.utc)
         else:
-            return None, None
+            return None, None, "none"
 
         age_seconds = max(0.0, (now_utc - dt).total_seconds())
-        return dt.isoformat(), round(age_seconds, 1)
+        return dt.isoformat(), round(age_seconds, 1), source
     except Exception:
-        return None, None
+        return None, None, "none"
 
 
 def _parse_bar_timestamp(df: pd.DataFrame) -> tuple[Optional[str], Optional[float]]:
@@ -135,7 +143,7 @@ def build_canonical_market_state(
     current_price = _safe_float(
         quote.get("price") or info.get("currentPrice") or info.get("regularMarketPrice")
     )
-    quote_as_of, quote_age_seconds = _parse_quote_timestamp(quote)
+    quote_as_of, quote_age_seconds, quote_source = _parse_quote_timestamp(quote)
 
     # 3. Candles & Technical Indicators
     intraday_state: Dict[str, Any] = {}
@@ -144,7 +152,8 @@ def build_canonical_market_state(
     bar_age_seconds: Optional[float] = None
 
     if horizon == "intraday":
-        # P0: High-resolution 5m candles for intraday
+        # P0: Dual-Horizon Intraday Context
+        # A) High-resolution 5m candles for intraday execution indicators
         df_intraday = get_history(ticker_clean, period="5d", interval="5m")
         if df_intraday is not None and not df_intraday.empty:
             if isinstance(df_intraday.columns, pd.MultiIndex):
@@ -161,6 +170,47 @@ def build_canonical_market_state(
                 intraday_state["vwap"] = snapshot.get("session_vwap")
                 if current_price is None or current_price <= 0:
                     current_price = snapshot.get("price")
+
+        # B) Daily candles for higher-timeframe CRO risk context (vol regime, max drawdown, momentum)
+        df_daily = get_history(ticker_clean, period="1y", interval="1d")
+        if df_daily is not None and not df_daily.empty and len(df_daily) >= 20:
+            if isinstance(df_daily.columns, pd.MultiIndex):
+                df_daily.columns = [c[0] for c in df_daily.columns]
+            close = df_daily["Close"]
+            ema20_val = _safe_float(close.ewm(span=20, adjust=False).mean().iloc[-1])
+            atr_series = _calculate_atr(df_daily)
+            daily_atr = _safe_float(atr_series.iloc[-1])
+
+            momentum_30d = None
+            if len(close) >= 22 and close.iloc[-22] > 0:
+                momentum_30d = _safe_float((close.iloc[-1] / close.iloc[-22] - 1.0) * 100.0)
+
+            ref_p = current_price if current_price else _safe_float(close.iloc[-1])
+            price_vs_ema20_atr = None
+            if ref_p and ema20_val and daily_atr and daily_atr > 0:
+                price_vs_ema20_atr = _safe_float((ref_p - ema20_val) / daily_atr)
+
+            returns = close.pct_change().dropna()
+            rolling_vol = returns.rolling(20).std() * np.sqrt(252) * 100.0
+            current_vol = _safe_float(rolling_vol.iloc[-1])
+            vol_percentile = None
+            if current_vol is not None and len(rolling_vol.dropna()) > 30:
+                vol_min = rolling_vol.min()
+                vol_max = rolling_vol.max()
+                if vol_max > vol_min:
+                    vol_percentile = _safe_float(((current_vol - vol_min) / (vol_max - vol_min)) * 100.0)
+
+            cum_ret = (1.0 + returns).cumprod()
+            rolling_max = cum_ret.expanding().max()
+            dd_series = (cum_ret - rolling_max) / rolling_max
+            max_drawdown = _safe_float(dd_series.min() * 100.0)
+
+            daily_state = {
+                "momentum_30d_pct": momentum_30d,
+                "price_vs_ema20_atr": price_vs_ema20_atr,
+                "volatility_percentile": vol_percentile,
+                "max_drawdown_pct": max_drawdown,
+            }
     else:
         # P0: Daily candles for swing and long_term
         df_daily = get_history(ticker_clean, period="1y", interval="1d")
@@ -263,7 +313,7 @@ def build_canonical_market_state(
         "quote": {
             "as_of": quote_as_of,
             "age_seconds": quote_age_seconds,
-            "source": "regularMarketTime",
+            "source": quote_source,
             "status": "OK" if quote_as_of else "MISSING_TIMESTAMP",
         },
         "bars": {
@@ -282,6 +332,7 @@ def build_canonical_market_state(
         "valuation": {
             "methodology": val_result.methodology,
             "data_status": val_result.data_status,
+            "assumption_status": val_result.assumption_status,
             "valuation_status": val_result.valuation_status,
             "reason": val_result.valuation_reason,
             "source": "valuation_service",
@@ -300,9 +351,10 @@ def build_canonical_market_state(
     }
 
     if horizon == "intraday" and intraday_state:
+        vwap_as_of = intraday_state.get("bar_as_of") or intraday_state.get("as_of") or bar_as_of
         provenance["session_vwap"] = {
             "value": intraday_state.get("vwap"),
-            "as_of": intraday_state.get("as_of"),
+            "as_of": vwap_as_of,
             "source": "session_anchored_vwap",
             "status": "OK" if intraday_state.get("vwap") is not None else "UNAVAILABLE",
         }
@@ -310,11 +362,13 @@ def build_canonical_market_state(
             "direction": intraday_state.get("supertrend_direction"),
             "period": 10,
             "multiplier": 3,
-            "source": "canonical_supertrend_atr",
+            "as_of": vwap_as_of,
+            "source": "canonical_supertrend_wilder_atr",
             "status": "OK" if intraday_state.get("supertrend_direction") is not None else "UNAVAILABLE",
         }
         provenance["orb"] = {
             "status": intraday_state.get("orb_status"),
+            "as_of": vwap_as_of,
             "source": "opening_range_breakout_15m",
             "status_flag": "OK" if intraday_state.get("orb_status") is not None else "INSUFFICIENT_SESSION_DATA",
         }
@@ -331,7 +385,7 @@ def build_canonical_market_state(
             "price": current_price,
             "as_of": quote_as_of,
             "age_seconds": quote_age_seconds,
-            "source": "regularMarketTime" if quote_as_of else "none",
+            "source": quote_source,
         },
         "bars": {
             "interval": "5m" if horizon == "intraday" else "1d",
@@ -400,13 +454,12 @@ def build_desk_context(
         supertrend_dir = intraday.get("supertrend_direction")
         orb_status_val = intraday.get("orb_status")
         rvol_val = intraday.get("rvol")
-        momentum_30d = None
-        price_vs_ema20_atr = None
-        vol_percentile = None
-        max_drawdown = None
-        delta_absorption = False
-        if rvol_val and rvol_val > 1.5 and rsi14_val and rsi14_val <= 30:
-            delta_absorption = True
+        delta_absorption = intraday.get("delta_absorption", False)
+        # Higher-timeframe daily risk metrics preserved for intraday CRO gate
+        momentum_30d = daily.get("momentum_30d_pct")
+        price_vs_ema20_atr = daily.get("price_vs_ema20_atr")
+        vol_percentile = daily.get("volatility_percentile")
+        max_drawdown = daily.get("max_drawdown_pct")
     else:
         # Swing / Long Term
         vwap_val = None  # P0: Do NOT call rolling 20-day price "VWAP"

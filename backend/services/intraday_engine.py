@@ -86,9 +86,11 @@ def calculate_session_vwap_and_bands(df: pd.DataFrame) -> Dict[str, np.ndarray]:
 
         s_vwap = np.where(cum_vol > 0, cum_vp / np.maximum(cum_vol, 1e-9), s_tp)
 
-        cum_vol_sq_diff = np.cumsum(s_vol * (s_tp - s_vwap) ** 2)
-        s_var = np.where(cum_vol > 0, cum_vol_sq_diff / np.maximum(cum_vol, 1e-9), 0.0)
-        s_std = np.sqrt(np.maximum(s_var, 0.0))
+        # Canonical Volume-Weighted Variance: Var(X) = E_w[X^2] - (E_w[X])^2
+        cum_vp2 = np.cumsum(s_vol * (s_tp ** 2))
+        s_mean_sq = np.where(cum_vol > 0, cum_vp2 / np.maximum(cum_vol, 1e-9), s_tp ** 2)
+        s_var = np.maximum(0.0, s_mean_sq - (s_vwap ** 2))
+        s_std = np.sqrt(s_var)
 
         vwap[start:end] = s_vwap
         vwap_std[start:end] = s_std
@@ -106,7 +108,7 @@ def calculate_session_vwap_and_bands(df: pd.DataFrame) -> Dict[str, np.ndarray]:
 
 def calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float = 3.0) -> Dict[str, np.ndarray]:
     """
-    Computes institutional Supertrend indicator with ATR trailing stop series.
+    Computes institutional Supertrend indicator with Welles Wilder ATR trailing stop series.
     Direction: 1 for BULLISH, -1 for BEARISH.
     """
     n = len(df)
@@ -117,14 +119,8 @@ def calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float =
     l = df["Low"].values
     c = df["Close"].values
 
-    tr1 = h - l
-    tr2 = np.abs(h - np.roll(c, 1))
-    tr3 = np.abs(l - np.roll(c, 1))
-    tr2[0] = tr1[0]
-    tr3[0] = tr1[0]
-    tr = np.maximum(tr1, np.maximum(tr2, tr3))
-
-    atr = pd.Series(tr).rolling(period, min_periods=1).mean().values
+    # Canonical Welles Wilder ATR smoothing
+    atr = calculate_atr(df, period=period)
 
     hl2 = (h + l) / 2.0
     basic_ub = hl2 + multiplier * atr
@@ -331,6 +327,7 @@ def calculate_intraday_snapshot(
     # ATR (14)
     atr_vals = calculate_atr(df_synced, period=14)
     curr_atr = _safe_float(atr_vals[-1]) if len(atr_vals) > 0 else None
+    atr_pct = _safe_float((curr_atr / quote_price * 100.0) if (curr_atr and quote_price and quote_price > 0) else None)
 
     # RVOL (Volume vs 20-period Volume MA)
     vol_ma20 = volume.rolling(20).mean().iloc[-1]
@@ -367,8 +364,10 @@ def calculate_intraday_snapshot(
         "ema200": ema200,
         "rsi14": curr_rsi,
         "atr": curr_atr,
+        "atr_pct": atr_pct,
         "rvol": curr_rvol,
         "delta_absorption": delta_absorption,
         "bar_as_of": str(last_bar_dt),
+        "as_of": str(last_bar_dt),
         "bar_age_seconds": max(0.0, bar_age_sec),
     }

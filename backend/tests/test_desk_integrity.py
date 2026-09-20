@@ -485,3 +485,332 @@ def test_thesis_invalidation_triggers_structure():
     triggers_no_vwap = build_thesis_invalidation_triggers(no_vwap_ctx, "BULLISH", "LONG_BIAS", risk_gate)
     metrics_no_vwap = [t["metric"] for t in triggers_no_vwap]
     assert "vwap" not in metrics_no_vwap
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test: Official 2026 NSE Holidays (Ganesh Chaturthi & Id-Ul-Fitr)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_nse_2026_holidays_ganesh_chaturthi_and_id_ul_fitr():
+    """
+    Verify official 2026 NSE trading holidays:
+    - 2026-09-14 (Ganesh Chaturthi)
+    - 2026-03-19 (Id-Ul-Fitr)
+    """
+    # Ganesh Chaturthi: Monday 14 September 2026 11:00 AM IST (05:30 UTC)
+    dt_ganesh = datetime(2026, 9, 14, 5, 30, tzinfo=timezone.utc)
+    state_ganesh = get_market_session_state("RELIANCE.NS", now_dt=dt_ganesh)
+    assert state_ganesh.status == "HOLIDAY"
+    assert state_ganesh.is_open is False
+
+    # Id-Ul-Fitr: Thursday 19 March 2026 11:00 AM IST (05:30 UTC)
+    dt_eid = datetime(2026, 3, 19, 5, 30, tzinfo=timezone.utc)
+    state_eid = get_market_session_state("RELIANCE.NS", now_dt=dt_eid)
+    assert state_eid.status == "HOLIDAY"
+    assert state_eid.is_open is False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test: US Early Close Rules (Black Friday & Christmas Eve)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_us_early_close_2026():
+    """
+    Verify US early close at 13:00 ET (1:00 PM) on:
+    - 2026-11-27 (Black Friday)
+    - 2026-12-24 (Christmas Eve)
+    """
+    # Black Friday 2026-11-27:
+    # 12:45 ET (17:45 UTC) -> OPEN
+    dt_bf_open = datetime(2026, 11, 27, 17, 45, tzinfo=timezone.utc)
+    state_bf_open = get_market_session_state("AAPL", now_dt=dt_bf_open)
+    assert state_bf_open.status == "OPEN"
+    assert state_bf_open.is_open is True
+
+    # 13:15 ET (18:15 UTC) -> POST_MARKET
+    dt_bf_closed = datetime(2026, 11, 27, 18, 15, tzinfo=timezone.utc)
+    state_bf_closed = get_market_session_state("AAPL", now_dt=dt_bf_closed)
+    assert state_bf_closed.status == "POST_MARKET"
+    assert state_bf_closed.is_open is False
+
+    # Christmas Eve 2026-12-24:
+    # 12:45 ET (17:45 UTC) -> OPEN
+    dt_xmas_open = datetime(2026, 12, 24, 17, 45, tzinfo=timezone.utc)
+    state_xmas_open = get_market_session_state("AAPL", now_dt=dt_xmas_open)
+    assert state_xmas_open.status == "OPEN"
+    assert state_xmas_open.is_open is True
+
+    # 13:15 ET (18:15 UTC) -> POST_MARKET
+    dt_xmas_closed = datetime(2026, 12, 24, 18, 15, tzinfo=timezone.utc)
+    state_xmas_closed = get_market_session_state("AAPL", now_dt=dt_xmas_closed)
+    assert state_xmas_closed.status == "POST_MARKET"
+    assert state_xmas_closed.is_open is False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test: Year Awareness (Uncataloged Years Return UNKNOWN)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_unknown_future_year_calendar():
+    """
+    Verify that uncataloged future years (e.g. 2028) return UNKNOWN session state
+    without claiming synthetic calendar validity.
+    """
+    # Wednesday in 2028 at 11:00 AM IST (05:30 UTC)
+    dt_2028 = datetime(2028, 6, 14, 5, 30, tzinfo=timezone.utc)
+    state_2028 = get_market_session_state("RELIANCE.NS", now_dt=dt_2028)
+    assert state_2028.status == "UNKNOWN"
+    assert state_2028.market_open is None
+    assert "uncataloged" in state_2028.directive.lower()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test: Dual-Horizon Intraday Context (Execution + Daily Risk)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_intraday_dual_context_preserves_daily_risk():
+    """
+    Verify horizon='intraday' populates both 5m execution technicals
+    AND higher-timeframe daily risk metrics (volatility percentile, max drawdown).
+    """
+    intraday_df = _make_intraday_df(days=2, bars_per_day=50, base_price=500.0)
+    daily_df = _make_daily_df(days=100, base_price=500.0)
+
+    def mock_get_history(ticker, period=None, interval=None):
+        if interval == "5m":
+            return intraday_df
+        elif interval == "1d":
+            return daily_df
+        return pd.DataFrame()
+
+    with patch("services.desk_adapter.get_history", side_effect=mock_get_history), \
+         patch("services.desk_adapter.get_quote", return_value={"price": 500.0, "regularMarketTime": 1774000000}), \
+         patch("services.desk_adapter.get_info", return_value={"currentPrice": 500.0}):
+
+        ctx = build_desk_context("RELIANCE.NS", horizon="intraday")
+
+        # Intraday execution metrics
+        assert ctx.vwap is not None
+        assert ctx.supertrend_direction in ("BULLISH", "BEARISH")
+        assert ctx.atr is not None
+        assert ctx.atr_pct is not None and ctx.atr_pct > 0
+
+        # Higher-timeframe daily risk metrics preserved for CRO risk gate
+        assert ctx.volatility_percentile is not None
+        assert ctx.max_drawdown_pct is not None
+        assert ctx.momentum_30d_pct is not None
+        assert ctx.price_vs_ema20_atr is not None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test: Supertrend Uses Canonical Welles Wilder ATR
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_supertrend_uses_wilder_atr():
+    """
+    Verify that calculate_supertrend uses Welles Wilder ATR exponential smoothing.
+    """
+    df = _make_intraday_df(days=1, bars_per_day=40, base_price=100.0)
+    st_res = calculate_supertrend(df, period=10, multiplier=3.0)
+
+    from services.intraday_engine import calculate_atr
+    expected_atr = calculate_atr(df, period=10)
+
+    # st_res['atr'] must match canonical Wilder ATR
+    np.testing.assert_allclose(st_res["atr"], expected_atr, rtol=1e-5)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test: VWAP Weighted Standard Deviation (Analytical Verification)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_vwap_weighted_dispersion_analytical():
+    """
+    Verify mathematically correct volume-weighted standard deviation
+    against an analytically known 2-bar distribution:
+    Bar 1: Price 100, Volume 100
+    Bar 2: Price 200, Volume 100
+    VWAP = 150, Weighted Variance = 2500, Weighted Std = 50.
+    """
+    times = pd.date_range("2026-09-18 09:15", periods=2, freq="5min", tz="Asia/Kolkata")
+    df = pd.DataFrame({
+        "Open": [100.0, 200.0],
+        "High": [100.0, 200.0],
+        "Low": [100.0, 200.0],
+        "Close": [100.0, 200.0],
+        "Volume": [100.0, 100.0],
+    }, index=times)
+
+    vwap_dict = calculate_session_vwap_and_bands(df)
+
+    # End VWAP should be 150.0
+    assert pytest.approx(vwap_dict["vwap"][-1], rel=1e-4) == 150.0
+
+    # Upper 1 should be 150 + 50 = 200.0
+    assert pytest.approx(vwap_dict["upper_1"][-1], rel=1e-4) == 200.0
+
+    # Lower 1 should be 150 - 50 = 100.0
+    assert pytest.approx(vwap_dict["lower_1"][-1], rel=1e-4) == 100.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test: OCF Labeled As Proxy, Not Masquerading As Standard DCF
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_ocf_labeled_as_proxy_not_standard_dcf():
+    """
+    Verify that Operating Cash Flow is labeled as OCF_PROXY_VALUATION (data_status=PARTIAL)
+    and does NOT masquerade as STANDARD_DCF.
+    """
+    info_ocf = {
+        "symbol": "PROXY_CO.NS",
+        "currentPrice": 100.0,
+        "marketCap": 1000000000,
+        "sharesOutstanding": 10000000,
+        "freeCashflow": None,  # No FCF
+        "operatingCashflow": 50000000,  # OCF available
+        "totalRevenue": 500000000,
+        "sector": "Technology",
+    }
+    res_ocf = calculate_canonical_valuation(info_ocf, current_price=100.0)
+    assert res_ocf.methodology == "OCF_PROXY_VALUATION"
+    assert res_ocf.data_status == "PARTIAL"
+    assert res_ocf.valuation_status == "PROXY"
+
+    # FCF available -> STANDARD_DCF
+    info_fcf = {
+        "symbol": "REAL_CO.NS",
+        "currentPrice": 100.0,
+        "marketCap": 1000000000,
+        "sharesOutstanding": 10000000,
+        "freeCashflow": 45000000,
+        "operatingCashflow": 50000000,
+        "totalRevenue": 500000000,
+        "sector": "Technology",
+    }
+    res_fcf = calculate_canonical_valuation(info_fcf, current_price=100.0)
+    assert res_fcf.methodology == "STANDARD_DCF"
+    assert res_fcf.data_status == "COMPLETE"
+    assert res_fcf.valuation_status == "OK"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test: Assumption Status Exposed in Valuation
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_assumption_status_exposed():
+    """
+    Verify assumption_status distinguishes DEFAULT_MODEL_ASSUMPTIONS from CUSTOM_ASSUMPTIONS.
+    """
+    info = {
+        "symbol": "ASSUME.NS",
+        "currentPrice": 100.0,
+        "marketCap": 1000000000,
+        "sharesOutstanding": 10000000,
+        "freeCashflow": 50000000,
+        "sector": "Technology",
+    }
+    # Default assumptions
+    res_def = calculate_canonical_valuation(info, current_price=100.0)
+    assert res_def.assumption_status == "DEFAULT_MODEL_ASSUMPTIONS"
+
+    # Custom assumptions
+    res_cust = calculate_canonical_valuation(
+        info, current_price=100.0, custom_growth_rate=0.12, custom_discount_rate=0.09
+    )
+    assert res_cust.assumption_status == "CUSTOM_ASSUMPTIONS"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test: Financial Institution Methodology Naming
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_financial_institution_methodology_naming():
+    """
+    Verify financial institution valuation is labeled FINANCIAL_INSTITUTION_EQUITY_CASHFLOW_PROXY.
+    """
+    info = {
+        "symbol": "HDFCBANK.NS",
+        "currentPrice": 1600.0,
+        "marketCap": 12000000000000,
+        "sharesOutstanding": 7500000000,
+        "netIncomeToCommon": 600000000000,
+        "sector": "Financial Services",
+        "industry": "Banks - Diversified",
+    }
+    res = calculate_canonical_valuation(info, current_price=1600.0)
+    assert res.methodology == "FINANCIAL_INSTITUTION_EQUITY_CASHFLOW_PROXY"
+    assert res.valuation_status == "OK"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test: Derivatives Model Estimate Rejection from Empirical Evidence
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_derivatives_model_estimate_rejected_from_empirical():
+    """
+    Inject pcr_oi with is_model_approximation=True and derivatives_provenance='MODEL_ESTIMATE'.
+    Verify that the committee does NOT treat the PCR as empirical derivatives evidence.
+    """
+    ctx_approx = {
+        "price": 100.0,
+        "pcr_oi": 1.25,
+        "is_model_approximation": True,
+        "derivatives_provenance": "MODEL_ESTIMATE",
+    }
+    res = evaluate_committee(ctx_approx)
+    deriv = res["desks"]["derivatives"]
+
+    # Must have 0 confidence and flagged as rejected
+    assert deriv["confidence"] == 0.0
+    assert "MODEL_DERIVATIVES_REJECTED" in deriv["flags"]
+    assert "derivatives (model approximation rejected)" in deriv["missing_data"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test: Provenance Timestamps & Quote Source Attribution
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_provenance_timestamps_and_quote_source():
+    """
+    Verify complete provenance timestamps for session_vwap, supertrend, orb,
+    and accurate quote source attribution (regularMarketTime vs price_date).
+    """
+    intraday_df = _make_intraday_df(days=2, bars_per_day=50, base_price=500.0)
+    daily_df = _make_daily_df(days=100, base_price=500.0)
+
+    def mock_get_history(ticker, period=None, interval=None):
+        return intraday_df if interval == "5m" else daily_df
+
+    with patch("services.desk_adapter.get_history", side_effect=mock_get_history), \
+         patch("services.desk_adapter.get_quote", return_value={"price": 500.0, "price_date": "2026-09-18T09:15:00Z"}), \
+         patch("services.desk_adapter.get_info", return_value={}):
+
+        state = build_canonical_market_state("RELIANCE.NS", horizon="intraday")
+        prov = state["provenance"]
+
+        # Quote source must be price_date when regularMarketTime is absent
+        assert prov["quote"]["source"] == "price_date"
+        assert prov["quote"]["as_of"] is not None
+
+        # Intraday timestamps must be populated
+        assert prov["session_vwap"]["as_of"] is not None
+        assert prov["supertrend"]["as_of"] is not None
+        assert prov["orb"]["as_of"] is not None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test: Thesis Invalidation Trigger Wording
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_thesis_invalidation_trigger_wording():
+    """
+    Verify thesis invalidation wording is concisely 'CRO risk gate enters VETO'.
+    """
+    ctx = {"price": 100.0, "vwap": 98.0}
+    risk_gate = evaluate_risk_gate(ctx)
+    triggers = build_thesis_invalidation_triggers(ctx, "BULLISH", "LONG_BIAS", risk_gate)
+
+    conditions = [t["condition"] for t in triggers]
+    assert "CRO risk gate enters VETO" in conditions
+    assert not any("liquidity breach or extreme volatility" in c for c in conditions)

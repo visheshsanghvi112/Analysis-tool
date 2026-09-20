@@ -407,6 +407,31 @@ def evaluate_technical_desk(ctx: Dict[str, Any]) -> DeskResult:
 
 
 def evaluate_derivatives_desk(ctx: Dict[str, Any]) -> DeskResult:
+    # Rejection of Model Approximations:
+    # If derivative evidence is flagged as a model approximation or MODEL_ESTIMATE,
+    # it must NOT be treated as empirical derivatives evidence.
+    is_model_approx = bool(
+        ctx.get("is_model_approximation")
+        or (isinstance(ctx.get("derivatives"), dict) and ctx.get("derivatives", {}).get("is_model_approximation"))
+        or str(ctx.get("derivatives_provenance", "")).upper() == "MODEL_ESTIMATE"
+        or (isinstance(ctx.get("derivatives"), dict) and str(ctx.get("derivatives", {}).get("provenance", "")).upper() == "MODEL_ESTIMATE")
+    )
+    if is_model_approx:
+        return DeskResult(
+            desk="DERIVATIVES",
+            stance="NEUTRAL",
+            score=50.0,
+            confidence=0.0,
+            evidence=[{
+                "factor": "Derivatives Model Estimate",
+                "status": "REJECTED_MODEL_APPROXIMATION",
+                "value": "MODEL_ESTIMATE",
+                "detail": "Model-approximated options/derivatives metrics rejected from empirical committee evidence."
+            }],
+            missing_data=["derivatives (model approximation rejected)"],
+            flags=["MODEL_DERIVATIVES_REJECTED"],
+        )
+
     futures_buildup = str(ctx.get("futures_buildup", "")).upper()
     pcr_oi = _num(ctx.get("pcr_oi"))
     pcr_volume = _num(ctx.get("pcr_volume"))
@@ -816,7 +841,7 @@ def build_thesis_invalidation_triggers(
                 "severity": "MEDIUM",
             })
         triggers.append({
-            "condition": "CRO risk gate triggers VETO (liquidity breach or extreme volatility)",
+            "condition": "CRO risk gate enters VETO",
             "metric": "risk_gate",
             "level": None,
             "type": "RISK_VETO",
@@ -856,7 +881,7 @@ def build_thesis_invalidation_triggers(
                 "severity": "MEDIUM",
             })
         triggers.append({
-            "condition": "CRO risk gate triggers VETO",
+            "condition": "CRO risk gate enters VETO",
             "metric": "risk_gate",
             "level": None,
             "type": "RISK_VETO",
@@ -990,6 +1015,9 @@ def evaluate_committee(ctx: Dict[str, Any]) -> Dict[str, Any]:
                 "derivatives": derivatives.missing_data,
                 "risk": risk.missing_data,
             },
+            "no_hidden_data_fallbacks": True,
+            "strategy_defaults_present": True,
+            "model_assumptions_present": True,
             "no_hidden_defaults": True,
             "llm_used": False,
             "network_calls": False,

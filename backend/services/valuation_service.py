@@ -8,7 +8,8 @@ Ensures zero synthetic cash-flow fabrication:
 - Does NOT manufacture cash flow from `price * shares * 0.04` or `revenue * 0.06`.
 - Strictly requires legitimate, verified cash-flow or earnings inputs.
 - Clearly separates valuation methodology from data completeness.
-- Distinguishes standard Enterprise DCF from Financial Institution Equity DDM.
+- Distinguishes standard Enterprise DCF from Financial Institution Equity Cashflow Proxy.
+- Exposes explicit assumption provenance (data_status vs assumption_status).
 """
 
 from dataclasses import dataclass, field
@@ -21,7 +22,8 @@ class ValuationResult:
     fair_value: Optional[float] = None
     methodology: str = "STANDARD_DCF"
     data_status: str = "INSUFFICIENT_DATA"  # "COMPLETE", "PARTIAL", "INSUFFICIENT_DATA"
-    valuation_status: str = "INSUFFICIENT_DATA"  # "OK", "INSUFFICIENT_DATA"
+    assumption_status: str = "DEFAULT_MODEL_ASSUMPTIONS"  # "DEFAULT_MODEL_ASSUMPTIONS", "CUSTOM_ASSUMPTIONS"
+    valuation_status: str = "INSUFFICIENT_DATA"  # "OK", "PROXY", "INSUFFICIENT_DATA"
     valuation_reason: Optional[str] = None
     starting_flow: Optional[float] = None
     flow_type: Optional[str] = None
@@ -38,6 +40,7 @@ class ValuationResult:
             "fair_value": self.fair_value,
             "methodology": self.methodology,
             "data_status": self.data_status,
+            "assumption_status": self.assumption_status,
             "valuation_status": self.valuation_status,
             "valuation_reason": self.valuation_reason,
             "starting_flow": self.starting_flow,
@@ -96,17 +99,27 @@ def calculate_canonical_valuation(
     custom_starting_flow: Optional[float] = None,
 ) -> ValuationResult:
     """
-    Computes a canonical, deterministic DCF / DDM intrinsic fair value.
+    Computes a canonical, deterministic DCF / Equity Cashflow Proxy intrinsic fair value.
     
     Data Integrity Guarantees:
     - Never manufactures cash flow from arbitrary market cap yields or revenue percentages.
     - If required cash flow / net income inputs are unavailable, returns fair_value = None
       and valuation_status = 'INSUFFICIENT_DATA'.
-    - Returns structured methodology and provenance metadata.
+    - Clearly distinguishes STANDARD_DCF (using verified FCF) from OCF_PROXY_VALUATION (using OCF).
+    - Accurately names financial institution model as FINANCIAL_INSTITUTION_EQUITY_CASHFLOW_PROXY.
+    - Exposes assumption_status to separate data completeness from model parameters.
     """
     ticker = str(info.get("symbol") or "")
     is_financial = is_financial_institution(info, ticker)
-    methodology = "FINANCIAL_INSTITUTION_EQUITY_DDM" if is_financial else "STANDARD_DCF"
+
+    # Assumption provenance tracking
+    is_custom_assumptions = any([
+        custom_growth_rate is not None,
+        custom_discount_rate is not None,
+        custom_terminal_growth is not None,
+        custom_starting_flow is not None,
+    ])
+    assumption_status = "CUSTOM_ASSUMPTIONS" if is_custom_assumptions else "DEFAULT_MODEL_ASSUMPTIONS"
 
     # Price & Shares
     price = _clean_num(current_price) or _clean_num(info.get("currentPrice")) or _clean_num(info.get("regularMarketPrice"))
@@ -119,8 +132,9 @@ def calculate_canonical_valuation(
     if shares <= 0:
         return ValuationResult(
             fair_value=None,
-            methodology=methodology,
+            methodology="FINANCIAL_INSTITUTION_EQUITY_CASHFLOW_PROXY" if is_financial else "STANDARD_DCF",
             data_status="INSUFFICIENT_DATA",
+            assumption_status=assumption_status,
             valuation_status="INSUFFICIENT_DATA",
             valuation_reason="Shares outstanding unavailable",
             details={"error": "Missing shares outstanding or market cap"},
@@ -136,20 +150,30 @@ def calculate_canonical_valuation(
     # Determine starting cash flow strictly without synthetic manufacture
     starting_flow: Optional[float] = None
     flow_type: Optional[str] = None
+    methodology: str = "STANDARD_DCF"
+    data_status: str = "INSUFFICIENT_DATA"
+    valuation_status: str = "INSUFFICIENT_DATA"
 
     if custom_starting_flow is not None and custom_starting_flow > 0:
         starting_flow = custom_starting_flow
         flow_type = "User Defined Starting Flow"
+        methodology = "CUSTOM_VALUATION"
+        data_status = "COMPLETE"
+        valuation_status = "OK"
     elif is_financial:
+        methodology = "FINANCIAL_INSTITUTION_EQUITY_CASHFLOW_PROXY"
         if net_income is not None and net_income > 0:
             starting_flow = net_income
-            flow_type = "Net Income (Equity DDM Flow)"
+            flow_type = "Net Income (Equity Cashflow Proxy)"
+            data_status = "COMPLETE"
+            valuation_status = "OK"
         else:
             # Do NOT manufacture from rev * 0.15 or market_cap * 0.05
             return ValuationResult(
                 fair_value=None,
                 methodology=methodology,
                 data_status="INSUFFICIENT_DATA",
+                assumption_status=assumption_status,
                 valuation_status="INSUFFICIENT_DATA",
                 valuation_reason="Required net income input unavailable or non-positive for financial institution",
                 shares_outstanding=shares,
@@ -158,17 +182,24 @@ def calculate_canonical_valuation(
     else:
         if fcf is not None and fcf > 0:
             starting_flow = fcf
-            flow_type = "Free Cash Flow (FCF)"
+            flow_type = "Free Cash Flow (FCFF)"
+            methodology = "STANDARD_DCF"
+            data_status = "COMPLETE"
+            valuation_status = "OK"
         elif ocf is not None and ocf > 0:
-            # Operating cash flow is an acceptable secondary baseline if FCF is unstated
+            # Operating cash flow is an explicit proxy; do NOT present as standard DCF
             starting_flow = ocf
-            flow_type = "Operating Cash Flow (OCF Baseline)"
+            flow_type = "Operating Cash Flow (OCF Proxy Baseline)"
+            methodology = "OCF_PROXY_VALUATION"
+            data_status = "PARTIAL"
+            valuation_status = "PROXY"
         else:
             # Do NOT manufacture from rev * 0.06 or price * shares * 0.04
             return ValuationResult(
                 fair_value=None,
-                methodology=methodology,
+                methodology="STANDARD_DCF",
                 data_status="INSUFFICIENT_DATA",
+                assumption_status=assumption_status,
                 valuation_status="INSUFFICIENT_DATA",
                 valuation_reason="Required cash-flow inputs unavailable (FCF/OCF <= 0 or missing)",
                 shares_outstanding=shares,
@@ -218,11 +249,11 @@ def calculate_canonical_valuation(
     enterprise_value = pv_sum + pv_tv
 
     if is_financial:
-        # For financial institutions, equity value equals DDM projected value directly.
+        # For financial institutions, equity value equals projected cashflow value directly.
         # Operating debt (deposits/borrowings) is not deducted as industrial debt.
         equity_value = enterprise_value
     else:
-        # Standard DCF: Equity Value = Enterprise Value + Cash - Debt
+        # Standard DCF / OCF Proxy: Equity Value = Enterprise Value + Cash - Debt
         equity_value = enterprise_value + cash - debt
 
     if equity_value <= 0:
@@ -233,9 +264,10 @@ def calculate_canonical_valuation(
     return ValuationResult(
         fair_value=fair_value_per_share,
         methodology=methodology,
-        data_status="COMPLETE",
-        valuation_status="OK",
-        valuation_reason=None,
+        data_status=data_status,
+        assumption_status=assumption_status,
+        valuation_status=valuation_status,
+        valuation_reason=None if valuation_status in ("OK", "PROXY") else "Valuation incomplete",
         starting_flow=round(starting_flow, 2),
         flow_type=flow_type,
         growth_rate=round(growth_rate, 4),
