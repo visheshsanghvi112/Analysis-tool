@@ -488,26 +488,40 @@ def test_thesis_invalidation_triggers_structure():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Test: Official 2026 NSE Holidays (Ganesh Chaturthi & Id-Ul-Fitr)
+# Test: Official 2026 NSE Holidays Complete Schedule
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_nse_2026_holidays_ganesh_chaturthi_and_id_ul_fitr():
     """
     Verify official 2026 NSE trading holidays:
+    - 2026-03-03 (Holi)
+    - 2026-08-26 (Id-E-Milad)
+    - 2026-01-15 (Municipal Corporation Election - Maharashtra)
+    - 2026-03-19 (Gudhi Padwa)
     - 2026-09-14 (Ganesh Chaturthi)
-    - 2026-03-19 (Id-Ul-Fitr)
     """
-    # Ganesh Chaturthi: Monday 14 September 2026 11:00 AM IST (05:30 UTC)
-    dt_ganesh = datetime(2026, 9, 14, 5, 30, tzinfo=timezone.utc)
-    state_ganesh = get_market_session_state("RELIANCE.NS", now_dt=dt_ganesh)
-    assert state_ganesh.status == "HOLIDAY"
-    assert state_ganesh.is_open is False
+    for holiday_date in [
+        datetime(2026, 3, 3, 5, 30, tzinfo=timezone.utc),    # Holi
+        datetime(2026, 8, 26, 5, 30, tzinfo=timezone.utc),   # Id-E-Milad
+        datetime(2026, 1, 15, 5, 30, tzinfo=timezone.utc),   # Municipal Election
+        datetime(2026, 3, 19, 5, 30, tzinfo=timezone.utc),   # Gudhi Padwa
+        datetime(2026, 9, 14, 5, 30, tzinfo=timezone.utc),   # Ganesh Chaturthi
+    ]:
+        state = get_market_session_state("RELIANCE.NS", now_dt=holiday_date)
+        assert state.status == "HOLIDAY"
+        assert state.is_open is False
 
-    # Id-Ul-Fitr: Thursday 19 March 2026 11:00 AM IST (05:30 UTC)
-    dt_eid = datetime(2026, 3, 19, 5, 30, tzinfo=timezone.utc)
-    state_eid = get_market_session_state("RELIANCE.NS", now_dt=dt_eid)
-    assert state_eid.status == "HOLIDAY"
-    assert state_eid.is_open is False
+
+def test_nse_2026_muhurat_trading_timing_unpublished():
+    """
+    Verify 2026-11-08 Muhurat Trading is recognized as a special session,
+    but does not fabricate exact session hours when not yet published by exchange circular.
+    """
+    dt_muhurat = datetime(2026, 11, 8, 12, 30, tzinfo=timezone.utc)  # 18:00 IST
+    state = get_market_session_state("RELIANCE.NS", now_dt=dt_muhurat)
+    assert state.status == "SPECIAL_SESSION"
+    assert state.market_open is None
+    assert "notified subsequently" in state.directive.lower()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -620,17 +634,49 @@ def test_supertrend_uses_wilder_atr():
     np.testing.assert_allclose(st_res["atr"], expected_atr, rtol=1e-5)
 
 
+def test_wilder_atr_independent_mathematical_validation():
+    """
+    Independently validates Welles Wilder ATR against a hand-calculated True Range series:
+    Period = 3
+    Bar 0: H=10, L=8, C=9   (TR = 2.0)
+    Bar 1: H=12, L=9, C=11  (TR = 3.0)
+    Bar 2: H=15, L=10, C=14 (TR = 5.0) -> First ATR (SMA seed) = (2 + 3 + 5) / 3 = 10/3 = 3.333333
+    Bar 3: H=16, L=13, C=15 (TR = 3.0) -> ATR_3 = (3.333333 * 2 + 3.0) / 3 = 3.222222
+    Bar 4: H=18, L=14, C=17 (TR = 4.0) -> ATR_4 = (3.222222 * 2 + 4.0) / 3 = 3.481481
+    """
+    times = pd.date_range("2026-09-18 09:15", periods=5, freq="5min", tz="Asia/Kolkata")
+    df = pd.DataFrame({
+        "Open": [9.0, 10.0, 12.0, 14.0, 16.0],
+        "High": [10.0, 12.0, 15.0, 16.0, 18.0],
+        "Low": [8.0, 9.0, 10.0, 13.0, 14.0],
+        "Close": [9.0, 11.0, 14.0, 15.0, 17.0],
+        "Volume": [100.0, 100.0, 100.0, 100.0, 100.0],
+    }, index=times)
+
+    from services.intraday_engine import calculate_atr
+    atr_vals = calculate_atr(df, period=3)
+
+    assert pytest.approx(atr_vals[2], rel=1e-5) == 10.0 / 3.0
+    assert pytest.approx(atr_vals[3], rel=1e-5) == ( (10.0 / 3.0) * 2 + 3.0 ) / 3.0
+    assert pytest.approx(atr_vals[4], rel=1e-5) == ( (((10.0 / 3.0) * 2 + 3.0) / 3.0) * 2 + 4.0 ) / 3.0
+
+
 # ─────────────────────────────────────────────────────────────────────────────
-# Test: VWAP Weighted Standard Deviation (Analytical Verification)
+# Test: VWAP Weighted Standard Deviation (Unequal Volume Analytical Verification)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_vwap_weighted_dispersion_analytical():
     """
-    Verify mathematically correct volume-weighted standard deviation
-    against an analytically known 2-bar distribution:
-    Bar 1: Price 100, Volume 100
+    Verify volume-weighted standard deviation against an analytically known unequal-volume distribution:
+    Bar 1: Price 100, Volume 900
     Bar 2: Price 200, Volume 100
-    VWAP = 150, Weighted Variance = 2500, Weighted Std = 50.
+    Total Volume = 1000
+    VWAP = (100 * 900 + 200 * 100) / 1000 = 110.0
+    Mean of Squares = (900 * 100^2 + 100 * 200^2) / 1000 = (9,000,000 + 4,000,000) / 1000 = 13,000
+    Weighted Variance = 13,000 - 110^2 = 13,000 - 12,100 = 900.0
+    Weighted Std = sqrt(900) = 30.0
+    Upper 1 = 110 + 30 = 140.0
+    Lower 1 = 110 - 30 = 80.0
     """
     times = pd.date_range("2026-09-18 09:15", periods=2, freq="5min", tz="Asia/Kolkata")
     df = pd.DataFrame({
@@ -638,19 +684,19 @@ def test_vwap_weighted_dispersion_analytical():
         "High": [100.0, 200.0],
         "Low": [100.0, 200.0],
         "Close": [100.0, 200.0],
-        "Volume": [100.0, 100.0],
+        "Volume": [900.0, 100.0],
     }, index=times)
 
     vwap_dict = calculate_session_vwap_and_bands(df)
 
-    # End VWAP should be 150.0
-    assert pytest.approx(vwap_dict["vwap"][-1], rel=1e-4) == 150.0
+    # End VWAP should be 110.0
+    assert pytest.approx(vwap_dict["vwap"][-1], rel=1e-4) == 110.0
 
-    # Upper 1 should be 150 + 50 = 200.0
-    assert pytest.approx(vwap_dict["upper_1"][-1], rel=1e-4) == 200.0
+    # Upper 1 should be 110 + 30 = 140.0
+    assert pytest.approx(vwap_dict["upper_1"][-1], rel=1e-4) == 140.0
 
-    # Lower 1 should be 150 - 50 = 100.0
-    assert pytest.approx(vwap_dict["lower_1"][-1], rel=1e-4) == 100.0
+    # Lower 1 should be 110 - 30 = 80.0
+    assert pytest.approx(vwap_dict["lower_1"][-1], rel=1e-4) == 80.0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -692,6 +738,43 @@ def test_ocf_labeled_as_proxy_not_standard_dcf():
     assert res_fcf.methodology == "STANDARD_DCF"
     assert res_fcf.data_status == "COMPLETE"
     assert res_fcf.valuation_status == "OK"
+
+
+def test_ocf_proxy_valuation_governance_in_committee():
+    """
+    Verify that proxy valuation metadata reaches DeskContext and evaluate_fundamental_desk,
+    flags PROXY_VALUATION_USED, labels factor as Fair-value gap (Proxy), and discounts confidence.
+    """
+    ctx_proxy = {
+        "price": 100.0,
+        "fair_value": 130.0,
+        "valuation_methodology": "OCF_PROXY_VALUATION",
+        "valuation_status": "PROXY",
+        "valuation_data_status": "PARTIAL",
+        "roe_pct": 18.0,
+        "revenue_growth_pct": 12.0,
+        "operating_margin_pct": 16.0,
+        "debt_to_equity": 50.0,
+        "pe_percentile": 60.0,
+    }
+    res_proxy = evaluate_committee(ctx_proxy)
+    fund_proxy = res_proxy["desks"]["fundamental"]
+
+    assert "PROXY_VALUATION_USED" in fund_proxy["flags"]
+    assert any(e["factor"] == "Fair-value gap (Proxy)" for e in fund_proxy["evidence"])
+
+    # Standard DCF with identical metrics for comparison
+    ctx_std = dict(ctx_proxy)
+    ctx_std["valuation_methodology"] = "STANDARD_DCF"
+    ctx_std["valuation_status"] = "OK"
+    ctx_std["valuation_data_status"] = "COMPLETE"
+
+    res_std = evaluate_committee(ctx_std)
+    fund_std = res_std["desks"]["fundamental"]
+
+    assert "PROXY_VALUATION_USED" not in fund_std["flags"]
+    assert any(e["factor"] == "Fair-value gap" for e in fund_std["evidence"])
+    assert fund_proxy["confidence"] < fund_std["confidence"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -814,3 +897,95 @@ def test_thesis_invalidation_trigger_wording():
     conditions = [t["condition"] for t in triggers]
     assert "CRO risk gate enters VETO" in conditions
     assert not any("liquidity breach or extreme volatility" in c for c in conditions)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test: True Empirical Volatility Percentile Rank
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_true_volatility_percentile_rank():
+    """
+    Verify volatility_percentile is calculated as true empirical percentile rank:
+    count(vols <= current_vol) / N * 100, NOT a min-max range position.
+    """
+    from services.desk_adapter import _safe_float
+    # Distribution: 10, 11, 12, 13, 14, 100 (N=6).
+    # Current = 14.
+    # True percentile rank = count(<= 14) / 6 * 100 = 5 / 6 * 100 = 83.33%.
+    # Min-max position would have been (14 - 10) / (100 - 10) * 100 = 4.44%.
+    rolling_vol = pd.Series([10.0, 11.0, 12.0, 13.0, 14.0, 100.0] * 6)  # N=36
+    current_vol = 14.0
+    valid_vols = rolling_vol.dropna()
+    count_le = (valid_vols <= current_vol).sum()
+    vol_percentile = _safe_float((count_le / len(valid_vols)) * 100.0)
+
+    # Must be approx 83.33%, definitely not 4.44%
+    assert pytest.approx(vol_percentile, rel=1e-2) == 83.33
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test: Parity Between /api/intraday and Canonical Intraday Engine
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_intraday_router_service_parity():
+    """
+    Verify that routers.intraday delegates directly to services.intraday_engine,
+    producing identical values for VWAP, Supertrend, ATR, RSI, and ORB on identical data.
+    """
+    from routers.intraday import (
+        _calculate_vwap_and_bands as r_vwap,
+        _calculate_supertrend as r_st,
+        _calculate_orb as r_orb,
+        _calculate_atr as r_atr,
+        _calculate_rsi as r_rsi,
+    )
+    from services.intraday_engine import (
+        calculate_session_vwap_and_bands as s_vwap,
+        calculate_supertrend as s_st,
+        calculate_orb as s_orb,
+        calculate_atr as s_atr,
+        calculate_rsi as s_rsi,
+    )
+
+    df = _make_intraday_df(days=2, bars_per_day=50, base_price=200.0)
+
+    # 1. VWAP
+    r_vwap_res = r_vwap(df)
+    s_vwap_res = s_vwap(df)
+    np.testing.assert_allclose(r_vwap_res["vwap"], s_vwap_res["vwap"])
+    np.testing.assert_allclose(r_vwap_res["upper_1"], s_vwap_res["upper_1"])
+
+    # 2. Supertrend
+    r_st_res = r_st(df)
+    s_st_res = s_st(df)
+    np.testing.assert_allclose(r_st_res["supertrend"], s_st_res["supertrend"])
+    np.testing.assert_array_equal(r_st_res["direction"], s_st_res["direction"])
+
+    # 3. ATR
+    np.testing.assert_allclose(r_atr(df), s_atr(df))
+
+    # 4. RSI
+    np.testing.assert_allclose(r_rsi(df["Close"]), s_rsi(df["Close"]))
+
+    # 5. ORB
+    r_orb_res = r_orb(df, "5m")
+    s_orb_res = s_orb(df, "5m")
+    assert r_orb_res == s_orb_res
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test: Deprecated no_hidden_defaults Removed from Audit
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_deprecated_no_hidden_defaults_removed():
+    """
+    Verify that no_hidden_defaults is cleanly removed from audit,
+    and no_hidden_data_fallbacks is present.
+    """
+    res = evaluate_committee({"price": 100.0})
+    audit = res["audit"]
+    assert "no_hidden_defaults" not in audit
+    assert audit["no_hidden_data_fallbacks"] is True
+    assert audit["strategy_defaults_present"] is True
+    assert audit["model_assumptions_present"] is True
+

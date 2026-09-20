@@ -34,10 +34,11 @@ class MarketStatus(str, Enum):
 # ── Authoritative 2026 Exchange Holiday Calendars ────────────────────────────
 # Official NSE/BSE Trading Holidays for 2026 (Excludes weekends)
 HOLIDAYS_NSE_2026: Set[date] = {
-    date(2026, 1, 15),   # Makar Sankranti / Pongal
+    date(2026, 1, 15),   # Municipal Corporation Election - Maharashtra
     date(2026, 1, 26),   # Republic Day
     date(2026, 2, 19),   # Chhatrapati Shivaji Maharaj Jayanti
-    date(2026, 3, 19),   # Id-Ul-Fitr (Ramzan Id)
+    date(2026, 3, 3),    # Holi
+    date(2026, 3, 19),   # Gudhi Padwa
     date(2026, 3, 26),   # Shri Ram Navami
     date(2026, 3, 31),   # Mahavir Jayanti
     date(2026, 4, 1),    # Annual Bank Closing
@@ -46,20 +47,24 @@ HOLIDAYS_NSE_2026: Set[date] = {
     date(2026, 5, 1),    # Maharashtra Day
     date(2026, 5, 28),   # Bakri Id / Eid-ul-Adha
     date(2026, 6, 26),   # Muharram
+    date(2026, 8, 26),   # Id-E-Milad
     date(2026, 9, 14),   # Ganesh Chaturthi
     date(2026, 10, 2),   # Mahatma Gandhi Jayanti
-    date(2026, 20, 10) if False else date(2026, 10, 20),  # Dussehra
+    date(2026, 10, 20),  # Dussehra
     date(2026, 11, 10),  # Diwali Balipratipada
     date(2026, 11, 24),  # Prakash Gurpurb Sri Guru Nanak Dev
     date(2026, 12, 25),  # Christmas
 }
 
 # Special Trading Sessions (e.g. Diwali Muhurat Trading)
+# Note: Exact session timings are to be notified subsequently by exchange circular.
 SPECIAL_SESSIONS_NSE_2026: Dict[date, Dict[str, Any]] = {
     date(2026, 11, 8): {
         "name": "Diwali Laxmi Pujan (Muhurat Trading)",
-        "start": time(18, 0),
-        "end": time(19, 15),
+        "special_session": True,
+        "start": None,  # Not yet published by exchange circular
+        "end": None,    # Not yet published by exchange circular
+        "timing_status": "NOT_YET_PUBLISHED",
     }
 }
 
@@ -208,8 +213,24 @@ def get_market_session(
     # 3. Special Session Check (e.g. Diwali Muhurat Trading)
     if is_in and current_date in SPECIAL_SESSIONS_NSE_2026:
         spec = SPECIAL_SESSIONS_NSE_2026[current_date]
-        spec_start = now.replace(hour=spec["start"].hour, minute=spec["start"].minute, second=0, microsecond=0)
-        spec_end = now.replace(hour=spec["end"].hour, minute=spec["end"].minute, second=0, microsecond=0)
+        spec_start_time = spec.get("start")
+        spec_end_time = spec.get("end")
+
+        if spec_start_time is None or spec_end_time is None:
+            return MarketSessionState(
+                status=MarketStatus.SPECIAL_SESSION,
+                market_open=None,
+                timezone=tz_str,
+                exchange=exchange,
+                current_time_str=time_str,
+                phase_name=spec["name"],
+                phase_num=1,
+                directive="Special festive trading session scheduled for this date; exact session timings to be notified subsequently by exchange circular.",
+                as_of=now,
+            )
+
+        spec_start = now.replace(hour=spec_start_time.hour, minute=spec_start_time.minute, second=0, microsecond=0)
+        spec_end = now.replace(hour=spec_end_time.hour, minute=spec_end_time.minute, second=0, microsecond=0)
 
         if spec_start <= now <= spec_end:
             return MarketSessionState(
@@ -232,7 +253,7 @@ def get_market_session(
                 current_time_str=time_str,
                 phase_name=f"{spec['name']} (Closed)",
                 phase_num=0,
-                directive=f"Special session scheduled for {spec['start'].strftime('%H:%M')} - {spec['end'].strftime('%H:%M')} IST.",
+                directive=f"Special session scheduled for {spec_start_time.strftime('%H:%M')} - {spec_end_time.strftime('%H:%M')} IST.",
                 as_of=now,
             )
 

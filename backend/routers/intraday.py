@@ -15,6 +15,13 @@ from fastapi import APIRouter, Query, HTTPException
 
 from yf_client import get_history, get_quote
 from utils.cache import cache_ttl
+from services.intraday_engine import (
+    calculate_session_vwap_and_bands,
+    calculate_supertrend,
+    calculate_orb,
+    calculate_atr,
+    calculate_rsi,
+)
 
 logger = logging.getLogger("stockiq.intraday")
 router = APIRouter(prefix="/api/intraday", tags=["intraday"])
@@ -44,59 +51,8 @@ def _safe_float(val: Any, default: float = 0.0, decimals: int = 2) -> float:
 
 
 def _calculate_vwap_and_bands(df: pd.DataFrame) -> Dict[str, np.ndarray]:
-    """
-    Computes session-anchored Volume-Weighted Average Price (VWAP)
-    and Standard Deviation Volatility Bands (±1σ, ±2σ, ±3σ).
-    Resets at each new trading session/day so multi-day data does not contaminate today's VWAP.
-    """
-    if df.empty:
-        empty_arr = np.array([])
-        return {
-            "vwap": empty_arr, "upper_1": empty_arr, "lower_1": empty_arr,
-            "upper_2": empty_arr, "lower_2": empty_arr,
-            "upper_3": empty_arr, "lower_3": empty_arr,
-        }
-
-    tp = ((df["High"] + df["Low"] + df["Close"]) / 3.0).values
-    vol = df["Volume"].fillna(0).values
-
-    # Identify session boundaries by calendar date
-    dates = pd.to_datetime(df.index).date
-    n = len(df)
-    vwap = np.zeros(n)
-    vwap_std = np.zeros(n)
-
-    unique_dates, split_indices = np.unique(dates, return_index=True)
-    session_starts = list(split_indices) + [n]
-
-    for s_idx in range(len(session_starts) - 1):
-        start = session_starts[s_idx]
-        end = session_starts[s_idx + 1]
-
-        s_tp = tp[start:end]
-        s_vol = vol[start:end]
-
-        cum_vol = np.cumsum(s_vol)
-        cum_vp = np.cumsum(s_tp * s_vol)
-
-        s_vwap = np.where(cum_vol > 0, cum_vp / np.maximum(cum_vol, 1e-9), s_tp)
-
-        cum_vol_sq_diff = np.cumsum(s_vol * (s_tp - s_vwap) ** 2)
-        s_var = np.where(cum_vol > 0, cum_vol_sq_diff / np.maximum(cum_vol, 1e-9), 0.0)
-        s_std = np.sqrt(np.maximum(s_var, 0.0))
-
-        vwap[start:end] = s_vwap
-        vwap_std[start:end] = s_std
-
-    return {
-        "vwap": vwap,
-        "upper_1": vwap + vwap_std,
-        "lower_1": vwap - vwap_std,
-        "upper_2": vwap + 2 * vwap_std,
-        "lower_2": vwap - 2 * vwap_std,
-        "upper_3": vwap + 3 * vwap_std,
-        "lower_3": vwap - 3 * vwap_std,
-    }
+    """Delegates to canonical intraday_engine service."""
+    return calculate_session_vwap_and_bands(df)
 
 
 def _calculate_volume_profile(df: pd.DataFrame, n_bins: int = 25) -> Dict[str, Any]:
@@ -305,159 +261,23 @@ def _calculate_pivots(daily_df: pd.DataFrame, today_date = None) -> Dict[str, An
 
 
 def _calculate_orb(df: pd.DataFrame, interval: str) -> Dict[str, Any]:
-    """
-    Computes Opening Range Breakout (ORB) boundaries for 15m and 30m intervals
-    anchored to the CURRENT (latest) trading session.
-    """
-    if df.empty:
-        return {"high_15m": 0.0, "low_15m": 0.0, "status": "INSIDE_RANGE", "high_30m": 0.0, "low_30m": 0.0}
-
-    # Extract the latest session's data
-    dates = pd.to_datetime(df.index).date
-    latest_date = dates[-1]
-    today_df = df[dates == latest_date]
-    if today_df.empty:
-        today_df = df
-
-    candle_minutes = 5
-    if "1m" in interval:
-        candle_minutes = 1
-    elif "3m" in interval:
-        candle_minutes = 3
-    elif "5m" in interval:
-        candle_minutes = 5
-    elif "15m" in interval:
-        candle_minutes = 15
-    elif "30m" in interval:
-        candle_minutes = 30
-    elif "1h" in interval:
-        candle_minutes = 60
-
-    count_15m = max(1, int(15 / candle_minutes))
-    count_30m = max(1, int(30 / candle_minutes))
-
-    orb_15m_slice = today_df.iloc[:min(len(today_df), count_15m)]
-    orb_30m_slice = today_df.iloc[:min(len(today_df), count_30m)]
-
-    high_15m = float(orb_15m_slice["High"].max())
-    low_15m = float(orb_15m_slice["Low"].min())
-    high_30m = float(orb_30m_slice["High"].max())
-    low_30m = float(orb_30m_slice["Low"].min())
-
-    curr_close = float(today_df["Close"].iloc[-1])
-
-    if len(today_df) < count_15m:
-        status = "FORMING_RANGE"
-    elif curr_close > high_15m:
-        status = "BULLISH_BREAKOUT"
-    elif curr_close < low_15m:
-        status = "BEARISH_BREAKDOWN"
-    else:
-        status = "INSIDE_RANGE"
-
-    return {
-        "high_15m": _safe_float(high_15m),
-        "low_15m": _safe_float(low_15m),
-        "high_30m": _safe_float(high_30m),
-        "low_30m": _safe_float(low_30m),
-        "status": status,
-        "pct_from_15m_high": _safe_float(((curr_close - high_15m) / high_15m) * 100) if high_15m > 0 else 0.0,
-        "pct_from_15m_low": _safe_float(((curr_close - low_15m) / low_15m) * 100) if low_15m > 0 else 0.0,
-    }
+    """Delegates to canonical intraday_engine service."""
+    return calculate_orb(df, interval=interval)
 
 
 def _calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float = 3.0) -> Dict[str, np.ndarray]:
-    """Computes institutional Supertrend indicator with ATR trailing stop series."""
-    n = len(df)
-    if n == 0:
-        return {"supertrend": np.array([]), "direction": np.array([])}
-
-    h = df["High"].values
-    l = df["Low"].values
-    c = df["Close"].values
-
-    tr1 = h - l
-    tr2 = np.abs(h - np.roll(c, 1))
-    tr3 = np.abs(l - np.roll(c, 1))
-    tr2[0] = tr1[0]
-    tr3[0] = tr1[0]
-    tr = np.maximum(tr1, np.maximum(tr2, tr3))
-
-    atr = pd.Series(tr).rolling(period, min_periods=1).mean().values
-
-    hl2 = (h + l) / 2.0
-    basic_ub = hl2 + multiplier * atr
-    basic_lb = hl2 - multiplier * atr
-
-    final_ub = np.zeros(n)
-    final_lb = np.zeros(n)
-    supertrend = np.zeros(n)
-    direction = np.ones(n, dtype=int)
-
-    final_ub[0] = basic_ub[0]
-    final_lb[0] = basic_lb[0]
-    supertrend[0] = final_lb[0]
-
-    for i in range(1, n):
-        if basic_ub[i] < final_ub[i - 1] or c[i - 1] > final_ub[i - 1]:
-            final_ub[i] = basic_ub[i]
-        else:
-            final_ub[i] = final_ub[i - 1]
-
-        if basic_lb[i] > final_lb[i - 1] or c[i - 1] < final_lb[i - 1]:
-            final_lb[i] = basic_lb[i]
-        else:
-            final_lb[i] = final_lb[i - 1]
-
-        if direction[i - 1] == 1:
-            if c[i] < final_lb[i]:
-                direction[i] = -1
-                supertrend[i] = final_ub[i]
-            else:
-                direction[i] = 1
-                supertrend[i] = final_lb[i]
-        else:
-            if c[i] > final_ub[i]:
-                direction[i] = 1
-                supertrend[i] = final_lb[i]
-            else:
-                direction[i] = -1
-                supertrend[i] = final_ub[i]
-
-    return {"supertrend": supertrend, "direction": direction, "atr": atr}
+    """Delegates to canonical intraday_engine service."""
+    return calculate_supertrend(df, period=period, multiplier=multiplier)
 
 
 def _calculate_atr(df: pd.DataFrame, period: int = 14) -> np.ndarray:
-    """Computes Welles Wilder Average True Range (ATR) across candlestick bars."""
-    if len(df) < 2:
-        return np.zeros(len(df))
-    h = df["High"].values
-    l = df["Low"].values
-    c = df["Close"].values
-    tr1 = h - l
-    tr2 = np.abs(h - np.roll(c, 1))
-    tr3 = np.abs(l - np.roll(c, 1))
-    tr2[0] = tr1[0]
-    tr3[0] = tr1[0]
-    tr = np.maximum(tr1, np.maximum(tr2, tr3))
-    # Welles Wilder exponential smoothing (RMA)
-    atr = pd.Series(tr).ewm(alpha=1.0 / period, adjust=False).mean().values
-    return np.nan_to_num(atr, nan=0.0)
+    """Delegates to canonical intraday_engine service."""
+    return calculate_atr(df, period=period)
 
 
 def _calculate_rsi(series: pd.Series, period: int = 14) -> np.ndarray:
-    """Computes Welles Wilder Relative Strength Index (RSI)."""
-    if len(series) < 2:
-        return np.full(len(series), 50.0)
-
-    delta = series.diff()
-    # Welles Wilder exponential moving average for gain and loss
-    gain = (delta.where(delta > 0, 0.0)).ewm(com=period - 1, adjust=False, min_periods=period).mean()
-    loss = (-delta.where(delta < 0, 0.0)).ewm(com=period - 1, adjust=False, min_periods=period).mean()
-
-    rs = gain / np.maximum(loss, 1e-9)
-    rsi = 100.0 - (100.0 / (1.0 + rs))
-    return rsi.fillna(50.0).values
+    """Delegates to canonical intraday_engine service."""
+    return calculate_rsi(series, period=period)
 
 
 def _calculate_macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> Dict[str, np.ndarray]:

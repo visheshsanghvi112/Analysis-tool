@@ -165,9 +165,16 @@ def calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float =
 
 
 def calculate_atr(df: pd.DataFrame, period: int = 14) -> np.ndarray:
-    """Computes Welles Wilder Average True Range (ATR) across candlestick bars."""
-    if len(df) < 2:
-        return np.zeros(len(df))
+    """
+    Computes Welles Wilder Average True Range (ATR) across candlestick bars.
+    Uses exact Welles Wilder specification:
+    - First ATR value at index (period - 1) is the SMA of the first 'period' True Ranges.
+    - Subsequent ATR values use Wilder's exponential smoothing recurrence:
+      ATR_t = (ATR_{t-1} * (period - 1) + TR_t) / period
+    """
+    n = len(df)
+    if n < 2:
+        return np.zeros(n)
     h = df["High"].values
     l = df["Low"].values
     c = df["Close"].values
@@ -177,7 +184,20 @@ def calculate_atr(df: pd.DataFrame, period: int = 14) -> np.ndarray:
     tr2[0] = tr1[0]
     tr3[0] = tr1[0]
     tr = np.maximum(tr1, np.maximum(tr2, tr3))
-    atr = pd.Series(tr).ewm(alpha=1.0 / period, adjust=False).mean().values
+
+    atr = np.zeros(n)
+    if n < period:
+        atr = pd.Series(tr).ewm(alpha=1.0 / period, adjust=False).mean().values
+        return np.nan_to_num(atr, nan=0.0)
+
+    # 1. First ATR is SMA of first 'period' TR values
+    atr[period - 1] = float(np.mean(tr[:period]))
+    # 2. Subsequent ATRs follow Wilder's smoothing recurrence
+    for i in range(period, n):
+        atr[i] = (atr[i - 1] * (period - 1) + tr[i]) / period
+    # For bars before 'period', fill with expanding mean for continuity
+    for i in range(period - 1):
+        atr[i] = float(np.mean(tr[:i + 1]))
     return np.nan_to_num(atr, nan=0.0)
 
 

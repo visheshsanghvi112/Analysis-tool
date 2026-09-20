@@ -146,7 +146,8 @@ def test_half_kelly_and_atr_geometry():
 
 def test_missing_data_is_explicit():
     result = evaluate_committee({"price": 100})
-    assert result["audit"]["no_hidden_defaults"] is True
+    assert result["audit"]["no_hidden_data_fallbacks"] is True
+    assert "no_hidden_defaults" not in result["audit"]
     assert "fair_value/price" in result["desks"]["fundamental"]["missing_data"]
     assert "vwap" in str(result["desks"]["technical"]["missing_data"])
     assert "pcr_oi" in result["desks"]["derivatives"]["missing_data"]

@@ -89,6 +89,10 @@ class DeskContext(BaseModel):
 
     # Fundamental / valuation context
     fair_value: Optional[float] = None
+    valuation_methodology: Optional[str] = None
+    valuation_status: Optional[str] = None
+    valuation_data_status: Optional[str] = None
+    assumption_status: Optional[str] = None
     roe_pct: Optional[float] = None
     revenue_growth_pct: Optional[float] = None
     operating_margin_pct: Optional[float] = None
@@ -160,6 +164,10 @@ class RiskGateResult:
 def evaluate_fundamental_desk(ctx: Dict[str, Any]) -> DeskResult:
     fair_value = _num(ctx.get("fair_value"))
     price = _num(ctx.get("price"))
+    val_methodology = ctx.get("valuation_methodology")
+    val_status = ctx.get("valuation_status")
+    val_data_status = ctx.get("valuation_data_status", ctx.get("data_status"))
+    assumption_status = ctx.get("assumption_status")
     roe = _pct(_num(ctx.get("roe_pct", ctx.get("roe"))))
     revenue_growth = _pct(_num(ctx.get("revenue_growth_pct", ctx.get("revenue_growth"))))
     op_margin = _pct(_num(ctx.get("operating_margin_pct", ctx.get("operating_margin"))))
@@ -173,21 +181,31 @@ def evaluate_fundamental_desk(ctx: Dict[str, Any]) -> DeskResult:
     missing: List[str] = []
     flags: List[str] = []
 
+    is_proxy_val = val_status == "PROXY" or val_methodology in (
+        "OCF_PROXY_VALUATION",
+        "FINANCIAL_INSTITUTION_EQUITY_CASHFLOW_PROXY",
+    )
+    if is_proxy_val:
+        flags.append("PROXY_VALUATION_USED")
+
     if fair_value is not None and price is not None and price > 0:
         upside = fair_value / price - 1.0
         possible += 2
+        method_label = f" ({val_methodology})" if val_methodology else " (Proxy)"
         if upside >= 0.15:
             points += 2
             state = "BULLISH"
-            detail = f"Fair value implies {upside * 100:.1f}% upside."
+            detail = f"Fair value implies {upside * 100:.1f}% upside." if not is_proxy_val else f"Proxy fair value{method_label} implies {upside * 100:.1f}% upside. Note: Non-standard cash flow/net income proxy."
         elif upside <= -0.15:
             points -= 2
             state = "BEARISH"
-            detail = f"Fair value implies {upside * 100:.1f}% downside."
+            detail = f"Fair value implies {upside * 100:.1f}% downside." if not is_proxy_val else f"Proxy fair value{method_label} implies {upside * 100:.1f}% downside. Note: Non-standard cash flow/net income proxy."
         else:
             state = "NEUTRAL"
-            detail = f"Fair value gap is {upside * 100:.1f}%."
-        evidence.append({"factor": "Fair-value gap", "status": state, "value": round(upside * 100, 2), "detail": detail})
+            detail = f"Fair value gap is {upside * 100:.1f}%." if not is_proxy_val else f"Proxy fair value{method_label} gap is {upside * 100:.1f}%. Note: Non-standard cash flow/net income proxy."
+        
+        factor_name = "Fair-value gap (Proxy)" if is_proxy_val else "Fair-value gap"
+        evidence.append({"factor": factor_name, "status": state, "value": round(upside * 100, 2), "detail": detail})
     else:
         missing.append("fair_value/price")
 
@@ -259,7 +277,8 @@ def evaluate_fundamental_desk(ctx: Dict[str, Any]) -> DeskResult:
 
     denom = max(possible, 1)
     score = _clamp(50 + (points / denom) * 50, 0, 100)
-    confidence = _clamp(100 * (possible / 6.0), 0, 100)
+    base_confidence = _clamp(100 * (possible / 7.0), 0, 100)
+    confidence = round(base_confidence * 0.80, 1) if is_proxy_val else round(base_confidence, 1)
     return DeskResult(
         desk="FUNDAMENTAL",
         stance=_direction_from_points(points),
@@ -1018,7 +1037,6 @@ def evaluate_committee(ctx: Dict[str, Any]) -> Dict[str, Any]:
             "no_hidden_data_fallbacks": True,
             "strategy_defaults_present": True,
             "model_assumptions_present": True,
-            "no_hidden_defaults": True,
             "llm_used": False,
             "network_calls": False,
         },

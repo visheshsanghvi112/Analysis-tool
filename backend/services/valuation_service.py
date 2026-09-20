@@ -182,7 +182,7 @@ def calculate_canonical_valuation(
     else:
         if fcf is not None and fcf > 0:
             starting_flow = fcf
-            flow_type = "Free Cash Flow (FCFF)"
+            flow_type = "Free Cash Flow (source-provided)"
             methodology = "STANDARD_DCF"
             data_status = "COMPLETE"
             valuation_status = "OK"

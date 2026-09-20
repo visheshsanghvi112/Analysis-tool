@@ -193,12 +193,11 @@ def build_canonical_market_state(
             returns = close.pct_change().dropna()
             rolling_vol = returns.rolling(20).std() * np.sqrt(252) * 100.0
             current_vol = _safe_float(rolling_vol.iloc[-1])
+            valid_vols = rolling_vol.dropna()
             vol_percentile = None
-            if current_vol is not None and len(rolling_vol.dropna()) > 30:
-                vol_min = rolling_vol.min()
-                vol_max = rolling_vol.max()
-                if vol_max > vol_min:
-                    vol_percentile = _safe_float(((current_vol - vol_min) / (vol_max - vol_min)) * 100.0)
+            if current_vol is not None and len(valid_vols) > 30:
+                count_le = (valid_vols <= current_vol).sum()
+                vol_percentile = _safe_float((count_le / len(valid_vols)) * 100.0)
 
             cum_ret = (1.0 + returns).cumprod()
             rolling_max = cum_ret.expanding().max()
@@ -254,12 +253,11 @@ def build_canonical_market_state(
             returns = close.pct_change().dropna()
             rolling_vol = returns.rolling(20).std() * np.sqrt(252) * 100.0
             current_vol = _safe_float(rolling_vol.iloc[-1])
+            valid_vols = rolling_vol.dropna()
             vol_percentile = None
-            if current_vol is not None and len(rolling_vol.dropna()) > 30:
-                vol_min = rolling_vol.min()
-                vol_max = rolling_vol.max()
-                if vol_max > vol_min:
-                    vol_percentile = _safe_float(((current_vol - vol_min) / (vol_max - vol_min)) * 100.0)
+            if current_vol is not None and len(valid_vols) > 30:
+                count_le = (valid_vols <= current_vol).sum()
+                vol_percentile = _safe_float((count_le / len(valid_vols)) * 100.0)
 
             cum_ret = (1.0 + returns).cumprod()
             rolling_max = cum_ret.expanding().max()
@@ -498,6 +496,10 @@ def build_desk_context(
         price_vs_ema20_atr=price_vs_ema20_atr,
         delta_absorption=delta_absorption,
         fair_value=valuation.get("fair_value"),
+        valuation_methodology=valuation.get("methodology"),
+        valuation_status=valuation.get("valuation_status"),
+        valuation_data_status=valuation.get("data_status"),
+        assumption_status=valuation.get("assumption_status"),
         roe_pct=fundamentals.get("roe_pct"),
         revenue_growth_pct=fundamentals.get("revenue_growth_pct"),
         operating_margin_pct=fundamentals.get("operating_margin_pct"),
