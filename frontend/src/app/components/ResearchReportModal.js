@@ -13,7 +13,9 @@ import {
   CheckCircle2, 
   Clock,
   ExternalLink,
-  Target
+  Target,
+  Scale,
+  ShieldCheck
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
@@ -27,7 +29,7 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
     let isMounted = true;
     setLoading(true);
 
-    // Fetch live quote, fundamentals, valuation, risk metrics, technical analysis, and ETF analysis
+    // Fetch live quote, fundamentals, valuation, risk metrics, technical analysis, ETF analysis, and committee desk
     Promise.all([
       fetch(`${API_BASE_URL}/api/live?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch(`${API_BASE_URL}/api/valuation?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
@@ -35,7 +37,8 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
       fetch(`${API_BASE_URL}/api/portfolio-metrics?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch(`${API_BASE_URL}/api/analyze?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch(`${API_BASE_URL}/api/etf-analysis?ticker=${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([quote, valuation, fundamentals, riskMetrics, analysis, etfAnalysis]) => {
+      fetch(`${API_BASE_URL}/api/desk/evaluate/${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([quote, valuation, fundamentals, riskMetrics, analysis, etfAnalysis, desk]) => {
       if (!isMounted) return;
       const isUS = ticker && !ticker.endsWith('.NS') && !ticker.endsWith('.BO');
       const loc = isUS ? 'en-US' : 'en-IN';
@@ -46,6 +49,7 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
         riskMetrics,
         analysis,
         etfAnalysis,
+        desk,
         generatedAt: new Date().toLocaleString(loc, {
           dateStyle: 'medium',
           timeStyle: 'short'
@@ -71,6 +75,7 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
   const mm = data?.riskMetrics?.market_metrics || {};
   const sum = data?.analysis?.summary || {};
   const etf = data?.etfAnalysis || null;
+  const desk = data?.desk || null;
   const isETF = Boolean(etf?.ticker) || (
     ticker && [
       'BEES', 'MON100', 'MAFANG', 'CPSEETF', 'GOLDETF', 'LIQUIDBEES', 'SILVERBEES',
@@ -359,6 +364,81 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
                   </div>
                 </div>
               </div>
+
+              {/* Multi-Desk Institutional Committee & CRO Risk Gate */}
+              {desk && (
+                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] print:border-slate-300">
+                  <div className="flex items-center justify-between mb-3 border-b border-white/[0.04] pb-2 print:border-slate-200 flex-wrap gap-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 print:text-black flex items-center gap-1.5">
+                      <Scale className="w-3.5 h-3.5 text-indigo-400" /> Institutional Committee &amp; CRO Gate
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                        desk.committee_state === 'BULLISH' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' :
+                        desk.committee_state === 'BEARISH' ? 'bg-rose-500/15 text-rose-300 border-rose-500/30' :
+                        'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      } print:text-black print:border-black`}>
+                        {desk.committee_state} ({desk.committee_score}/100)
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.04] text-slate-300 border border-white/[0.08] print:text-black print:border-black">
+                        {desk.action_state}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs mb-3">
+                    {/* Red-Teaming Duel Highlights */}
+                    <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/15 print:border-slate-200">
+                      <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block mb-1">
+                        Bullish Catalysts (Long Thesis)
+                      </span>
+                      <div className="space-y-1 text-[11px] text-slate-300 print:text-slate-800">
+                        {desk.desks?.fundamental?.evidence?.filter(e => e.status?.includes('BULL') || e.status === 'OK').slice(0, 1).map((e, idx) => (
+                          <p key={idx}>• <strong>{e.factor}:</strong> {e.detail}</p>
+                        ))}
+                        {desk.desks?.technical?.evidence?.filter(e => e.status?.includes('BULL')).slice(0, 1).map((e, idx) => (
+                          <p key={idx}>• <strong>{e.factor}:</strong> {e.detail}</p>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-rose-500/5 border border-rose-500/15 print:border-slate-200">
+                      <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider block mb-1">
+                        Skeptic Adversary (Bear Red-Team)
+                      </span>
+                      <div className="space-y-1 text-[11px] text-slate-300 print:text-slate-800">
+                        {desk.risk_gate?.risk_factors?.filter(f => f.severity !== 'OK').slice(0, 2).map((rf, idx) => (
+                          <p key={idx}>• <strong>{rf.factor}:</strong> {rf.severity} ({String(rf.value)})</p>
+                        )) || <p className="italic text-slate-500">No critical risk flags active.</p>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* CRO Gate & Trade Geometry Row */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-white/[0.04] print:border-slate-200 text-center">
+                    <div className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04] print:border-slate-200">
+                      <span className="text-[9px] text-slate-400 uppercase block mb-0.5">CRO Gate</span>
+                      <span className="text-xs font-bold text-white print:text-black">{desk.risk_gate?.state || 'PASS'}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04] print:border-slate-200">
+                      <span className="text-[9px] text-slate-400 uppercase block mb-0.5">Sizing Cap</span>
+                      <span className="text-xs font-bold text-indigo-300 print:text-black">{((desk.risk_gate?.sizing_cap_pct ?? 1) * 100).toFixed(0)}%</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04] print:border-slate-200">
+                      <span className="text-[9px] text-slate-400 uppercase block mb-0.5">Stop Loss (ATR)</span>
+                      <span className="text-xs font-bold text-rose-400 font-mono print:text-black">
+                        {desk.trade_geometry?.stop_loss ? `${currSym}${desk.trade_geometry.stop_loss.toLocaleString(loc)}` : 'N/A'}
+                      </span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04] print:border-slate-200">
+                      <span className="text-[9px] text-slate-400 uppercase block mb-0.5">Target 1 (2R)</span>
+                      <span className="text-xs font-bold text-emerald-400 font-mono print:text-black">
+                        {desk.trade_geometry?.target1 ? `${currSym}${desk.trade_geometry.target1.toLocaleString(loc)}` : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Analytical Synthesis & Model View */}
               <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] print:border-slate-300">

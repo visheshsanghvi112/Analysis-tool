@@ -145,8 +145,9 @@ export default function InvestmentCommitteeDesk({ ticker }) {
 
       {loading && !data ? (
         <div className="py-12 text-center">
-          <div className="inline-flex items-center justify-center p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 mb-3 animate-pulse">
-            <Scale className="w-8 h-8 animate-spin" />
+          <div className="inline-flex items-center justify-center p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 mb-3 relative">
+            <Scale className="w-7 h-7 text-indigo-300" />
+            <RefreshCw className="w-3.5 h-3.5 animate-spin absolute -top-1 -right-1 text-indigo-400" />
           </div>
           <h4 className="text-sm font-bold text-white mb-1">Convening Multi-Desk Committee...</h4>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
@@ -262,7 +263,7 @@ export default function InvestmentCommitteeDesk({ ticker }) {
                       type="number"
                       value={capital}
                       onChange={(e) => setCapital(Number(e.target.value) || 10000)}
-                      className="w-24 px-2 py-1 rounded-lg bg-black/50 border border-white/10 text-xs font-mono text-white"
+                      className="w-24 px-2.5 py-1 rounded-lg bg-black/50 border border-white/10 text-xs font-mono text-white outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/40 transition"
                     />
                   </div>
                 </div>
@@ -384,7 +385,7 @@ export default function InvestmentCommitteeDesk({ ticker }) {
           </div>
 
           {/* ── Active Conflict Matrix Alerts ───────────────────── */}
-          {active_conflicts.length > 0 && (
+          {active_conflicts.length > 0 ? (
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-400">
                 <AlertTriangle className="w-4 h-4" />
@@ -428,6 +429,16 @@ export default function InvestmentCommitteeDesk({ ticker }) {
                   </div>
                 ))}
               </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs">
+              <div className="flex items-center gap-2 text-slate-400">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>Conflict Matrix: <strong>0 Model Conflicts</strong> Detected — Cross-desk signals aligned.</span>
+              </div>
+              <span className="text-[10px] font-mono text-emerald-400/80 uppercase font-semibold hidden sm:inline">
+                Harmonious Deliberation
+              </span>
             </div>
           )}
 
@@ -555,19 +566,19 @@ export default function InvestmentCommitteeDesk({ ticker }) {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                       <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                         <span className="text-[10px] font-bold text-slate-400 block mb-1">Entry Price</span>
-                        <span className="text-xs sm:text-sm font-black text-white font-mono tabular-nums">{currSym}{trade_geometry.entry_price}</span>
+                        <span className="text-xs sm:text-sm font-black text-white font-mono tabular-nums">{currSym}{trade_geometry.entry_price != null ? Number(trade_geometry.entry_price).toLocaleString(isIndian ? 'en-IN' : 'en-US') : '—'}</span>
                       </div>
                       <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">
                         <span className="text-[10px] font-bold text-rose-300 block mb-1">Stop Loss (ATR)</span>
-                        <span className="text-xs sm:text-sm font-black text-rose-400 font-mono tabular-nums">{currSym}{trade_geometry.stop_loss}</span>
+                        <span className="text-xs sm:text-sm font-black text-rose-400 font-mono tabular-nums">{currSym}{trade_geometry.stop_loss != null ? Number(trade_geometry.stop_loss).toLocaleString(isIndian ? 'en-IN' : 'en-US') : '—'}</span>
                       </div>
                       <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                         <span className="text-[10px] font-bold text-emerald-300 block mb-1">Target 1 (2R)</span>
-                        <span className="text-xs sm:text-sm font-black text-emerald-400 font-mono tabular-nums">{currSym}{trade_geometry.target1}</span>
+                        <span className="text-xs sm:text-sm font-black text-emerald-400 font-mono tabular-nums">{currSym}{trade_geometry.target1 != null ? Number(trade_geometry.target1).toLocaleString(isIndian ? 'en-IN' : 'en-US') : '—'}</span>
                       </div>
                       <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                         <span className="text-[10px] font-bold text-emerald-300 block mb-1">Target 2 (3R)</span>
-                        <span className="text-xs sm:text-sm font-black text-emerald-400 font-mono tabular-nums">{currSym}{trade_geometry.target2}</span>
+                        <span className="text-xs sm:text-sm font-black text-emerald-400 font-mono tabular-nums">{currSym}{trade_geometry.target2 != null ? Number(trade_geometry.target2).toLocaleString(isIndian ? 'en-IN' : 'en-US') : '—'}</span>
                       </div>
                     </div>
 
