@@ -1447,12 +1447,12 @@ export default function IntradayTerminal() {
               </div>
             </div>
 
-            {/* 3. Relative Strength vs Benchmark */}
+            {/* 3. Relative Performance vs Benchmark */}
             <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between shadow-md shadow-black/30">
               <div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
-                    Relative Strength
+                    Relative Performance
                     <InfoBadge infoKey="benchmark_relative_strength" />
                   </span>
                   <span className="text-[10px] font-mono text-slate-400 font-bold px-1.5 py-0.5 bg-slate-950/80 border border-slate-800 rounded">
@@ -1460,11 +1460,11 @@ export default function IntradayTerminal() {
                   </span>
                 </div>
                 <div className="mt-1">
-                  <p className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${data.relative_strength?.alpha_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {data.relative_strength?.alpha_pct >= 0 ? '+' : ''}{data.relative_strength?.alpha_pct}%
+                  <p className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${(data.relative_strength?.relative_perf_pct ?? data.relative_strength?.alpha_pct) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {(data.relative_strength?.relative_perf_pct ?? data.relative_strength?.alpha_pct) >= 0 ? '+' : ''}{data.relative_strength?.relative_perf_pct ?? data.relative_strength?.alpha_pct}%
                   </p>
                   <p className="text-xs text-slate-400 mt-0.5 truncate font-mono">
-                    Alpha: <span className="font-semibold text-slate-200">{data.relative_strength?.status || 'Neutral'}</span>
+                    Spread: <span className="font-semibold text-slate-200">{data.relative_strength?.status || 'Neutral'}</span>
                   </p>
                 </div>
               </div>
@@ -1473,12 +1473,12 @@ export default function IntradayTerminal() {
               <div>
                 <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60 font-mono">
                   <span>Idx: <strong className={data.relative_strength?.benchmark_change_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{data.relative_strength?.benchmark_change_pct >= 0 ? '+' : ''}{data.relative_strength?.benchmark_change_pct}%</strong></span>
-                  <span className="text-slate-300 truncate max-w-[85px]">{data.relative_strength?.regime || 'Tracking'}</span>
+                  <span className="text-slate-300 truncate max-w-[85px]">{data.relative_strength?.status || 'Tracking'}</span>
                 </div>
                 <div className="mt-1.5 flex items-center justify-between text-[8px] text-slate-500 font-mono">
                   <span>Lagging</span>
-                  <span className={data.relative_strength?.alpha_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
-                    {data.relative_strength?.alpha_pct >= 0 ? 'Outperforming' : 'Underperforming'}
+                  <span className={(data.relative_strength?.relative_perf_pct ?? data.relative_strength?.alpha_pct) >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                    {(data.relative_strength?.relative_perf_pct ?? data.relative_strength?.alpha_pct) >= 0 ? 'Outperforming' : 'Underperforming'}
                   </span>
                   <span>Leading</span>
                 </div>
@@ -1556,6 +1556,12 @@ export default function IntradayTerminal() {
                       style={{ width: `${Math.abs(data.signals.quant_score)}%` }}
                     />
                   </div>
+                  {data.signals?.extension_state && data.signals.extension_state !== 'NORMAL' && (
+                    <div className="mt-2 px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[9px] text-amber-300 font-mono flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                      <span className="truncate">{data.signals.extension_desc || 'Price extended from VWAP — elevated chase risk.'}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1568,7 +1574,7 @@ export default function IntradayTerminal() {
                 </div>
                 <div className="mt-1.5 flex items-center justify-between text-[8px] text-slate-500 font-mono">
                   <span>Bearish</span>
-                  <span className="text-slate-400">Multi-Model Engine</span>
+                  <span className="text-slate-400">{data.signals?.risk_regime || 'Multi-Model Engine'}</span>
                   <span>Bullish</span>
                 </div>
               </div>
@@ -2416,7 +2422,7 @@ export default function IntradayTerminal() {
                             : 'text-slate-400 hover:text-slate-200 border border-transparent'
                         }`}
                       >
-                        Order Flow CVD
+                        Volume Delta Proxy
                       </button>
                       <button
                         onClick={() => setActiveSubChart('atr')}
@@ -2603,7 +2609,7 @@ export default function IntradayTerminal() {
                         return (
                           <>
                             <text x={padding.left + 4} y={14} fill="#94a3b8" fontSize="8" fontFamily="monospace" fontWeight="bold">
-                              CVD Net Cumulative Delta: <tspan fill={(activeCandle?.cum_delta || 0) >= 0 ? '#eab308' : '#f43f5e'} fontWeight="bold">{(activeCandle?.cum_delta || 0) >= 0 ? '+' : ''}{(activeCandle?.cum_delta || 0).toLocaleString()} shares</tspan>
+                              Volume Delta Proxy (Price-Location Model): <tspan fill={(activeCandle?.cum_delta || 0) >= 0 ? '#eab308' : '#f43f5e'} fontWeight="bold">{(activeCandle?.cum_delta || 0) >= 0 ? '+' : ''}{(activeCandle?.cum_delta || 0).toLocaleString()} shares</tspan>
                               {hoveredCandle && ` (${activeCandle?.time})`}
                             </text>
                             <line x1={padding.left} y1={zeroY} x2={chartWidth - padding.right} y2={zeroY} stroke="#64748b" strokeOpacity={0.6} strokeDasharray="2 2" />
@@ -2724,7 +2730,7 @@ export default function IntradayTerminal() {
                   </div>
                 </div>
 
-                {/* Microstructure Order Pressure */}
+                {/* Candle Volume Pressure Proxy */}
                 <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
                   <div>
                     <div className="flex items-center justify-between mb-4">
@@ -2734,9 +2740,9 @@ export default function IntradayTerminal() {
                         </div>
                         <div>
                           <h3 className="text-sm font-bold text-white tracking-wide">
-                            Microstructure Order Pressure
+                            Candle Volume Pressure Proxy
                           </h3>
-                          <p className="text-[11px] text-slate-400">Bid-ask tick volume aggression delta</p>
+                          <p className="text-[11px] text-slate-400">Intra-bar price location estimation (Proxy)</p>
                         </div>
                       </div>
                       <InfoBadge infoKey="order_flow_delta" />
@@ -2745,30 +2751,33 @@ export default function IntradayTerminal() {
                     <div className="p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800/80 space-y-3">
                       <div className="flex items-center justify-between text-xs font-mono">
                         <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold">
-                          Buyers: {data.order_flow.buy_pressure_pct}%
+                          Buyers: {data.order_flow?.buy_pressure_pct ?? data.volume_delta_proxy?.buy_pressure_pct}%
                         </span>
                         <span className="px-2 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/20 text-rose-400 font-bold">
-                          Sellers: {data.order_flow.sell_pressure_pct}%
+                          Sellers: {data.order_flow?.sell_pressure_pct ?? data.volume_delta_proxy?.sell_pressure_pct}%
                         </span>
                       </div>
 
                       <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden flex p-0.5 border border-slate-800">
                         <div
                           className="bg-gradient-to-r from-emerald-600 to-emerald-400 h-full rounded-l-full transition-all duration-500"
-                          style={{ width: `${data.order_flow.buy_pressure_pct}%` }}
+                          style={{ width: `${data.order_flow?.buy_pressure_pct ?? data.volume_delta_proxy?.buy_pressure_pct}%` }}
                         />
                         <div
                           className="bg-gradient-to-r from-rose-500 to-rose-600 h-full rounded-r-full transition-all duration-500"
-                          style={{ width: `${data.order_flow.sell_pressure_pct}%` }}
+                          style={{ width: `${data.order_flow?.sell_pressure_pct ?? data.volume_delta_proxy?.sell_pressure_pct}%` }}
                         />
                       </div>
 
                       <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono pt-1">
-                        <span>Net Delta: <strong className={data.order_flow.net_delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
-                          {data.order_flow.net_delta >= 0 ? '+' : ''}{data.order_flow.net_delta?.toLocaleString()} shares
+                        <span>Net Delta: <strong className={(data.order_flow?.net_delta ?? data.volume_delta_proxy?.net_delta) >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                          {(data.order_flow?.net_delta ?? data.volume_delta_proxy?.net_delta) >= 0 ? '+' : ''}{(data.order_flow?.net_delta ?? data.volume_delta_proxy?.net_delta)?.toLocaleString()} shares
                         </strong></span>
                         <span>Total Vol: <strong className="text-white">{data.volume?.toLocaleString()}</strong></span>
                       </div>
+                      <p className="text-[9px] text-slate-500 font-mono italic text-center pt-1 border-t border-slate-800/40">
+                        * Modeled via candle close-to-range location; not Level 2 tick order flow.
+                      </p>
                     </div>
                   </div>
 
@@ -3077,7 +3086,8 @@ export default function IntradayTerminal() {
                 <div className="w-2/4 bg-emerald-500/60" />
                 <div className="w-1/4 bg-purple-500/60" />
               </div>
-              <span className="text-emerald-400 font-semibold">🎯 Target: {currSym}{data.battle_plan.target_2}</span>
+              <span className="text-purple-300 font-semibold">⚖️ {data.battle_plan.rr_ratio || '1:2.0 (Weighted)'}</span>
+              <span className="text-emerald-400 font-semibold ml-3">🎯 T2: {currSym}{data.battle_plan.target_2}</span>
             </div>
           </div>
         )}
@@ -3475,10 +3485,20 @@ export default function IntradayTerminal() {
                   </div>
                 ) : (
                   <div className="space-y-3.5">
-                    {pcrData.is_index_benchmark && (
+                    {pcrData.is_model_approximation ? (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-300 font-mono">
+                        <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                        <span>Model Estimate: NIFTY Momentum &amp; VIX (Not Live Strike OI)</span>
+                      </div>
+                    ) : pcrData.provenance === 'NSE_OFFICIAL_OPTION_CHAIN' ? (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[10px] text-emerald-300 font-mono">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                        <span>NSE India Live Option Chain ({pcrData.benchmark_name})</span>
+                      </div>
+                    ) : (
                       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-purple-500/10 border border-purple-500/30 text-[10px] text-purple-300 font-mono">
-                        <Scale className="w-3 h-3 text-purple-400" />
-                        <span>{pcrData.benchmark_name} Macro Derivatives Sentiment</span>
+                        <Scale className="w-3 h-3 text-purple-400 shrink-0" />
+                        <span>{pcrData.benchmark_name || 'Live Options Chain'}</span>
                       </div>
                     )}
 

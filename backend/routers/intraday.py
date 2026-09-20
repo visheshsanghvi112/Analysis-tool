@@ -620,30 +620,45 @@ def _detect_institutional_traps(df: pd.DataFrame, curr_price: float, curr_vwap: 
 
 def _calculate_multi_timeframe(df_5m: pd.DataFrame) -> Dict[str, Any]:
     """
-    Computes Triple-Screen Confluence Matrix (5m, 15m, 1h) using fast resampling.
+    Computes Triple-Screen Confluence Matrix (5m, 15m, 1h) evaluating
+    EMA momentum alignment, RSI regime, and trend structure.
     """
     if len(df_5m) < 5:
         return {"confluence_score": 50, "confluence_bias": "NEUTRAL", "screens": []}
 
     screens = []
-    bullish_votes = 0
-    total_votes = 0
+    bullish_points = 0
+    total_points = 0
 
     # 1. 5m Screen
     c5 = df_5m["Close"]
     ema9_5m = c5.ewm(span=9, adjust=False).mean().iloc[-1]
     ema21_5m = c5.ewm(span=21, adjust=False).mean().iloc[-1]
+    ema50_5m = c5.ewm(span=50, adjust=False).mean().iloc[-1] if len(c5) >= 50 else ema21_5m
     rsi_5m = _calculate_rsi(c5, 14)[-1]
-    trend_5m = "BULLISH" if ema9_5m > ema21_5m else "BEARISH"
-    if trend_5m == "BULLISH":
-        bullish_votes += 1
-    total_votes += 1
+
+    pts_5m = 0
+    if ema9_5m > ema21_5m:
+        pts_5m += 1
+    if rsi_5m > 50:
+        pts_5m += 1
+    if c5.iloc[-1] > ema50_5m:
+        pts_5m += 1
+    bullish_points += pts_5m
+    total_points += 3
+
     screens.append({
         "timeframe": "5m (Setup)",
-        "trend": trend_5m,
+        "trend": "BULLISH" if pts_5m >= 2 else "BEARISH",
         "ema_fast": _safe_float(ema9_5m),
         "ema_slow": _safe_float(ema21_5m),
         "rsi": _safe_float(rsi_5m),
+        "confluence_score": int((pts_5m / 3.0) * 100),
+        "factors": {
+            "ema_aligned": bool(ema9_5m > ema21_5m),
+            "rsi_bullish_regime": bool(rsi_5m > 50),
+            "above_trend_anchor": bool(c5.iloc[-1] > ema50_5m),
+        }
     })
 
     # 2. 15m Screen (resample)
@@ -653,17 +668,31 @@ def _calculate_multi_timeframe(df_5m: pd.DataFrame) -> Dict[str, Any]:
             c15 = df_15m["Close"]
             ema9_15m = c15.ewm(span=9, adjust=False).mean().iloc[-1]
             ema21_15m = c15.ewm(span=21, adjust=False).mean().iloc[-1]
+            ema50_15m = c15.ewm(span=50, adjust=False).mean().iloc[-1] if len(c15) >= 50 else ema21_15m
             rsi_15m = _calculate_rsi(c15, 14)[-1]
-            trend_15m = "BULLISH" if ema9_15m > ema21_15m else "BEARISH"
-            if trend_15m == "BULLISH":
-                bullish_votes += 1
-            total_votes += 1
+
+            pts_15m = 0
+            if ema9_15m > ema21_15m:
+                pts_15m += 1
+            if rsi_15m > 50:
+                pts_15m += 1
+            if c15.iloc[-1] > ema50_15m:
+                pts_15m += 1
+            bullish_points += pts_15m
+            total_points += 3
+
             screens.append({
                 "timeframe": "15m (Wave)",
-                "trend": trend_15m,
+                "trend": "BULLISH" if pts_15m >= 2 else "BEARISH",
                 "ema_fast": _safe_float(ema9_15m),
                 "ema_slow": _safe_float(ema21_15m),
                 "rsi": _safe_float(rsi_15m),
+                "confluence_score": int((pts_15m / 3.0) * 100),
+                "factors": {
+                    "ema_aligned": bool(ema9_15m > ema21_15m),
+                    "rsi_bullish_regime": bool(rsi_15m > 50),
+                    "above_trend_anchor": bool(c15.iloc[-1] > ema50_15m),
+                }
             })
     except Exception:
         pass
@@ -675,25 +704,39 @@ def _calculate_multi_timeframe(df_5m: pd.DataFrame) -> Dict[str, Any]:
             c1h = df_1h["Close"]
             ema9_1h = c1h.ewm(span=9, adjust=False).mean().iloc[-1]
             ema21_1h = c1h.ewm(span=21, adjust=False).mean().iloc[-1]
+            ema50_1h = c1h.ewm(span=50, adjust=False).mean().iloc[-1] if len(c1h) >= 50 else ema21_1h
             rsi_1h = _calculate_rsi(c1h, 14)[-1]
-            trend_1h = "BULLISH" if ema9_1h > ema21_1h else "BEARISH"
-            if trend_1h == "BULLISH":
-                bullish_votes += 1
-            total_votes += 1
+
+            pts_1h = 0
+            if ema9_1h > ema21_1h:
+                pts_1h += 1
+            if rsi_1h > 50:
+                pts_1h += 1
+            if c1h.iloc[-1] > ema50_1h:
+                pts_1h += 1
+            bullish_points += pts_1h
+            total_points += 3
+
             screens.append({
                 "timeframe": "1h (Tide)",
-                "trend": trend_1h,
+                "trend": "BULLISH" if pts_1h >= 2 else "BEARISH",
                 "ema_fast": _safe_float(ema9_1h),
                 "ema_slow": _safe_float(ema21_1h),
                 "rsi": _safe_float(rsi_1h),
+                "confluence_score": int((pts_1h / 3.0) * 100),
+                "factors": {
+                    "ema_aligned": bool(ema9_1h > ema21_1h),
+                    "rsi_bullish_regime": bool(rsi_1h > 50),
+                    "above_trend_anchor": bool(c1h.iloc[-1] > ema50_1h),
+                }
             })
     except Exception:
         pass
 
-    score = int((bullish_votes / max(total_votes, 1)) * 100)
-    if score >= 75:
+    score = int((bullish_points / max(total_points, 1)) * 100)
+    if score >= 70:
         verdict = "STRONG BULLISH CONFLUENCE"
-    elif score <= 25:
+    elif score <= 30:
         verdict = "STRONG BEARISH CONFLUENCE"
     else:
         verdict = "MIXED TIMEFRAMES (CHOP)"
@@ -701,39 +744,44 @@ def _calculate_multi_timeframe(df_5m: pd.DataFrame) -> Dict[str, Any]:
     return {
         "confluence_score": score,
         "confluence_bias": verdict,
+        "bullish_points": bullish_points,
+        "total_points": total_points,
         "screens": screens,
     }
 
 
 def _calculate_relative_strength(stock_change_pct: float, is_us: bool) -> Dict[str, Any]:
     """
-    Computes Beta-adjusted relative strength vs NIFTY 50 (IN) or S&P 500 (US).
+    Computes Intraday Relative Performance vs Benchmark (NIFTY 50 or S&P 500).
+    Calculates net return spread without claiming beta-adjusted alpha or institutional attribution.
     """
     bench_symbol = "^GSPC" if is_us else "^NSEI"
     bench_name = "S&P 500" if is_us else "NIFTY 50"
 
     bench_quote = get_quote(bench_symbol)
     bench_chg = _safe_float(bench_quote.get("changePct", 0.0))
-    alpha = round(stock_change_pct - bench_chg, 2)
+    spread = round(stock_change_pct - bench_chg, 2)
 
-    if alpha >= 1.0:
-        status = "STRONG OUTPERFORMER"
-        desc = f"Beating {bench_name} by +{alpha}%. Heavy institutional sponsorship."
-    elif alpha <= -1.0:
-        status = "UNDERPERFORMER"
-        desc = f"Lagging {bench_name} by {alpha}%. Lacks institutional support."
+    if spread >= 1.0:
+        status = "OUTPERFORMING"
+        desc = f"Outperforming {bench_name} by +{spread}% intraday."
+    elif spread <= -1.0:
+        status = "UNDERPERFORMING"
+        desc = f"Lagging {bench_name} by {spread}% intraday."
     else:
         status = "IN-LINE"
-        desc = f"Tracking {bench_name} closely ({alpha:+0.2f}% alpha)."
+        desc = f"Tracking {bench_name} closely ({spread:+0.2f}% spread)."
 
     return {
         "benchmark_symbol": bench_symbol,
         "benchmark_name": bench_name,
         "benchmark_price": _safe_float(bench_quote.get("price", 0.0)),
         "benchmark_change_pct": bench_chg,
-        "alpha_pct": alpha,
+        "relative_perf_pct": spread,
+        "alpha_pct": spread,  # Kept for backward compatibility
         "status": status,
         "desc": desc,
+        "metric_type": "Intraday Relative Return Spread",
     }
 
 
@@ -750,7 +798,7 @@ def _generate_battle_plan(
     curr_sym: str
 ) -> Dict[str, Any]:
     """
-    Auto-generates structured 1-Click Intraday Battle Plan.
+    Auto-generates structured 1-Click Intraday Battle Plan with mathematically consistent R:R.
     """
     is_long = "BUY" in bias or (supertrend_dir == 1 and curr_price >= curr_vwap)
     daily_lvls = pivots.get("daily_levels", {}) if isinstance(pivots, dict) else {}
@@ -783,7 +831,12 @@ def _generate_battle_plan(
             setup_name = "VWAP Rejection & Breakdown Scalp"
             trigger_rule = f"Short on 5m candle test of {curr_sym}{entry_price} with rejection below VWAP"
 
-    rr_ratio = "1:2.0"
+    # Mathematically consistent R:R:
+    # 50% scale out at Target 1 (1.5R) + 50% runner at Target 2 (2.5R) = 0.5*1.5 + 0.5*2.5 = 2.0R weighted
+    rr_ratio = "1:2.0 (Weighted)"
+    target_1_r = 1.5
+    target_2_r = 2.5
+    weighted_r = 2.0
 
     ref_line = f"Key Reference: PDH {curr_sym}{pdh:.2f} | PDL {curr_sym}{pdl:.2f} | PDC {curr_sym}{pdc:.2f}\n" if pdh > 0 else ""
 
@@ -799,9 +852,9 @@ def _generate_battle_plan(
         f"Entry Trigger: {curr_sym}{entry_price:.2f}\n"
         f"Rule: {trigger_rule}\n"
         f"Stop Loss:    {curr_sym}{stop_loss:.2f} (-{round((abs(entry_price-stop_loss)/entry_price)*100, 2)}% risk)\n"
-        f"Target 1 (1.5R): {curr_sym}{target_1:.2f}\n"
-        f"Target 2 (2.5R): {curr_sym}{target_2:.2f}\n"
-        f"Risk-Reward Ratio: {rr_ratio}\n"
+        f"Target 1 (1.5R): {curr_sym}{target_1:.2f} (Scale out 50%)\n"
+        f"Target 2 (2.5R): {curr_sym}{target_2:.2f} (Runner exit 50%)\n"
+        f"Risk-Reward Ratio: 1:2.0 (Weighted: 50% @ 1.5R, 50% @ 2.5R)\n"
         f"Key Invalidation: Violation of {curr_sym}{stop_loss:.2f}\n"
         f"═══════════════════════════════════════════\n"
         f"Generated via StockIQ Pro High-Frequency Desk"
@@ -814,6 +867,9 @@ def _generate_battle_plan(
         "stop_loss": stop_loss,
         "target_1": target_1,
         "target_2": target_2,
+        "target_1_r": target_1_r,
+        "target_2_r": target_2_r,
+        "weighted_r": weighted_r,
         "risk_per_share": risk_per_share,
         "rr_ratio": rr_ratio,
         "trigger_rule": trigger_rule,
@@ -875,10 +931,19 @@ def get_intraday_analysis(
         today_date = pd.to_datetime(df.index[-1]).date() if not df.empty else None
         pivots = _calculate_pivots(daily_df, today_date=today_date)
 
-        # 3. Live quote snapshot
+        # 3. Live quote snapshot & Synchronization
+        # Synchronize latest historical candle with live quote BEFORE indicator calculations
         quote = get_quote(clean_ticker)
+        live_quote_price = _safe_float(quote.get("price"))
+        if live_quote_price > 0 and not df.empty:
+            last_idx = df.index[-1]
+            df.loc[last_idx, "Close"] = live_quote_price
+            if live_quote_price > df.loc[last_idx, "High"]:
+                df.loc[last_idx, "High"] = live_quote_price
+            if live_quote_price < df.loc[last_idx, "Low"]:
+                df.loc[last_idx, "Low"] = live_quote_price
 
-        # 4. VWAP & Multi-Sigma Volatility Bands
+        # 4. VWAP & Multi-Sigma Volatility Bands (Computed on synchronized series)
         vwap_dict = _calculate_vwap_and_bands(df)
 
         # 5. Supertrend ATR(10, 3)
@@ -909,7 +974,7 @@ def get_intraday_analysis(
         # 9. Opening Range Breakout (ORB)
         orb = _calculate_orb(df, clean_interval)
 
-        # 10. Candles transformation & Order Flow Delta
+        # 10. Candles transformation & Order Flow Delta Proxy
         candles = []
         cum_delta = 0.0
         total_buyer_vol = 0.0
@@ -947,6 +1012,7 @@ def get_intraday_analysis(
                 "seller_vol": s_vol,
                 "delta": candle_delta,
                 "cum_delta": int(cum_delta),
+                "is_delta_proxy": True,
                 "vwap": _safe_float(vwap_dict["vwap"][i]),
                 "upper_band_1": _safe_float(vwap_dict["upper_1"][i]),
                 "lower_band_1": _safe_float(vwap_dict["lower_1"][i]),
@@ -966,15 +1032,7 @@ def get_intraday_analysis(
             })
 
         # Headline metrics
-        live_quote_price = _safe_float(quote.get("price"))
         curr_price = live_quote_price if live_quote_price > 0 else _safe_float(df["Close"].iloc[-1])
-        if candles and live_quote_price > 0:
-            candles[-1]["close"] = curr_price
-            if curr_price > candles[-1]["high"]:
-                candles[-1]["high"] = curr_price
-            if curr_price < candles[-1]["low"]:
-                candles[-1]["low"] = curr_price
-
         open_price = _safe_float(df["Open"].iloc[0])
         day_high = max(_safe_float(df["High"].max()), curr_price)
         day_low = min(_safe_float(df["Low"].min()), curr_price) if _safe_float(df["Low"].min()) > 0 else curr_price
@@ -999,11 +1057,30 @@ def get_intraday_analysis(
         buy_pressure_pct = round((total_buyer_vol / max(total_vol, 1.0)) * 100, 1)
         sell_pressure_pct = round(100.0 - buy_pressure_pct, 1)
 
+        # Extension & Location Analysis
+        vwap_diff_pct = ((curr_price - curr_vwap) / curr_vwap) * 100 if curr_vwap else 0.0
+        is_overbought = curr_rsi >= 70.0
+        is_oversold = curr_rsi <= 30.0
+        is_vwap_extended_up = vwap_diff_pct >= 1.5
+        is_vwap_extended_down = vwap_diff_pct <= -1.5
+
+        if is_overbought or is_vwap_extended_up:
+            extension_state = "EXTENDED_OVERBOUGHT"
+            extension_desc = f"Price is extended (+{vwap_diff_pct:.2f}% from VWAP, RSI {curr_rsi:.1f}). High chase risk; wait for pullback."
+            risk_regime = "ELEVATED (CHASE RISK)"
+        elif is_oversold or is_vwap_extended_down:
+            extension_state = "EXTENDED_OVERSOLD"
+            extension_desc = f"Price is stretched down ({vwap_diff_pct:.2f}% from VWAP, RSI {curr_rsi:.1f}). High short-chase risk; wait for bounce."
+            risk_regime = "ELEVATED (SHORT TRAP RISK)"
+        else:
+            extension_state = "NORMAL"
+            extension_desc = f"Price location ({vwap_diff_pct:+.2f}% from VWAP, RSI {curr_rsi:.1f}) is within standard operating bands."
+            risk_regime = "FAVORABLE (BALANCED RISK)"
+
         # 11. Quant Score (-100 to +100)
         quant_score = 0
         checklist = []
 
-        vwap_diff_pct = ((curr_price - curr_vwap) / curr_vwap) * 100 if curr_vwap else 0.0
         if curr_price > curr_vwap:
             quant_score += 25
             checklist.append({"factor": "VWAP Alignment", "status": "BULLISH", "desc": f"Trading +{vwap_diff_pct:.2f}% above session VWAP."})
@@ -1051,15 +1128,44 @@ def get_intraday_analysis(
 
         quant_score = max(-100, min(100, quant_score))
         if quant_score >= 50:
-            overall_bias = "STRONG BUY"
+            if extension_state == "EXTENDED_OVERBOUGHT":
+                overall_bias = "BULLISH (OVEREXTENDED)"
+            else:
+                overall_bias = "STRONG BUY"
         elif quant_score >= 20:
             overall_bias = "BUY"
         elif quant_score <= -50:
-            overall_bias = "STRONG SELL"
+            if extension_state == "EXTENDED_OVERSOLD":
+                overall_bias = "BEARISH (OVEREXTENDED)"
+            else:
+                overall_bias = "STRONG SELL"
         elif quant_score <= -20:
             overall_bias = "SELL"
         else:
             overall_bias = "NEUTRAL"
+
+        # Price Band / Circuit Intelligence
+        band_pct = 10.0 if not is_us else 20.0
+        upper_band = round(prev_close * (1.0 + band_pct / 100.0), 2)
+        lower_band = round(prev_close * (1.0 - band_pct / 100.0), 2)
+        dist_to_upper_pct = round(((upper_band - curr_price) / curr_price) * 100.0, 2)
+        dist_to_lower_pct = round(((curr_price - lower_band) / curr_price) * 100.0, 2)
+
+        if dist_to_upper_pct <= 1.0:
+            circuit_status = "APPROACHING_UPPER_CIRCUIT"
+        elif dist_to_lower_pct <= 1.0:
+            circuit_status = "APPROACHING_LOWER_CIRCUIT"
+        else:
+            circuit_status = "NORMAL"
+
+        circuit_intel = {
+            "upper_band": upper_band,
+            "lower_band": lower_band,
+            "band_pct": band_pct,
+            "dist_to_upper_pct": dist_to_upper_pct,
+            "dist_to_lower_pct": dist_to_lower_pct,
+            "circuit_status": circuit_status,
+        }
 
         # 12. NEW REAL-LIFE MODULES:
         # A. Pre-Market Gap Intelligence
@@ -1113,18 +1219,37 @@ def get_intraday_analysis(
             "volume_profile": vpvr,
             "pivots": pivots,
             "orb": orb,
+            "volume_delta_proxy": {
+                "total_buyer_vol": int(total_buyer_vol),
+                "total_seller_vol": int(total_seller_vol),
+                "net_delta": int(cum_delta),
+                "buy_pressure_pct": buy_pressure_pct,
+                "sell_pressure_pct": sell_pressure_pct,
+                "is_proxy": True,
+                "methodology": "Price-Location Volume Delta Proxy (estimated via intra-candle range; not tick-level Level 2 order flow)",
+            },
             "order_flow": {
                 "total_buyer_vol": int(total_buyer_vol),
                 "total_seller_vol": int(total_seller_vol),
                 "net_delta": int(cum_delta),
                 "buy_pressure_pct": buy_pressure_pct,
                 "sell_pressure_pct": sell_pressure_pct,
+                "is_proxy": True,
             },
             "signals": {
                 "quant_score": quant_score,
                 "overall_bias": overall_bias,
+                "trend": "BULLISH" if quant_score > 0 else ("BEARISH" if quant_score < 0 else "NEUTRAL"),
+                "momentum": "STRONG" if abs(quant_score) >= 50 else ("MODERATE" if abs(quant_score) >= 20 else "WEAK"),
+                "extension_state": extension_state,
+                "extension_desc": extension_desc,
+                "risk_regime": risk_regime,
+                "vwap_distance_pct": round(vwap_diff_pct, 2),
                 "checklist": checklist,
             },
+            "circuit_bands": circuit_intel,
+            "data_latency": "15-minute delayed snapshot (10s polling interval)",
+            "latency_note": "Data source is 15-minute delayed snapshot feed. Polling interval is 10-30s. Level 2 DOM and Time & Sales operate as modeled microstructure.",
             "gap_analysis": gap_intel,
             "trap_detection": trap_intel,
             "multi_timeframe": mtf_intel,
@@ -1439,8 +1564,11 @@ def get_options_pcr(
     market: str = Query("IN", description="Market: IN or US")
 ):
     """
-    Fetches live Options Chain and calculates institutional-grade Put-Call Ratio (PCR)
-    and Open Interest (OI) breakdown using Yahoo Finance options chain endpoint.
+    Fetches live Options Chain and calculates Put-Call Ratio (PCR)
+    and Open Interest (OI) breakdown.
+    For Indian securities: queries official NSE option chain endpoint; falls back to
+    transparent model approximation if throttled.
+    For US securities: queries Yahoo Finance options chain endpoint.
     PCR = Total Put OI / Total Call OI
     PCR > 1.2 → Extreme Fear / Potential Contrarian Long
     PCR < 0.7 → Extreme Greed / Potential Contrarian Short
@@ -1454,18 +1582,115 @@ def get_options_pcr(
     currency_symbol = "₹" if is_in else "$"
 
     try:
-        # For Indian equities: deliver NIFTY 50 Benchmark Derivatives Sentiment & PCR
+        # For Indian equities: attempt live NSE option chain fetch for NIFTY / Indian tickers
         if is_in:
+            try:
+                session = _req.Session()
+                session.headers.update({
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/124.0.0.0 Safari/537.36"
+                    ),
+                    "Accept": "application/json, text/plain, */*",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Referer": "https://www.nseindia.com/option-chain",
+                    "Origin": "https://www.nseindia.com",
+                })
+                # Warm up session cookie
+                session.get("https://www.nseindia.com", timeout=4)
+                
+                sym = clean_ticker.replace(".NS", "").replace(".BO", "")
+                if sym in ["NIFTY", "NIFTY 50", "^NSEI", "NSEI"]:
+                    oc_url = "https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY"
+                    bench_name = "NIFTY 50"
+                else:
+                    oc_url = f"https://www.nseindia.com/api/option-chain-equities?symbol={sym}"
+                    bench_name = sym
+
+                oc_resp = session.get(oc_url, timeout=5)
+                if oc_resp.status_code == 200:
+                    oc_data = oc_resp.json()
+                    records = oc_data.get("records", {})
+                    data_rows = records.get("data", [])
+                    expiry_dates = records.get("expiryDates", [])
+                    
+                    if data_rows and expiry_dates:
+                        active_expiry = expiry_dates[0]
+                        filtered = [row for row in data_rows if row.get("expiryDate") == active_expiry]
+                        
+                        total_call_oi = sum(r.get("CE", {}).get("openInterest", 0) for r in filtered)
+                        total_put_oi = sum(r.get("PE", {}).get("openInterest", 0) for r in filtered)
+                        total_call_vol = sum(r.get("CE", {}).get("totalTradedVolume", 0) for r in filtered)
+                        total_put_vol = sum(r.get("PE", {}).get("totalTradedVolume", 0) for r in filtered)
+                        
+                        pcr_oi = round(total_put_oi / max(total_call_oi, 1), 2)
+                        pcr_vol = round(total_put_vol / max(total_call_vol, 1), 2)
+                        
+                        # Max Pain Calculation across active strikes
+                        min_pain = float("inf")
+                        max_pain_strike = None
+                        all_strikes = [r.get("strikePrice") for r in filtered if r.get("strikePrice")]
+                        for strike in all_strikes:
+                            call_pain = sum(max(0, strike - r.get("strikePrice", 0)) * r.get("CE", {}).get("openInterest", 0) for r in filtered)
+                            put_pain = sum(max(0, r.get("strikePrice", 0) - strike) * r.get("PE", {}).get("openInterest", 0) for r in filtered)
+                            total_pain = call_pain + put_pain
+                            if total_pain < min_pain:
+                                min_pain = total_pain
+                                max_pain_strike = strike
+                        
+                        calls_sorted = sorted(filtered, key=lambda x: x.get("CE", {}).get("openInterest", 0), reverse=True)[:5]
+                        puts_sorted = sorted(filtered, key=lambda x: x.get("PE", {}).get("openInterest", 0), reverse=True)[:5]
+                        
+                        top_calls = [{"strike": r.get("strikePrice"), "oi": r.get("CE", {}).get("openInterest", 0)} for r in calls_sorted]
+                        top_puts = [{"strike": r.get("strikePrice"), "oi": r.get("PE", {}).get("openInterest", 0)} for r in puts_sorted]
+                        
+                        if pcr_oi >= 1.20:
+                            sentiment = "BULLISH_SUPPORT"
+                            sentiment_label = "Put Writing Dominance — Institutional floor holding"
+                            color = "bullish"
+                        elif pcr_oi >= 0.90:
+                            sentiment = "BALANCED_RANGE"
+                            sentiment_label = "Balanced OI Structure — Sideways rangebound auction"
+                            color = "neutral"
+                        else:
+                            sentiment = "CALL_WRITING_RESISTANCE"
+                            sentiment_label = "Heavy Call Writing — Resistance overhead capping rallies"
+                            color = "bearish"
+                        
+                        return {
+                            "ticker": clean_ticker,
+                            "available": True,
+                            "provenance": "NSE_OFFICIAL_OPTION_CHAIN",
+                            "is_model_approximation": False,
+                            "benchmark_name": f"{bench_name} F&O",
+                            "message": f"Live NSE India Option Chain ({bench_name})",
+                            "currency_symbol": "₹",
+                            "call_oi": total_call_oi,
+                            "put_oi": total_put_oi,
+                            "call_volume": total_call_vol,
+                            "put_volume": total_put_vol,
+                            "pcr_oi": pcr_oi,
+                            "pcr_volume": pcr_vol,
+                            "sentiment": sentiment,
+                            "sentiment_label": sentiment_label,
+                            "color": color,
+                            "max_pain_strike": max_pain_strike,
+                            "top_call_strikes": top_calls,
+                            "top_put_strikes": top_puts,
+                            "expiry_date": active_expiry,
+                        }
+            except Exception as e:
+                logger.debug(f"Live NSE option chain fetch error ({clean_ticker}): {e}")
+
+            # Fallback to model estimate if live NSE API is unavailable / throttled
             nifty_q = get_quote("^NSEI")
             vix_q = get_quote("^INDIAVIX")
             nifty_price = float(nifty_q.get("price") or 23500.0)
             nifty_chg_pct = float(nifty_q.get("changePct") or 0.0)
             vix_price = float(vix_q.get("price") or 11.5)
 
-            # Nearest 50-strike round for NIFTY
             atm_strike = int(round(nifty_price / 50.0) * 50)
-            
-            # Institutional PCR calculation anchored to Nifty momentum & VIX
             pcr_oi = max(0.65, min(1.45, 1.0 + (nifty_chg_pct * 0.45) - ((vix_price - 12.0) * 0.02)))
             pcr_vol = max(0.60, min(1.50, pcr_oi + (0.05 if nifty_chg_pct >= 0 else -0.05)))
 
@@ -1503,9 +1728,11 @@ def get_options_pcr(
             return {
                 "ticker": clean_ticker,
                 "available": True,
+                "provenance": "MODEL_ESTIMATE",
+                "is_model_approximation": True,
                 "is_index_benchmark": True,
-                "benchmark_name": "NIFTY 50 F&O",
-                "message": f"NIFTY 50 Benchmark Derivatives Sentiment (applied to {clean_ticker})",
+                "benchmark_name": "NIFTY 50 F&O (Model Proxy)",
+                "message": "NIFTY 50 Benchmark Derivatives Sentiment (Model Approximation: Derived from index momentum & VIX; not live strike-level OI)",
                 "currency_symbol": "₹",
                 "call_oi": total_call_oi,
                 "put_oi": total_put_oi,
@@ -1519,10 +1746,10 @@ def get_options_pcr(
                 "max_pain_strike": max_pain,
                 "top_call_strikes": top_calls,
                 "top_put_strikes": top_puts,
-                "expiry_date": "Current Weekly F&O Expiry",
+                "expiry_date": "Current Weekly F&O Expiry (Model)",
             }
 
-        # Yahoo Finance v7 options endpoint
+        # Yahoo Finance v7 options endpoint for US securities
         url = f"https://query1.finance.yahoo.com/v7/finance/options/{clean_ticker}"
         headers = {
             "User-Agent": (
@@ -1538,6 +1765,8 @@ def get_options_pcr(
             return {
                 "ticker": clean_ticker,
                 "available": False,
+                "provenance": "UNAVAILABLE",
+                "is_model_approximation": False,
                 "message": f"Options chain not currently available for {clean_ticker}.",
                 "currency_symbol": currency_symbol,
                 "call_oi": 0,
@@ -1560,6 +1789,8 @@ def get_options_pcr(
             return {
                 "ticker": clean_ticker,
                 "available": False,
+                "provenance": "UNAVAILABLE",
+                "is_model_approximation": False,
                 "message": f"No options chain listed for {clean_ticker}.",
                 "currency_symbol": currency_symbol,
                 "call_oi": 0,
@@ -1584,6 +1815,8 @@ def get_options_pcr(
             return {
                 "ticker": clean_ticker,
                 "available": False,
+                "provenance": "UNAVAILABLE",
+                "is_model_approximation": False,
                 "message": f"Options chain empty for {clean_ticker}.",
                 "currency_symbol": currency_symbol,
                 "call_oi": 0,
@@ -1608,7 +1841,6 @@ def get_options_pcr(
         expiry_ts = expiration_dates[0] if expiration_dates else None
         expiry_date = datetime.fromtimestamp(expiry_ts).strftime("%d %b %Y") if expiry_ts else "Unknown"
 
-        # Aggregate OI and Volume
         total_call_oi = sum(c.get("openInterest", 0) or 0 for c in calls)
         total_put_oi = sum(p.get("openInterest", 0) or 0 for p in puts)
         total_call_vol = sum(c.get("volume", 0) or 0 for c in calls)
@@ -1638,14 +1870,12 @@ def get_options_pcr(
             sentiment_label = "Balanced OI — No Directional Bias"
             color = "neutral"
 
-        # Top 5 strikes by OI for call and put concentration map
         calls_sorted = sorted(calls, key=lambda x: x.get("openInterest", 0) or 0, reverse=True)[:5]
         puts_sorted = sorted(puts, key=lambda x: x.get("openInterest", 0) or 0, reverse=True)[:5]
 
         max_pain_calls = [{"strike": c.get("strike"), "oi": c.get("openInterest", 0)} for c in calls_sorted]
         max_pain_puts = [{"strike": p.get("strike"), "oi": p.get("openInterest", 0)} for p in puts_sorted]
 
-        # Implied max pain: strike where total OI pain for writers is minimized
         all_strikes = sorted(set(
             [c.get("strike", 0) for c in calls] + [p.get("strike", 0) for p in puts]
         ))
@@ -1662,6 +1892,8 @@ def get_options_pcr(
         return {
             "ticker": clean_ticker,
             "available": True,
+            "provenance": "YAHOO_FINANCE_OPTIONS",
+            "is_model_approximation": False,
             "expiry_date": expiry_date,
             "total_expiries": len(expiration_dates),
             "currency_symbol": currency_symbol,
@@ -1684,6 +1916,8 @@ def get_options_pcr(
         return {
             "ticker": clean_ticker,
             "available": False,
+            "provenance": "ERROR",
+            "is_model_approximation": False,
             "message": "Options data currently unavailable.",
             "currency_symbol": currency_symbol,
             "call_oi": 0,
@@ -1706,8 +1940,8 @@ def get_options_pcr(
 def get_block_deals():
     """
     Fetches today's Block Deals and Bulk Deals from NSE India's public JSON API.
-    Block Deals: Large negotiated trades ≥ 500,000 shares or ≥ ₹5 Crore on a dedicated block window.
-    Bulk Deals: Any single client's trade > 0.5% of total listed shares in a session.
+    Block Deals: Large negotiated trades ≥ ₹25 Crore on dedicated block windows (Morning: 08:45–09:00 AM IST, Afternoon: 14:05–14:20 PM IST).
+    Bulk Deals: Any single client's trade > 0.5% of total listed shares in a session (reported EOD).
     This endpoint uses NSE's official public REST endpoint (no auth required).
     """
     import requests as _req
@@ -1801,7 +2035,7 @@ def get_block_deals():
         "source": "NSE India Public API",
         "window_status": window_status,
         "next_window": next_window,
-        "note": "Block Deals execute in dedicated windows (08:45-09:00 AM & 02:05-02:20 PM). Bulk deals report at EOD.",
+        "note": "Block Deals execute in dedicated windows (08:45-09:00 AM & 02:05-02:20 PM IST) with minimum ₹25 Cr order size per NSE circular. Bulk deals report at EOD.",
         "block_deals": block_deals[:50],
         "bulk_deals": bulk_deals[:50],
         "block_count": len(block_deals),

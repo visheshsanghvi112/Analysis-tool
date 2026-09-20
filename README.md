@@ -16,7 +16,7 @@
 [![Python](https://img.shields.io/badge/Python_3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Scrapling Engine](https://img.shields.io/badge/Scrapling_Stealth_Engine-06B6D4?style=for-the-badge&logo=cloudflare&logoColor=white)](https://github.com/d4vinci/Scrapling)
 [![Machine Learning](https://img.shields.io/badge/6--Model_OOF_Ensemble-10B981?style=for-the-badge&logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
-[![Tests](https://img.shields.io/badge/Pytest_Suite-48%2F48_Passing_(100%25)-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](https://docs.pytest.org/)
+[![Tests](https://img.shields.io/badge/Pytest_Suite-56%2F56_Passing_(100%25)-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](https://docs.pytest.org/)
 [![Deployed on Vercel](https://img.shields.io/badge/Deployed_on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/)
 
 <br/>
