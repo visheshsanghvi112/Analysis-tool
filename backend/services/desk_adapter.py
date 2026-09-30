@@ -478,6 +478,16 @@ def build_desk_context(
         if rvol_val and rvol_val > 1.5 and rsi14_val and rsi14_val <= 30:
             delta_absorption = True
 
+    # News & Corporate Catalyst Intelligence
+    news_decision = None
+    try:
+        from services.intelligent_news_reader import intelligent_news_reader
+        news_res = intelligent_news_reader.fetch_live_stock_news(ticker_clean)
+        if news_res and "decision" in news_res:
+            news_decision = news_res["decision"]
+    except Exception as e:
+        print(f"[DeskAdapter] News context fetch skipped: {e}")
+
     return DeskContext(
         ticker=ticker_clean,
         horizon=horizon,
@@ -528,8 +538,16 @@ def build_desk_context(
         stop_atr_multiple=2.0,
         target_r_multiple=2.0,
         target2_r_multiple=3.0,
+        # News & Corporate Catalyst Intelligence
+        news_sentiment=news_decision.get("sentiment_score") if news_decision else None,
+        news_verdict=news_decision.get("verdict") if news_decision else None,
+        news_directive=news_decision.get("trade_directive") if news_decision else None,
+        news_catalyst_class=news_decision.get("catalyst_class") if news_decision else None,
+        news_cro_flags=news_decision.get("cro_risk_flags") if news_decision else None,
+        news_committee_vote=news_decision.get("committee_vote") if news_decision else None,
         # Provenance and market state tracking
         market_status=session.get("status"),
         provenance=state.get("provenance"),
         market_state=state,
     )
+

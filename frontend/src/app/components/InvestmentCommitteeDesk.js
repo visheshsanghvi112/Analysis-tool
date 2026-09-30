@@ -613,14 +613,35 @@ export default function InvestmentCommitteeDesk({ ticker }) {
                     />
                   </div>
                   {trade_geometry.available && (
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                      ATR 2.0x Sizing
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {trade_geometry.trade_blocked && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold">
+                          EXECUTION BLOCKED
+                        </span>
+                      )}
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        ATR 2.0x Sizing
+                      </span>
+                    </div>
                   )}
                 </div>
 
                 {trade_geometry.available ? (
                   <div className="space-y-4">
+                    {trade_geometry.warning && (
+                      <div className={`p-3 rounded-xl border flex items-center gap-2.5 text-xs ${
+                        trade_geometry.trade_blocked 
+                          ? 'bg-rose-500/15 border-rose-500/40 text-rose-300'
+                          : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                      }`}>
+                        <AlertTriangle className={`w-4 h-4 shrink-0 ${trade_geometry.trade_blocked ? 'text-rose-400' : 'text-amber-400'}`} />
+                        <div>
+                          <span className="font-bold">{trade_geometry.trade_blocked ? 'EXECUTION BLOCKED: ' : 'NOTICE: '}</span>
+                          <span>{trade_geometry.warning}</span>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                       <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                         <span className="text-[10px] font-bold text-slate-400 block mb-1">Entry Price</span>
@@ -652,8 +673,8 @@ export default function InvestmentCommitteeDesk({ ticker }) {
                       </div>
                       <div className="flex items-center justify-between text-xs pt-2 border-t border-white/[0.06]">
                         <span className="text-slate-300 font-semibold">Calculated Position Shares:</span>
-                        <span className="font-black text-emerald-400 font-mono text-sm tabular-nums">
-                          {trade_geometry.shares ?? 0} shares
+                        <span className={`font-black font-mono text-sm tabular-nums ${trade_geometry.trade_blocked ? 'text-rose-400' : 'text-emerald-400'}`}>
+                          {trade_geometry.trade_blocked ? '0 shares (BLOCKED)' : `${trade_geometry.shares ?? 0} shares`}
                         </span>
                       </div>
                     </div>

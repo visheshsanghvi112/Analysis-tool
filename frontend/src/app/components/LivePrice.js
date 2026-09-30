@@ -169,7 +169,7 @@ const YearRangeBar = ({ yearHigh, yearLow, currentPrice, currSym = '₹', loc = 
   );
 };
 
-export default function LivePrice({ ticker }) {
+export default function LivePrice({ ticker, onDataLoaded }) {
   const [quote, setQuote] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -246,6 +246,7 @@ export default function LivePrice({ ticker }) {
       setQuote(json);
       setLastUpdated(new Date());
       setError(false);
+      onDataLoaded?.(json);
     } catch (err) {
       if (err.name !== 'AbortError') {
         setError(true);

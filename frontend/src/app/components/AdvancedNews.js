@@ -13,7 +13,8 @@ import {
   ThumbsUp,
   ThumbsDown,
   Minus,
-  Sparkles
+  Sparkles,
+  ShieldAlert
 } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 
@@ -178,6 +179,63 @@ export default function AdvancedNews({ ticker, companyName }) {
               <p className="text-[10px] text-slate-500">Negative</p>
             </div>
           </div>
+
+          {/* Decisive Trade Directive & CRO Risk Gate Integration */}
+          {newsData.decision && (
+            <div className={`mb-4 p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+              newsData.decision.trade_directive === 'AVOID / HIGH TAIL RISK' || newsData.decision.trade_directive === 'DEFENSIVE / REDUCE'
+                ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                : newsData.decision.trade_directive?.includes('BUY') || newsData.decision.trade_directive?.includes('ACCUMULATE')
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+            }`}>
+              <div className="flex items-start gap-2.5">
+                <ShieldAlert className={`h-5 w-5 shrink-0 mt-0.5 ${
+                  newsData.decision.cro_risk_flags?.length > 0 ? 'text-rose-400 animate-pulse' : 'text-slate-400'
+                }`} />
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-black uppercase tracking-wider opacity-80">News Trade Directive</span>
+                    <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
+                      newsData.decision.trade_directive === 'AVOID / HIGH TAIL RISK'
+                        ? 'bg-rose-500/20 text-rose-200 border-rose-500/40'
+                        : newsData.decision.trade_directive?.includes('BUY')
+                        ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40'
+                        : 'bg-amber-500/20 text-amber-200 border-amber-500/40'
+                    }`}>
+                      {newsData.decision.trade_directive}
+                    </span>
+                  </div>
+                  <div className="text-xs font-bold text-white mt-1">
+                    Verdict: <span className="font-mono">{newsData.decision.verdict}</span>
+                    {newsData.decision.catalyst_class && (
+                      <span className="text-slate-400 font-normal ml-2">({newsData.decision.catalyst_class})</span>
+                    )}
+                  </div>
+                  {newsData.decision.cro_risk_flags && newsData.decision.cro_risk_flags.length > 0 && (
+                    <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                      <span className="text-[9px] font-bold text-rose-400 uppercase tracking-wider">CRO Risk Flags:</span>
+                      {newsData.decision.cro_risk_flags.map((flag, fIdx) => (
+                        <span key={fIdx} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                          {flag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="text-left sm:text-right shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/[0.08]">
+                <span className="text-[9px] text-slate-400 block">Committee Desk Vote</span>
+                <span className={`text-xs font-mono font-bold ${
+                  newsData.decision.committee_vote === 'BEARISH' ? 'text-rose-400' :
+                  newsData.decision.committee_vote === 'BULLISH' ? 'text-emerald-400' :
+                  'text-slate-300'
+                }`}>
+                  {newsData.decision.committee_vote || 'NEUTRAL'}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Executive AI Synthesis */}
           {newsData.summary && (

@@ -902,46 +902,70 @@ class StockPredictor:
             eligible_base_preds = []
             model_telemetry = {}
 
+            # First pass: collect raw model predictions
+            raw_predictions = {}
             for name, mdl in self.models.items():
                 try:
                     p_raw = float(mdl.predict(X_latest)[0])
-                    is_outlier = (p_raw < lower_bound) or (p_raw > upper_bound)
-                    p_val = float(np.clip(p_raw, lower_bound, upper_bound))
-                    is_clipped = (abs(p_raw - p_val) > 1e-4)
-
-                    raw_price = round(current_price * (1.0 + p_raw), 2)
-                    val_price = round(max(0.01, current_price * (1.0 + p_val)), 2)
-
-                    status = "DEGRADED_OUTLIER" if is_outlier else "OK"
-                    is_eligible = not is_outlier
-
-                    if is_eligible:
-                        eligible_base_preds.append(p_val)
-                    base_preds.append(p_val)
-
-                    model_telemetry[name] = {
-                        'raw_return': round(p_raw * 100, 2),
-                        'validated_return': round(p_val * 100, 2),
-                        'raw_price': raw_price,
-                        'validated_price': val_price,
-                        'predicted_return': round(p_val * 100, 2),
-                        'predicted_price': val_price,
-                        'is_clipped': is_clipped,
-                        'status': status,
-                        'included_in_ensemble': is_eligible,
-                        'thresholds_applied': {
-                            'policy_key': policy_key,
-                            'lower_pct': round(lower_bound * 100, 1),
-                            'upper_pct': round(upper_bound * 100, 1),
-                        },
-                        'outlier_reason': (
-                            f"Raw return ({round(p_raw * 100, 2)}%) breached policy bounds "
-                            f"[{round(lower_bound * 100, 1)}%, {round(upper_bound * 100, 1)}%]"
-                            if is_outlier else None
-                        ),
-                    }
+                    raw_predictions[name] = p_raw
                 except Exception as exc:
                     print(f"[ML] Base model {name} failed: {exc}")
+
+            if not raw_predictions:
+                return None, "All model predictions failed"
+
+            # Compute ensemble consensus median & median absolute deviation (MAD)
+            med_raw = float(np.median(list(raw_predictions.values())))
+            mad_raw = float(np.median([abs(p - med_raw) for p in raw_predictions.values()]))
+
+            for name, p_raw in raw_predictions.items():
+                # Policy bounds check
+                policy_outlier = (p_raw < lower_bound) or (p_raw > upper_bound)
+                
+                # Statistical divergence check: if model deviates by >25% from median and opposite sign, or >40%
+                divergence_outlier = False
+                if len(raw_predictions) >= 3:
+                    diff_from_med = abs(p_raw - med_raw)
+                    if (diff_from_med > 0.25 and (p_raw * med_raw < 0)) or (diff_from_med > 0.40):
+                        divergence_outlier = True
+
+                is_outlier = policy_outlier or divergence_outlier
+                p_val = float(np.clip(p_raw, lower_bound, upper_bound))
+                is_clipped = (abs(p_raw - p_val) > 1e-4)
+
+                raw_price = round(current_price * (1.0 + p_raw), 2)
+                val_price = round(max(0.01, current_price * (1.0 + p_val)), 2)
+
+                status = "DEGRADED_OUTLIER" if is_outlier else "OK"
+                is_eligible = not is_outlier
+
+                if is_eligible:
+                    eligible_base_preds.append(p_val)
+                base_preds.append(p_val)
+
+                outlier_reason = None
+                if policy_outlier:
+                    outlier_reason = f"Raw return ({round(p_raw * 100, 2)}%) breached policy bounds [{round(lower_bound * 100, 1)}%, {round(upper_bound * 100, 1)}%]"
+                elif divergence_outlier:
+                    outlier_reason = f"Prediction ({round(p_raw * 100, 2)}%) diverged severely from ensemble consensus median ({round(med_raw * 100, 2)}%)"
+
+                model_telemetry[name] = {
+                    'raw_return': round(p_raw * 100, 2),
+                    'validated_return': round(p_val * 100, 2),
+                    'raw_price': raw_price,
+                    'validated_price': val_price,
+                    'predicted_return': round(p_val * 100, 2),
+                    'predicted_price': val_price,
+                    'is_clipped': is_clipped,
+                    'status': status,
+                    'included_in_ensemble': is_eligible,
+                    'thresholds_applied': {
+                        'policy_key': policy_key,
+                        'lower_pct': round(lower_bound * 100, 1),
+                        'upper_pct': round(upper_bound * 100, 1),
+                    },
+                    'outlier_reason': outlier_reason,
+                }
 
             if not base_preds:
                 return None, "All model predictions failed"
@@ -964,15 +988,17 @@ class StockPredictor:
             predicted_return = float(np.clip(predicted_return, -clip_max, clip_max))
 
             # ── Sentiment fusion ──
-            # ETFs: NO news sentiment — irrelevant for index/commodity ETFs
-            # Stocks: 80% ML + 20% news nudge (original logic)
             if is_etf:
-                fused_return    = predicted_return
-                news_sentiment  = 0.0   # zero out for clean reporting
+                # If news contains a severe catalyst or structural dislocation, allow it to inform the ETF
+                if abs(news_sentiment) >= 0.20:
+                    sentiment_nudge = np.clip(news_sentiment, -1.0, 1.0) * 0.05
+                    fused_return = predicted_return * 0.75 + sentiment_nudge * 0.25
+                else:
+                    fused_return = predicted_return
             else:
-                sentiment_nudge = np.clip(news_sentiment, -1.0, 1.0) * 0.004
-                fused_return    = predicted_return * 0.80 + sentiment_nudge * 0.20
-                fused_return    = float(np.clip(fused_return, -0.20, 0.20))
+                sentiment_nudge = np.clip(news_sentiment, -1.0, 1.0) * 0.03
+                fused_return = predicted_return * 0.80 + sentiment_nudge * 0.20
+            fused_return = float(np.clip(fused_return, -clip_max, clip_max))
 
             # ── Confidence from model disagreement ──
             model_std = float(np.std(base_preds))
@@ -1024,7 +1050,11 @@ class StockPredictor:
                 else:                                    signal = "HOLD"
                 horizon_days = 5
 
-            signal_strength = float(np.clip(abs(fused_return) * 1000, 0, 100))
+            # Signal strength harmonized with model confidence:
+            # High return with high confidence = strong signal.
+            # High return with low confidence (or high divergence) = moderated signal strength.
+            raw_strength = abs(fused_return) * 500.0 * (confidence / 100.0)
+            signal_strength = float(np.clip(raw_strength, 5.0, 100.0))
 
             # ── Prices ──
             current_price   = live_price if (live_price is not None and live_price > 0) else float(df['Close'].iloc[-1])

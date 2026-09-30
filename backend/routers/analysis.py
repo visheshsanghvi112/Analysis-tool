@@ -1689,7 +1689,7 @@ def get_etf_analysis(
                 "value":     f"{'+' if prem_disc >= 0 else ''}{prem_disc}%",
                 "condition": "< ±0.50%",
                 "passed":    passed_nav,
-                "note":      f"Market price trades at a {prem_disc}% premium to iNAV (₹{inav_val})" if abs(prem_disc) >= 0.5 else "Traded price closely tracking indicative fair value (iNAV)"
+                "note":      f"Market price trades at a {prem_disc:.1f}% premium to iNAV (₹{inav_val:.2f})" if abs(prem_disc) >= 0.5 else "Traded price closely tracking indicative fair value (iNAV)"
             })
         else:
             health_checklist.append({"metric": "Premium/(Discount) to iNAV", "value": "N/A", "condition": "< ±0.50%", "passed": None, "note": "Indicative NAV (iNAV) data unavailable"})
@@ -1860,10 +1860,10 @@ def get_etf_analysis(
 
                 # Secondary-Market Dislocation (Market price vs iNAV/NAV)
                 "secondary_market_dislocation": {
-                    "inav":                 inav_val,
+                    "inav":                 round(inav_val, 2) if inav_val is not None else None,
                     "inav_source":          inav_source,
                     "market_price":         round(current_price, 2),
-                    "premium_discount_pct": premium_discount_pct,
+                    "premium_discount_pct": round(premium_discount_pct, 2) if premium_discount_pct is not None else None,
                     "metric_label":         "Premium/(Discount) to iNAV",
                     "is_dislocated":        abs(premium_discount_pct or 0) > 15.0,
                 },
@@ -1903,9 +1903,9 @@ def get_etf_analysis(
                 "secondary_market_dislocation": "HIGH" if ((secondary_divergence_annual is not None and secondary_divergence_annual > 15.0) or (premium_discount_pct is not None and abs(premium_discount_pct) > 15.0)) else ("MODERATE" if (secondary_divergence_annual is not None and secondary_divergence_annual > 5.0) else "NORMAL"),
                 "circuit_risk": "HIGH" if (secondary_divergence_30d is not None and secondary_divergence_30d > 20.0) else "NORMAL",
                 "premium_discount_state": "DISLOCATED" if ((premium_discount_pct is not None and abs(premium_discount_pct) > 15.0) or (secondary_divergence_annual is not None and secondary_divergence_annual > 15.0)) else "NORMAL",
-                "observation": f"Market price (₹{current_price}) is substantially above indicative iNAV (₹{inav_val}), trading at a +{premium_discount_pct}% premium with {secondary_divergence_30d}% 30-day price-return divergence." if (premium_discount_pct is not None and premium_discount_pct > 15.0) else "Normal secondary market pricing and index replication.",
+                "observation": f"Market price (₹{current_price:.2f}) is substantially above indicative iNAV (₹{inav_val:.2f}), trading at a +{premium_discount_pct:.1f}% premium with {secondary_divergence_30d:.1f}% 30-day price-return divergence." if (premium_discount_pct is not None and premium_discount_pct > 15.0 and inav_val is not None and secondary_divergence_30d is not None) else (f"Market price (₹{current_price:.2f}) is substantially above indicative iNAV (₹{inav_val:.2f}), trading at a +{premium_discount_pct:.1f}% premium." if (premium_discount_pct is not None and premium_discount_pct > 15.0 and inav_val is not None) else "Normal secondary market pricing and index replication."),
                 "attribution": "Potential contributors include overseas investment quota limits, trading constraints, retail circuit limits, and secondary-market liquidity dynamics." if (premium_discount_pct is not None and premium_discount_pct > 15.0) else "Market prices are well-arbitraged against indicative fair value.",
-                "details": f"Market price is substantially above iNAV (+{premium_discount_pct}% premium). Potential contributors include overseas investment limits and liquidity constraints." if (premium_discount_pct is not None and premium_discount_pct > 15.0) else "Normal secondary market pricing and index replication.",
+                "details": f"Market price is substantially above iNAV (+{premium_discount_pct:.1f}% premium). Potential contributors include overseas investment limits and liquidity constraints." if (premium_discount_pct is not None and premium_discount_pct > 15.0) else "Normal secondary market pricing and index replication.",
             },
 
             # Portfolio breakdown

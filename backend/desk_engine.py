@@ -128,6 +128,14 @@ class DeskContext(BaseModel):
     target_r_multiple: Optional[float] = Field(default=2.0, gt=0, le=10)
     target2_r_multiple: Optional[float] = Field(default=3.0, gt=0, le=20)
 
+    # News & Corporate Catalyst Intelligence
+    news_sentiment: Optional[float] = None
+    news_verdict: Optional[str] = None
+    news_directive: Optional[str] = None
+    news_catalyst_class: Optional[str] = None
+    news_cro_flags: Optional[List[str]] = None
+    news_committee_vote: Optional[str] = None
+
 
 @dataclass(frozen=True)
 class DeskResult:
@@ -534,7 +542,13 @@ def evaluate_derivatives_desk(ctx: Dict[str, Any]) -> DeskResult:
     )
 
 
-def evaluate_risk_gate(ctx: Dict[str, Any]) -> RiskGateResult:
+def evaluate_risk_gate(ctx: Any) -> RiskGateResult:
+    if hasattr(ctx, "model_dump"):
+        ctx = ctx.model_dump()
+    elif hasattr(ctx, "dict"):
+        ctx = ctx.dict()
+    elif not isinstance(ctx, dict):
+        ctx = dict(ctx)
     volatility_percentile = _num(ctx.get("volatility_percentile"))
     atr_pct = _pct(_num(ctx.get("atr_pct")))
     max_drawdown_pct = _pct(_num(ctx.get("max_drawdown_pct", ctx.get("max_drawdown"))))
@@ -616,6 +630,24 @@ def evaluate_risk_gate(ctx: Dict[str, Any]) -> RiskGateResult:
 
     if market_open is False:
         factors.append({"factor": "Market session", "severity": "CLOSED", "value": False})
+
+    # Evaluate News Catalyst & Corporate Red Flags
+    news_flags = ctx.get("news_cro_flags") or []
+    news_verdict = ctx.get("news_verdict")
+    critical_keywords = ("SEVERE", "VALUATION", "REGULATORY", "FREEZE", "DISLOCATION", "CRITICAL", "PREMIUM")
+    has_critical_news = (
+        news_verdict in ("CRITICAL_HEADWIND", "STRUCTURAL_RISK_AVOID")
+        or any(k in str(f).upper() for f in news_flags for k in critical_keywords)
+    )
+    if has_critical_news:
+        risk = 100.0
+        blocks.append("CRO Risk Flag: High-severity news catalyst / structural dislocation alert")
+        factors.append({"factor": "News Catalyst Risk", "severity": "CRITICAL", "value": news_verdict or "CRITICAL_HEADWIND"})
+    elif news_verdict in ("BEARISH_HEADWIND", "BEARISH"):
+        risk += 25
+        factors.append({"factor": "News Catalyst Risk", "severity": "ELEVATED", "value": "BEARISH_HEADWIND"})
+    elif news_verdict in ("HIGH_CONVICTION_BULLISH", "BULLISH"):
+        factors.append({"factor": "News Catalyst Risk", "severity": "POSITIVE", "value": "BULLISH_CATALYST"})
 
     risk = _clamp(risk, 0, 100)
     if risk >= 65 or blocks:
@@ -750,7 +782,13 @@ def build_conflict_matrix(ctx: Dict[str, Any]) -> List[ConflictResult]:
     return checks
 
 
-def calculate_trade_geometry(ctx: Dict[str, Any], risk_gate: RiskGateResult) -> Dict[str, Any]:
+def calculate_trade_geometry(ctx: Any, risk_gate: RiskGateResult) -> Dict[str, Any]:
+    if hasattr(ctx, "model_dump"):
+        ctx = ctx.model_dump()
+    elif hasattr(ctx, "dict"):
+        ctx = ctx.dict()
+    elif not isinstance(ctx, dict):
+        ctx = dict(ctx)
     entry = _num(ctx.get("entry_price", ctx.get("price")))
     atr = _num(ctx.get("atr"))
     account = _num(ctx.get("account_capital"))
@@ -789,6 +827,15 @@ def calculate_trade_geometry(ctx: Dict[str, Any], risk_gate: RiskGateResult) -> 
         risk_budget = account * sizing_pct / 100
         shares = int(max(0, risk_budget / max(risk_per_share, EPS)))
 
+    trade_blocked = (risk_gate.state == "VETO")
+    warning = None
+    if trade_blocked:
+        warning = "Trade execution is blocked by CRO Risk Gate VETO (0 shares allocated)."
+    elif direction == "LONG" and ctx.get("committee_state") == "BEARISH":
+        warning = "Directional Mismatch: Long bracket requested against BEARISH committee stance."
+    elif direction == "SHORT" and ctx.get("committee_state") == "BULLISH":
+        warning = "Directional Mismatch: Short bracket requested against BULLISH committee stance."
+
     return {
         "available": True,
         "direction": direction,
@@ -805,6 +852,8 @@ def calculate_trade_geometry(ctx: Dict[str, Any], risk_gate: RiskGateResult) -> 
         "effective_account_risk_pct": round(sizing_pct, 3) if sizing_pct is not None else None,
         "shares": shares,
         "sizing_cap_from_cro": risk_gate.sizing_cap_pct,
+        "trade_blocked": trade_blocked,
+        "warning": warning,
     }
 
 
@@ -967,13 +1016,23 @@ def evaluate_committee(ctx: Dict[str, Any]) -> Dict[str, Any]:
         + derivatives.confidence * weights["derivatives"]
     )
 
-    stance_votes = [
-        fundamentals.stance,
-        technicals.stance,
-        derivatives.stance,
+    news_vote = normalized.get("news_committee_vote")
+    
+    # Active desks that have positive confidence
+    desk_pairs = [
+        (fundamentals.stance, fundamentals.confidence),
+        (technicals.stance, technicals.confidence),
+        (derivatives.stance, derivatives.confidence),
     ]
-    bull_votes = stance_votes.count("BULLISH")
-    bear_votes = stance_votes.count("BEARISH")
+    valid_votes = [s for s, c in desk_pairs if c > 0]
+    
+    # If news desk cast a directional vote, include it in committee deliberation
+    if news_vote and news_vote in ("BULLISH", "BEARISH"):
+        valid_votes.append(news_vote)
+
+    bull_votes = valid_votes.count("BULLISH")
+    bear_votes = valid_votes.count("BEARISH")
+    total_valid = len(valid_votes)
 
     extension = "EXTENDED" in technicals.flags or "EXTREME_RSI" in technicals.flags
     if risk.state == "VETO":
@@ -986,13 +1045,27 @@ def evaluate_committee(ctx: Dict[str, Any]) -> Dict[str, Any]:
         action_state = "WAIT" if extension else "LONG_BIAS"
     elif bear_votes >= 2 and bull_votes == 0:
         action_state = "SHORT_BIAS"
+    elif bull_votes >= 1 and total_valid == 1:
+        action_state = "WAIT" if extension else "LONG_BIAS"
+    elif bear_votes >= 1 and total_valid == 1:
+        action_state = "SHORT_BIAS"
+    elif bull_votes > bear_votes:
+        action_state = "LONG_BIAS"
+    elif bear_votes > bull_votes:
+        action_state = "SHORT_BIAS"
     else:
         action_state = "CONFLICTED"
 
-    if bull_votes >= 2 and bear_votes == 0:
+    if bull_votes >= 1 and bear_votes == 0:
         committee_state = "BULLISH"
-    elif bear_votes >= 2 and bull_votes == 0:
+    elif bear_votes >= 1 and bull_votes == 0:
         committee_state = "BEARISH"
+    elif bull_votes > bear_votes:
+        committee_state = "BULLISH"
+    elif bear_votes > bull_votes:
+        committee_state = "BEARISH"
+    elif bull_votes == 0 and bear_votes == 0:
+        committee_state = "NEUTRAL"
     else:
         committee_state = "CONFLICTED"
 

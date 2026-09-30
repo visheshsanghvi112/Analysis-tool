@@ -30,22 +30,21 @@ def get_ml_prediction_endpoint(
         # This is the single source of truth that drives everything downstream.
         asset_type = get_asset_type(ticker_clean)
 
-        # ── News sentiment: only meaningful for individual equities ───────────
-        # Index ETFs (NIFTYBEES, GOLDBEES, etc.) have no company-specific news.
+        # ── News sentiment: fetch news decision synthesis for equities & ETFs ──
+        # ETFs with severe catalysts or NAV dislocations will now inform the downstream model.
         news_sentiment = 0.0
-        if asset_type == 'EQUITY':
+        try:
+            from services.intelligent_news_reader import intelligent_news_reader
+            news_res = intelligent_news_reader.fetch_live_stock_news(ticker_clean)
+            if news_res and "sentiment" in news_res and "overall_sentiment" in news_res["sentiment"]:
+                news_sentiment = float(news_res["sentiment"]["overall_sentiment"])
+        except Exception:
             try:
-                from services.intelligent_news_reader import intelligent_news_reader
-                news_res = intelligent_news_reader.fetch_live_stock_news(ticker_clean)
+                news_res = get_advanced_news_analysis(ticker_clean)
                 if news_res and "sentiment" in news_res and "overall_sentiment" in news_res["sentiment"]:
                     news_sentiment = float(news_res["sentiment"]["overall_sentiment"])
             except Exception:
-                try:
-                    news_res = get_advanced_news_analysis(ticker_clean)
-                    if news_res and "sentiment" in news_res and "overall_sentiment" in news_res["sentiment"]:
-                        news_sentiment = float(news_res["sentiment"]["overall_sentiment"])
-                except Exception:
-                    pass
+                pass
 
         # ── Auto-upgrade period for ETFs ──────────────────────────────────────
         # ETFs need 5Y history to learn full market cycles.

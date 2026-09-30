@@ -1,23 +1,49 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import Header from './components/Header';
 import LivePrice from './components/LivePrice';
 import StockChart from './components/StockChart';
 import MLPrediction from './components/MLPrediction';
 import AdvancedNews from './components/AdvancedNews';
-import PortfolioMetrics from './components/PortfolioMetrics';
+import InvestmentCommitteeDesk from './components/InvestmentCommitteeDesk';
+
+// Viewport-aware dynamic imports to optimize bundle size and prevent network avalanche
+const PortfolioMetrics = dynamic(() => import('./components/PortfolioMetrics'), {
+  ssr: false,
+  loading: () => <div className="glass-card p-6 min-h-[200px] flex items-center justify-center text-slate-500 text-xs font-mono">Loading Risk Analytics...</div>
+});
+const Backtesting = dynamic(() => import('./components/Backtesting'), {
+  ssr: false,
+  loading: () => <div className="glass-card p-6 min-h-[220px] flex items-center justify-center text-slate-500 text-xs font-mono">Loading Strategy Backtest...</div>
+});
+const MonteCarloSimulation = dynamic(() => import('./components/MonteCarloSimulation'), {
+  ssr: false,
+  loading: () => <div className="glass-card p-6 min-h-[220px] flex items-center justify-center text-slate-500 text-xs font-mono">Loading Monte Carlo Simulation...</div>
+});
+const ETFLongTermPanel = dynamic(() => import('./components/ETFLongTermPanel'), {
+  ssr: false,
+  loading: () => <div className="glass-card p-6 min-h-[220px] flex items-center justify-center text-slate-500 text-xs font-mono">Loading ETF Analytics...</div>
+});
+const LongTermAnalysis = dynamic(() => import('./components/LongTermAnalysis'), {
+  ssr: false,
+  loading: () => <div className="glass-card p-6 min-h-[220px] flex items-center justify-center text-slate-500 text-xs font-mono">Loading Long-Term Trends...</div>
+});
+const FundamentalsAnalysis = dynamic(() => import('./components/FundamentalsAnalysis'), {
+  ssr: false,
+  loading: () => <div className="glass-card p-6 min-h-[220px] flex items-center justify-center text-slate-500 text-xs font-mono">Loading Fundamentals...</div>
+});
+const SIPCalculator = dynamic(() => import('./components/SIPCalculator'), {
+  ssr: false,
+  loading: () => <div className="glass-card p-6 min-h-[180px] flex items-center justify-center text-slate-500 text-xs font-mono">Loading SIP Simulator...</div>
+});
+const ResearchReportModal = dynamic(() => import('./components/ResearchReportModal'), {
+  ssr: false
+});
 import PeerComparison from './components/PeerComparison';
 import SectorIntelligence from './components/SectorIntelligence';
-import Backtesting from './components/Backtesting';
-import LongTermAnalysis from './components/LongTermAnalysis';
-import ETFLongTermPanel from './components/ETFLongTermPanel';
-import MonteCarloSimulation from './components/MonteCarloSimulation';
-import FundamentalsAnalysis from './components/FundamentalsAnalysis';
-import SIPCalculator from './components/SIPCalculator';
-import ResearchReportModal from './components/ResearchReportModal';
-import InvestmentCommitteeDesk from './components/InvestmentCommitteeDesk';
 import {
   TrendingUp, Brain, Newspaper, PieChart,
   Activity, ArrowRight, CheckCircle, Clock, AlertTriangle,
@@ -25,6 +51,37 @@ import {
 } from 'lucide-react';
 import InfoBadge from './components/InfoBadge';
 import { API_BASE_URL } from './config';
+
+/* ── Lazy Section Viewport Wrapper ───────────────────────────────── */
+const LazySection = ({ children, placeholderHeight = 220 }) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '450px' }
+    );
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref}>
+      {isVisible ? children : (
+        <div style={{ minHeight: placeholderHeight }} className="glass-card border border-white/[0.05] flex items-center justify-center text-slate-600 text-xs font-mono animate-pulse">
+          Loading module...
+        </div>
+      )}
+    </div>
+  );
+};
 
 /* ── Status badge ─────────────────────────────────────────────────── */
 const StatusBadge = ({ icon: Icon, title, subtitle, status, infoKey }) => {
@@ -274,32 +331,15 @@ export default function Dashboard() {
 
   const isETF = confirmedETF !== null ? confirmedETF : checkIsETF(selectedTicker);
 
-  // Asynchronously confirm ETF status from backend if not already matched
+  // Confirm ETF status from heuristic or LivePrice onDataLoaded
   useEffect(() => {
     if (!selectedTicker) {
       setConfirmedETF(null);
       return;
     }
-
-    const controller = new AbortController();
-    fetch(`${API_BASE_URL}/api/live?ticker=${encodeURIComponent(selectedTicker)}`, {
-      signal: controller.signal
-    })
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        if (data) {
-          if (data.asset_type === 'ETF' || data.asset_type === 'MUTUALFUND') {
-            setConfirmedETF(true);
-          } else if (data.longName && /\b(etf|bees)\b/i.test(data.longName)) {
-            setConfirmedETF(true);
-          } else {
-            setConfirmedETF(false);
-          }
-        }
-      })
-      .catch(() => {});
-
-    return () => controller.abort();
+    if (checkIsETF(selectedTicker)) {
+      setConfirmedETF(true);
+    }
   }, [selectedTicker]);
 
   const handleTickerSelect = useCallback((ticker) => {
@@ -517,7 +557,16 @@ export default function Dashboard() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }} className="dash-main-grid">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <LivePrice ticker={selectedTicker} />
+                  <LivePrice 
+                    ticker={selectedTicker} 
+                    onDataLoaded={(quote) => {
+                      if (quote?.asset_type) {
+                        setConfirmedETF(quote.asset_type === 'ETF' || quote.asset_type === 'MUTUALFUND');
+                      } else if (quote?.longName && /\b(etf|bees)\b/i.test(quote.longName)) {
+                        setConfirmedETF(true);
+                      }
+                    }}
+                  />
                   <div id="stock-chart-section">
                     <StockChart ticker={selectedTicker} />
                   </div>
@@ -534,28 +583,49 @@ export default function Dashboard() {
               <div id="investment-committee-section">
                 <InvestmentCommitteeDesk ticker={selectedTicker} />
               </div>
-              <PortfolioMetrics ticker={selectedTicker} />
-              <Backtesting ticker={selectedTicker} />
+              
+              <LazySection placeholderHeight={240}>
+                <PortfolioMetrics ticker={selectedTicker} />
+              </LazySection>
+
+              <LazySection placeholderHeight={280}>
+                <Backtesting ticker={selectedTicker} />
+              </LazySection>
+
               <div id="monte-carlo-section">
-                <MonteCarloSimulation ticker={selectedTicker} />
+                <LazySection placeholderHeight={300}>
+                  <MonteCarloSimulation ticker={selectedTicker} />
+                </LazySection>
               </div>
 
               {/* ── Long-Term: ETF deep-dive OR stock analysis ─────────── */}
               {isETF ? (
-                <ETFLongTermPanel ticker={selectedTicker} />
+                <LazySection placeholderHeight={350}>
+                  <ETFLongTermPanel ticker={selectedTicker} />
+                </LazySection>
               ) : (
                 <>
-                  <LongTermAnalysis ticker={selectedTicker} />
+                  <LazySection placeholderHeight={300}>
+                    <LongTermAnalysis ticker={selectedTicker} />
+                  </LazySection>
                   <div id="valuation-section">
-                    <FundamentalsAnalysis ticker={selectedTicker} />
+                    <LazySection placeholderHeight={300}>
+                      <FundamentalsAnalysis ticker={selectedTicker} />
+                    </LazySection>
                   </div>
                 </>
               )}
 
-              <SIPCalculator ticker={selectedTicker} />
+              <LazySection placeholderHeight={200}>
+                <SIPCalculator ticker={selectedTicker} />
+              </LazySection>
 
               {/* ── Peer & Sector Intelligence Tabs ───────────────────── */}
-              {!isETF && <PeerSectorTabs ticker={selectedTicker} />}
+              {!isETF && (
+                <LazySection placeholderHeight={300}>
+                  <PeerSectorTabs ticker={selectedTicker} />
+                </LazySection>
+              )}
             </div>
           </div>
         )}
