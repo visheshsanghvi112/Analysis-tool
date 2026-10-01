@@ -69,7 +69,7 @@ def test_build_desk_context_mocked(mock_info, mock_hist, mock_quote):
 
     res = evaluate_committee(ctx.model_dump(exclude_none=True))
     assert res["engine"] == "stockiq_deterministic_multidesk"
-    assert res["committee_state"] in {"BULLISH", "BEARISH", "CONFLICTED"}
+    assert res["committee_state"] in {"BULLISH", "BEARISH", "NEUTRAL", "CONFLICTED"}
     assert res["action_state"] in {"LONG_BIAS", "SHORT_BIAS", "WAIT", "NO_TRADE", "CONFLICTED"}
     assert res["desks"]["fundamental"]["stance"] in {"BULLISH", "BEARISH", "NEUTRAL"}
     assert res["trade_geometry"]["available"] is True

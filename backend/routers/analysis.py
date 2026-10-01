@@ -179,6 +179,8 @@ def calculate_dcf(
     """
     try:
         ticker_clean = ticker.strip().upper()
+        asset_type = get_asset_type(ticker_clean)
+        is_etf = (asset_type in ("ETF", "MUTUALFUND"))
         info = get_info(ticker_clean)
         
         if not info:
@@ -188,6 +190,9 @@ def calculate_dcf(
             )
 
         current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+        if current_price is None:
+            quote = get_quote(ticker_clean)
+            current_price = quote.get("price") if quote else None
         if current_price is None:
             raise HTTPException(status_code=404, detail=f"No price information found for {ticker_clean}")
 
@@ -492,15 +497,30 @@ def calculate_dcf(
                 "details": "DCF is an intrinsic fundamental valuation model, independent of ML statistical models.",
             },
             "valuation_status": {
-                "methodology": "FINANCIAL_INSTITUTION_EQUITY_DDM" if is_financial else "STANDARD_DCF",
-                "status": "OK",
-                "details": "Equity Free Cash Flow Proxy (Net Income) — operating debt excluded from equity deduction" if is_financial else "Free Cash Flow to Firm (FCFF) — Enterprise DCF with net debt deduction",
+                "methodology": "ETF_NAV_REPLICATION_ANALYSIS" if is_etf else ("FINANCIAL_INSTITUTION_EQUITY_DDM" if is_financial else "STANDARD_DCF"),
+                "status": "NON_APPLICABLE" if is_etf else "OK",
+                "details": (
+                    "DCF cash flow projections do not apply to Exchange Traded Funds. Refer to /api/etf-analysis for secondary market pricing, tracking error, expense ratio, and portfolio basket holdings."
+                    if is_etf else (
+                        "Equity Free Cash Flow Proxy (Net Income) — operating debt excluded from equity deduction"
+                        if is_financial else
+                        "Free Cash Flow to Firm (FCFF) — Enterprise DCF with net debt deduction"
+                    )
+                ),
             },
             "market_structure_status": {
-                "secondary_market_dislocation": "NORMAL",
+                "secondary_market_dislocation": "CHECK_INAV_SPREAD" if is_etf else "NORMAL",
                 "liquidity_state": "OK" if (market_cap and market_cap > 1e9) else "LOW_LIQUIDITY",
-                "details": "Single-stock equity traded on exchange without ETF-style NAV arbitrage constraints."
-            }
+                "details": (
+                    "ETF traded on secondary market. Verify iNAV / NAV premium-discount to avoid dislocation traps."
+                    if is_etf else (
+                        "Regulated financial institution evaluated via Equity Value methodology."
+                        if is_financial else
+                        "Single-stock equity traded on exchange without ETF-style NAV arbitrage constraints."
+                    )
+                )
+            },
+            "is_etf": is_etf
         }
     except HTTPException:
         raise

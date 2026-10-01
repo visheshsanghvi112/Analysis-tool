@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from scipy.optimize import minimize
 from fastapi import APIRouter, Query, HTTPException, Request
 
@@ -19,6 +19,26 @@ class Holding(BaseModel):
     ticker: str
     qty: float
     buy_price: float
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_fields(cls, data):
+        if isinstance(data, dict):
+            data_copy = dict(data)
+            if "qty" not in data_copy:
+                if "shares" in data_copy:
+                    data_copy["qty"] = data_copy["shares"]
+                elif "quantity" in data_copy:
+                    data_copy["qty"] = data_copy["quantity"]
+            if "buy_price" not in data_copy:
+                if "buyPrice" in data_copy:
+                    data_copy["buy_price"] = data_copy["buyPrice"]
+                elif "avg_price" in data_copy:
+                    data_copy["buy_price"] = data_copy["avg_price"]
+                elif "price" in data_copy:
+                    data_copy["buy_price"] = data_copy["price"]
+            return data_copy
+        return data
 
 class PortfolioRequest(BaseModel):
     holdings: List[Holding]

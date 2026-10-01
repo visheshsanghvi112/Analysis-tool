@@ -79,7 +79,7 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
   const desk = data?.desk || null;
   const isETF = Boolean(etf?.ticker) || (
     ticker && [
-      'BEES', 'MON100', 'MAFANG', 'CPSEETF', 'GOLDETF', 'LIQUIDBEES', 'SILVERBEES',
+      'BEES', 'MON100', 'MONQ50', 'MAFANG', 'CPSEETF', 'GOLDETF', 'LIQUIDBEES', 'SILVERBEES',
       'ITBEES', 'SETFNN50', 'KOTAKNV20', 'MID150BEES', 'JUNIORBEES', 'HDFCNIFTY', 'ICICINIFTY', 'NIFTYETF',
       'SPY', 'QQQ', 'VOO', 'IVV', 'VTI', 'IWM', 'DIA', 'GLD', 'SLV'
     ].some(k => ticker.toUpperCase().includes(k))

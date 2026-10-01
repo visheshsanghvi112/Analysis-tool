@@ -5,7 +5,7 @@ import {
   ShieldAlert, ShieldCheck, Scale, TrendingUp, TrendingDown,
   AlertTriangle, CheckCircle2, Crosshair, Sliders, RefreshCw,
   Layers, Zap, Info, Lock, ArrowUpRight, ArrowDownRight,
-  ChevronDown, ChevronUp, Sparkles, DollarSign, Percent
+  ChevronDown, ChevronUp, Sparkles, DollarSign, Percent, Newspaper
 } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 
@@ -500,8 +500,8 @@ export default function InvestmentCommitteeDesk({ ticker }) {
             </div>
           )}
 
-          {/* ── The 3 Desks Grid ───────────────────────────────── */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {/* ── Desks Grid (Fundamental, Technical, Derivatives, News) ── */}
+          <div className={`grid grid-cols-1 ${desks.news ? 'sm:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-3'} gap-5`}>
             {/* Fundamental Desk */}
             {desks.fundamental && (
               <DeskCard
@@ -529,6 +529,16 @@ export default function InvestmentCommitteeDesk({ ticker }) {
                 icon={<Zap className="w-4 h-4 text-purple-400" />}
                 weight={weights.derivatives}
                 desk={desks.derivatives}
+              />
+            )}
+
+            {/* News & Catalyst Intelligence Desk */}
+            {desks.news && (
+              <DeskCard
+                title="News & Catalyst"
+                icon={<Newspaper className="w-4 h-4 text-amber-400" />}
+                weight={weights.news || 0.15}
+                desk={desks.news}
               />
             )}
           </div>

@@ -418,6 +418,7 @@ class IntelligentNewsReader:
             'verdict': verdict,
             'trade_directive': directive,
             'catalyst_class': catalyst_class,
+            'sentiment_score': round(score, 4),
             'conviction_score': round(conf, 1),
             'action_recommendation': action_text,
             'cro_risk_flags': cro_risk_flags,

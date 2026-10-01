@@ -772,12 +772,42 @@ def _conflict_capitulation(ctx: Dict[str, Any]) -> ConflictResult:
     )
 
 
+def _conflict_news_dislocation(ctx: Dict[str, Any]) -> ConflictResult:
+    news_verdict = ctx.get("news_verdict")
+    news_flags = ctx.get("news_cro_flags") or []
+    rsi = _num(ctx.get("rsi14", ctx.get("rsi")))
+    orb = str(ctx.get("orb_status", "")).upper()
+    supertrend = str(ctx.get("supertrend_direction", "")).upper()
+
+    technical_bullish = (rsi is not None and rsi > 50) or orb in ("BREAKOUT", "BULLISH_BREAKOUT") or supertrend == "BULLISH"
+    critical_keywords = ("SEVERE", "VALUATION", "REGULATORY", "FREEZE", "DISLOCATION", "CRITICAL", "PREMIUM")
+    has_critical_news = (
+        news_verdict in ("CRITICAL_HEADWIND", "STRUCTURAL_RISK_AVOID")
+        or any(k in str(f).upper() for f in news_flags for k in critical_keywords)
+    )
+    met = bool(technical_bullish and has_critical_news)
+
+    return ConflictResult(
+        code="STRUCTURAL_DISLOCATION_TRAP",
+        severity="HIGH" if met else "NONE",
+        title="Structural Dislocation / False Technical Rebound",
+        condition_met=met,
+        evidence=[
+            f"Technical stance: {'Bullish momentum/breakout' if technical_bullish else 'Neutral/Bearish'}",
+            f"News Verdict: {news_verdict or 'Normal'}",
+            f"CRO Risk Flags: {len(news_flags)} active",
+        ],
+        diagnostic="Short-term technical bounce or breakout coincides with a high-severity structural dislocation, regulatory restriction, or speculative NAV bubble collapse." if met else "Structural dislocation conflict not met.",
+    )
+
+
 def build_conflict_matrix(ctx: Dict[str, Any]) -> List[ConflictResult]:
     checks = [
         _conflict_value_trap(ctx),
         _conflict_parabolic_top(ctx),
         _conflict_iv_crush(ctx),
         _conflict_capitulation(ctx),
+        _conflict_news_dislocation(ctx),
     ]
     return checks
 
@@ -1053,6 +1083,8 @@ def evaluate_committee(ctx: Dict[str, Any]) -> Dict[str, Any]:
         action_state = "LONG_BIAS"
     elif bear_votes > bull_votes:
         action_state = "SHORT_BIAS"
+    elif bull_votes == 0 and bear_votes == 0:
+        action_state = "WAIT"
     else:
         action_state = "CONFLICTED"
 
@@ -1079,6 +1111,85 @@ def evaluate_committee(ctx: Dict[str, Any]) -> Dict[str, Any]:
         normalized, committee_state, action_state, risk
     )
 
+    # News Intelligence Desk Synthesis
+    has_news = any(
+        normalized.get(k) is not None
+        for k in (
+            "news_verdict",
+            "news_directive",
+            "news_sentiment",
+            "news_catalyst_class",
+            "news_cro_flags",
+            "news_committee_vote",
+        )
+    )
+
+    news_intelligence = None
+    if has_news:
+        sentiment_val = normalized.get("news_sentiment")
+        if sentiment_val is not None:
+            news_score = round(_clamp((sentiment_val + 1.0) * 50.0, 0, 100), 1)
+        elif news_vote == "BULLISH":
+            news_score = 75.0
+        elif news_vote == "BEARISH":
+            news_score = 25.0
+        else:
+            news_score = 50.0
+
+        news_evidence = []
+        if normalized.get("news_verdict"):
+            verdict_str = str(normalized["news_verdict"])
+            news_evidence.append({
+                "factor": "News Verdict",
+                "value": verdict_str,
+                "status": "BEARISH" if ("HEADWIND" in verdict_str or "RISK" in verdict_str) else ("BULLISH" if "ACCUMULATE" in verdict_str else "NEUTRAL"),
+                "detail": normalized.get("news_directive") or "Directional directive synthesized from media"
+            })
+        if sentiment_val is not None:
+            news_evidence.append({
+                "factor": "Financial Sentiment",
+                "value": f"{sentiment_val:+.2f}",
+                "status": "BULLISH" if sentiment_val >= 0.12 else ("BEARISH" if sentiment_val <= -0.12 else "NEUTRAL"),
+                "detail": "Domain-calibrated financial lexicon & quantitative magnitude"
+            })
+        if normalized.get("news_catalyst_class"):
+            cat_str = str(normalized["news_catalyst_class"])
+            news_evidence.append({
+                "factor": "Catalyst Class",
+                "value": cat_str,
+                "status": "BEARISH" if ("RISK" in cat_str or "DISLOCATION" in cat_str) else "INFO",
+                "detail": "Core corporate/regulatory driver identified from real-time feeds"
+            })
+        if normalized.get("news_cro_flags"):
+            flags = list(normalized["news_cro_flags"])
+            news_evidence.append({
+                "factor": "Risk Flags",
+                "value": f"{len(flags)} active",
+                "status": "BEARISH" if flags else "INFO",
+                "detail": ", ".join(flags[:2])
+            })
+
+        news_intelligence = {
+            "desk": "news",
+            "stance": news_vote or "NEUTRAL",
+            "score": news_score,
+            "confidence": 75.0 if normalized.get("news_verdict") else 40.0,
+            "evidence": news_evidence,
+            "missing_data": [] if sentiment_val is not None else ["news_sentiment"],
+            "flags": normalized.get("news_cro_flags") or [],
+            "verdict": normalized.get("news_verdict"),
+            "directive": normalized.get("news_directive"),
+            "catalyst_class": normalized.get("news_catalyst_class"),
+        }
+
+    desks_payload = {
+        "fundamental": asdict(fundamentals),
+        "technical": asdict(technicals),
+        "derivatives": asdict(derivatives),
+    }
+    if news_intelligence:
+        desks_payload["news"] = news_intelligence
+
     result = {
         "engine": "stockiq_deterministic_multidesk",
         "engine_version": "1.0.0",
@@ -1089,11 +1200,7 @@ def evaluate_committee(ctx: Dict[str, Any]) -> Dict[str, Any]:
         "committee_score": round(_clamp(committee_score, 0, 100), 1),
         "committee_confidence": round(_clamp(confidence, 0, 100), 1),
         "weights": weights,
-        "desks": {
-            "fundamental": asdict(fundamentals),
-            "technical": asdict(technicals),
-            "derivatives": asdict(derivatives),
-        },
+        "desks": desks_payload,
         "risk_gate": asdict(risk),
         "conflict_matrix": [asdict(c) for c in conflicts],
         "active_conflicts": [asdict(c) for c in top_conflicts],
@@ -1114,6 +1221,9 @@ def evaluate_committee(ctx: Dict[str, Any]) -> Dict[str, Any]:
             "network_calls": False,
         },
     }
+
+    if news_intelligence:
+        result["news_intelligence"] = news_intelligence
 
     if "provenance" in normalized:
         result["provenance"] = normalized["provenance"]

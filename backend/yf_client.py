@@ -228,11 +228,27 @@ def get_info(ticker: str) -> dict:
             )
 
     if not data:
+        try:
+            import yfinance as yf
+            t = yf.Ticker(ticker)
+            inf = t.info
+            if inf and len(inf) > 5:
+                return inf
+        except Exception:
+            pass
         return {}
 
     try:
         res = data.get("quoteSummary", {}).get("result", [])
         if not res:
+            try:
+                import yfinance as yf
+                t = yf.Ticker(ticker)
+                inf = t.info
+                if inf and len(inf) > 5:
+                    return inf
+            except Exception:
+                pass
             return {}
 
         out = {}
@@ -245,6 +261,14 @@ def get_info(ticker: str) -> dict:
                         out[k] = v
         return out
     except Exception:
+        try:
+            import yfinance as yf
+            t = yf.Ticker(ticker)
+            inf = t.info
+            if inf and len(inf) > 5:
+                return inf
+        except Exception:
+            pass
         return {}
 
 
@@ -269,6 +293,15 @@ def get_asset_type(ticker: str) -> str:
         return "INDEX"
     if qt == "MUTUALFUND":
         return "MUTUALFUND"
+
+    GLOBAL_ETFS = {
+        "SPY", "QQQ", "VOO", "IVV", "VTI", "IWM", "DIA", "GLD", "SLV",
+        "ARKK", "SMH", "XLF", "XLE", "XLK", "EEM", "VEA", "VWO", "SCHD",
+        "TLT", "IEF", "SHY", "XBI", "IBB", "VNQ", "VIG", "VYM"
+    }
+    clean_t = t.replace(".NS", "").replace(".BO", "")
+    if clean_t in GLOBAL_ETFS or t in GLOBAL_ETFS:
+        return "ETF"
 
     # Known Indian & Global ETF ticker patterns
     ETF_PATTERNS = [

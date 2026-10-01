@@ -24,6 +24,19 @@ def get_advanced_news_endpoint(
         except Exception:
             # Fallback to legacy news intelligence if unexpected error
             news_analysis = get_advanced_news_analysis(ticker_clean, company_name)
+            if news_analysis and "decision" not in news_analysis:
+                sentiment_val = news_analysis.get("sentiment", {}).get("overall_sentiment", 0.0)
+                news_analysis["decision"] = {
+                    "verdict": "MILD_ACCUMULATE" if sentiment_val >= 0.15 else ("BEARISH_HEADWIND" if sentiment_val <= -0.15 else "NEUTRAL_NOISE"),
+                    "trade_directive": "MILD BUY / DIP ACCUMULATE" if sentiment_val >= 0.15 else ("SHORT_BIAS / CAUTION" if sentiment_val <= -0.15 else "NO DIRECTIONAL BIAS"),
+                    "catalyst_class": "ROUTINE_MARKET_COVERAGE",
+                    "sentiment_score": round(sentiment_val, 4),
+                    "conviction_score": 50.0,
+                    "action_recommendation": "Rely primarily on price action and technical levels.",
+                    "cro_risk_flags": [],
+                    "committee_vote": "BULLISH" if sentiment_val >= 0.15 else ("BEARISH" if sentiment_val <= -0.15 else "NEUTRAL"),
+                    "ml_adjustment_factor": round(sentiment_val * 0.1, 4)
+                }
         
         return {
             "ticker": ticker_clean,

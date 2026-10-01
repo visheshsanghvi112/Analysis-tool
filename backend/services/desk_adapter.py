@@ -480,11 +480,14 @@ def build_desk_context(
 
     # News & Corporate Catalyst Intelligence
     news_decision = None
+    news_score = None
     try:
         from services.intelligent_news_reader import intelligent_news_reader
         news_res = intelligent_news_reader.fetch_live_stock_news(ticker_clean)
-        if news_res and "decision" in news_res:
-            news_decision = news_res["decision"]
+        if news_res:
+            news_decision = news_res.get("decision")
+            if "sentiment" in news_res and "overall_sentiment" in news_res["sentiment"]:
+                news_score = float(news_res["sentiment"]["overall_sentiment"])
     except Exception as e:
         print(f"[DeskAdapter] News context fetch skipped: {e}")
 
@@ -539,7 +542,7 @@ def build_desk_context(
         target_r_multiple=2.0,
         target2_r_multiple=3.0,
         # News & Corporate Catalyst Intelligence
-        news_sentiment=news_decision.get("sentiment_score") if news_decision else None,
+        news_sentiment=news_score if news_score is not None else (news_decision.get("sentiment_score") if news_decision else None),
         news_verdict=news_decision.get("verdict") if news_decision else None,
         news_directive=news_decision.get("trade_directive") if news_decision else None,
         news_catalyst_class=news_decision.get("catalyst_class") if news_decision else None,

@@ -124,7 +124,6 @@ def get_ml_prediction_endpoint(
         raise HTTPException(status_code=500, detail=f"ML prediction failed: {str(e)}")
 
 
-@router.post("/api/retrain-model")  # keep the /api prefix or relative path
 @router.post("/retrain-model")
 def retrain_ml_model(
     ticker: str = Query(..., description="Stock ticker to retrain model for"),
