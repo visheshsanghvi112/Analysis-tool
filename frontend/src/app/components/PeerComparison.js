@@ -50,7 +50,7 @@ function MetricRow({ label, valA, valB, winner, tickerA, tickerB, unit = '', hig
   );
 }
 
-export default function PeerComparison({ ticker }) {
+export default function PeerComparison({ ticker, initialPeer = null }) {
   const [peers, setPeers]           = useState([]);
   const [sector, setSector]         = useState('');
   const [selectedPeer, setSelectedPeer] = useState(null);
@@ -63,6 +63,13 @@ export default function PeerComparison({ ticker }) {
   const [peersLoading, setPeersLoading] = useState(true);
   const [error, setError]               = useState(null);
   const searchRef                       = useRef(null);
+
+  // Trigger comparison when initialPeer is passed from Sector Intelligence
+  useEffect(() => {
+    if (initialPeer && initialPeer !== ticker) {
+      loadComparison(initialPeer);
+    }
+  }, [initialPeer]);
 
   // Close dropdown on outside click
   useEffect(() => {

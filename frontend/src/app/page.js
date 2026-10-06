@@ -254,6 +254,13 @@ const PEER_TABS = [
 
 const PeerSectorTabs = ({ ticker }) => {
   const [activeTab, setActiveTab] = useState('compare');
+  const [comparePeer, setComparePeer] = useState(null);
+
+  const handleSelectPeer = (peer) => {
+    setComparePeer(peer);
+    setActiveTab('compare');
+  };
+
   return (
     <div>
       {/* Tab row */}
@@ -282,8 +289,8 @@ const PeerSectorTabs = ({ ticker }) => {
         })}
       </div>
       {/* Tab panels */}
-      {activeTab === 'compare' && <PeerComparison ticker={ticker} />}
-      {activeTab === 'sector'  && <SectorIntelligence ticker={ticker} />}
+      {activeTab === 'compare' && <PeerComparison ticker={ticker} initialPeer={comparePeer} />}
+      {activeTab === 'sector'  && <SectorIntelligence ticker={ticker} onSelectPeer={handleSelectPeer} />}
     </div>
   );
 };

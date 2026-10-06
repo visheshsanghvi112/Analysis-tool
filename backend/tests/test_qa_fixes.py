@@ -159,3 +159,61 @@ def test_ml_signal_strength_harmonization():
         assert pred['signal_strength'] <= 100.0
         assert pred['signal_strength'] > 0
 
+
+def test_universal_peer_resolution():
+    from peer_data import get_peers
+    test_cases = [
+        ("RELIANCE.NS", "Oil & Gas"),
+        ("AAPL", "US Mega-Cap Tech"),
+        ("NVDA", "Semiconductors & AI"),
+        ("MONQ50.NS", "Index & Sectoral ETFs"),
+        ("BEL.NS", "Defence"),
+        ("HAL.NS", "Defence"),
+        ("IRFC.NS", "Railways"),
+        ("ETERNAL.NS", "Internet & Tech"),
+        ("SWIGGY.NS", "Internet & Tech"),
+        ("PFC.NS", "Power & Energy"),
+        ("SPY", "Global & US ETFs"),
+    ]
+    for sym, expected_sector in test_cases:
+        res = get_peers(sym)
+        assert res["found"] is True
+        assert res["sector"] == expected_sector
+        assert len(res["peers"]) >= 3
+        # Queried ticker must never be in its own peer list
+        assert sym not in res["peers"]
+        assert sym.replace(".NS", "") not in res["peers"]
+
+
+def test_sector_rank_computation_and_aggregates():
+    from routers.analysis import sector_rank_endpoint
+
+    dummy_metrics = {
+        "RELIANCE.NS": {"ticker": "RELIANCE.NS", "ret_1m": 2.0, "ret_3m": 5.0, "ret_1y": 15.0, "sharpe": 1.2, "annual_vol": 18.0, "rsi": 55.0},
+        "ONGC.NS":     {"ticker": "ONGC.NS",     "ret_1m": 4.0, "ret_3m": 12.0, "ret_1y": 25.0, "sharpe": 1.5, "annual_vol": 22.0, "rsi": 62.0},
+        "BPCL.NS":     {"ticker": "BPCL.NS",     "ret_1m": -1.0, "ret_3m": -2.0, "ret_1y": 8.0, "sharpe": 0.5, "annual_vol": 25.0, "rsi": 45.0},
+        "IOC.NS":      {"ticker": "IOC.NS",      "ret_1m": 0.5, "ret_3m": 1.0, "ret_1y": 10.0, "sharpe": 0.7, "annual_vol": 20.0, "rsi": 48.0},
+    }
+
+    with patch("routers.analysis._compute_quick_metrics", side_effect=lambda t: dummy_metrics.get(t)):
+        res = sector_rank_endpoint(ticker="RELIANCE.NS")
+        assert res["ticker"] == "RELIANCE.NS"
+        assert res["sector"] == "Oil & Gas"
+        assert len(res["ranked"]) == 4
+
+        # Rank must be sorted descending by score
+        scores = [r["score"] for r in res["ranked"]]
+        assert scores == sorted(scores, reverse=True)
+
+        # Sector averages must be computed
+        avg_3m = res["sector_averages"]["avg_ret_3m"]
+        assert avg_3m == pytest.approx((5.0 + 12.0 - 2.0 + 1.0) / 4.0, rel=1e-2)
+
+        # Alpha and tier must be present
+        for r in res["ranked"]:
+            assert "alpha_3m" in r
+            assert "alpha_1y" in r
+            assert r["tier"] in ["LEADER", "OUTPERFORMER", "MARKET PERFORMER", "LAGGARD"]
+            assert r["ml_signal"] in ["STRONG BUY", "BUY", "HOLD", "SELL"]
+
+

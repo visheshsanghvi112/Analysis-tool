@@ -207,7 +207,7 @@ def get_info(ticker: str) -> dict:
     """
     global _CRUMB
     crumb = _ensure_crumb()
-    params = {"modules": "price,defaultKeyStatistics,financialData,summaryDetail"}
+    params = {"modules": "price,defaultKeyStatistics,financialData,summaryDetail,assetProfile"}
     if crumb:
         params["crumb"] = crumb
 

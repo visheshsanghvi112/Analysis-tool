@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import APIRouter, Query, HTTPException
 
 from yf_client import get_history, get_quote, get_info, get_asset_type, get_etf_meta, get_etf_holdings
@@ -674,19 +675,26 @@ def sector_rank_endpoint(ticker: str = Query(...)):
         ticker_clean = ticker.upper().strip()
         peer_info = get_peers(ticker_clean)
         sector    = peer_info["sector"]
-        peers     = peer_info["peers"]
+        peers     = peer_info.get("peers", [])
 
-        all_tickers = [ticker_clean] + peers
+        # Ensure unique tickers and maintain queried ticker first
+        all_tickers = [ticker_clean] + [p for p in peers if p != ticker_clean]
 
         all_metrics = []
-        for t in all_tickers:
-            m = _compute_quick_metrics(t)
-            if m:
-                all_metrics.append(m)
+        with ThreadPoolExecutor(max_workers=min(len(all_tickers), 10)) as executor:
+            future_to_ticker = {executor.submit(_compute_quick_metrics, t): t for t in all_tickers}
+            for future in as_completed(future_to_ticker):
+                try:
+                    m = future.result()
+                    if m:
+                        all_metrics.append(m)
+                except Exception:
+                    pass
 
         if not all_metrics:
             raise HTTPException(status_code=503, detail="Could not fetch sector data")
 
+        # Calculate composite score for each stock
         for m in all_metrics:
             m['score'] = _sector_composite_score(m, all_metrics)
 
@@ -695,31 +703,96 @@ def sector_rank_endpoint(ticker: str = Query(...)):
         for i, m in enumerate(ranked):
             m['rank'] = i + 1
 
-        valid = [m for m in ranked if m.get('ret_3m') is not None]
-        best_momentum   = max(valid, key=lambda x: x.get('ret_3m', -999))  if valid else None
-        best_sharpe     = max(all_metrics, key=lambda x: x.get('sharpe', -999))
-        best_ml         = max([m for m in all_metrics if m.get('ml_return') is not None],
-                               key=lambda x: x.get('ml_return', -999), default=None)
-        lowest_vol      = min(all_metrics, key=lambda x: x.get('annual_vol', 999))
+        # Calculate sector benchmarks (averages & medians)
+        ret_1m_vals = [m['ret_1m'] for m in ranked if m.get('ret_1m') is not None]
+        ret_3m_vals = [m['ret_3m'] for m in ranked if m.get('ret_3m') is not None]
+        ret_1y_vals = [m['ret_1y'] for m in ranked if m.get('ret_1y') is not None]
+        sharpe_vals = [m['sharpe'] for m in ranked if m.get('sharpe') is not None]
+        vol_vals    = [m['annual_vol'] for m in ranked if m.get('annual_vol') is not None]
+        score_vals  = [m['score'] for m in ranked if m.get('score') is not None]
 
-        queried_rank = next((m['rank'] for m in ranked if m['ticker'] == ticker_clean), None)
-        total        = len(ranked)
+        avg_3m     = _safe_float(float(np.mean(ret_3m_vals)), 0.0, 2) if ret_3m_vals else 0.0
+        avg_1y     = _safe_float(float(np.mean(ret_1y_vals)), 0.0, 2) if ret_1y_vals else 0.0
+        avg_sharpe = _safe_float(float(np.mean(sharpe_vals)), 0.0, 2) if sharpe_vals else 0.0
+        avg_vol    = _safe_float(float(np.mean(vol_vals)), 0.0, 2) if vol_vals else 0.0
+        avg_score  = _safe_float(float(np.mean(score_vals)), 50.0, 1) if score_vals else 50.0
+
+        sector_averages = {
+            'avg_ret_1m':    _safe_float(float(np.mean(ret_1m_vals)), 0.0, 2) if ret_1m_vals else None,
+            'avg_ret_3m':    avg_3m,
+            'avg_ret_1y':    avg_1y,
+            'avg_sharpe':    avg_sharpe,
+            'avg_vol':       avg_vol,
+            'avg_score':     avg_score,
+            'median_ret_3m': _safe_float(float(np.median(ret_3m_vals)), 0.0, 2) if ret_3m_vals else None,
+            'median_ret_1y': _safe_float(float(np.median(ret_1y_vals)), 0.0, 2) if ret_1y_vals else None,
+            'median_sharpe': _safe_float(float(np.median(sharpe_vals)), 0.0, 2) if sharpe_vals else None,
+            'median_vol':    _safe_float(float(np.median(vol_vals)), 0.0, 2) if vol_vals else None,
+        }
+
+        # Decorate each stock with alpha, tier, and actionable signal
+        for m in ranked:
+            # Alpha vs sector average
+            m['alpha_3m'] = _safe_float(m['ret_3m'] - avg_3m, 0.0, 2) if m.get('ret_3m') is not None else 0.0
+            m['alpha_1y'] = _safe_float(m['ret_1y'] - avg_1y, 0.0, 2) if m.get('ret_1y') is not None else 0.0
+
+            # Performance Tier
+            sc = m.get('score', 50)
+            if sc >= 75:
+                m['tier'] = 'LEADER'
+            elif sc >= 55:
+                m['tier'] = 'OUTPERFORMER'
+            elif sc >= 40:
+                m['tier'] = 'MARKET PERFORMER'
+            else:
+                m['tier'] = 'LAGGARD'
+
+            # Ensure an informative momentum/trend signal is available
+            if not m.get('ml_signal'):
+                rsi = m.get('rsi') or 50.0
+                r3m = m.get('ret_3m') or 0.0
+                if sc >= 75 and rsi < 70 and r3m > 5:
+                    m['ml_signal'] = 'STRONG BUY'
+                elif sc >= 55 and r3m >= 0:
+                    m['ml_signal'] = 'BUY'
+                elif sc < 35 or (r3m < -10 and rsi < 40):
+                    m['ml_signal'] = 'SELL'
+                else:
+                    m['ml_signal'] = 'HOLD'
+
+        valid = [m for m in ranked if m.get('ret_3m') is not None]
+        best_momentum = max(valid, key=lambda x: x.get('ret_3m', -999)) if valid else ranked[0]
+        best_sharpe   = max(ranked, key=lambda x: x.get('sharpe', -999))
+        best_ml       = max(ranked, key=lambda x: x.get('score', 0))
+        lowest_vol    = min(ranked, key=lambda x: x.get('annual_vol', 999))
+
+        queried_stock = next((m for m in ranked if m['ticker'] == ticker_clean), None)
+        queried_rank  = queried_stock['rank'] if queried_stock else None
+        total         = len(ranked)
 
         insights = {
-            'sector':           sector,
-            'total_peers':      total,
-            'queried_rank':     queried_rank,
-            'best_momentum':    best_momentum['ticker'] if best_momentum else None,
-            'best_risk_adj':    best_sharpe['ticker'],
-            'best_ml_signal':   best_ml['ticker'] if best_ml else None,
-            'lowest_vol':       lowest_vol['ticker'],
+            'sector':             sector,
+            'total_peers':        total,
+            'queried_rank':       queried_rank,
+            'queried_tier':       queried_stock.get('tier', 'NEUTRAL') if queried_stock else 'NEUTRAL',
+            'queried_alpha_3m':   queried_stock.get('alpha_3m', 0.0) if queried_stock else 0.0,
+            'queried_alpha_1y':   queried_stock.get('alpha_1y', 0.0) if queried_stock else 0.0,
+            'best_momentum':      best_momentum['ticker'],
+            'best_risk_adj':      best_sharpe['ticker'],
+            'best_ml_signal':     best_ml['ticker'],
+            'lowest_vol':         lowest_vol['ticker'],
+            'sector_3m_avg':      avg_3m,
+            'sector_1y_avg':      avg_1y,
+            'sector_sharpe_avg':  avg_sharpe,
+            'sector_vol_avg':     avg_vol,
         }
 
         return {
-            "ticker":   ticker_clean,
-            "sector":   sector,
-            "ranked":   ranked,
-            "insights": insights,
+            "ticker":          ticker_clean,
+            "sector":          sector,
+            "ranked":          ranked,
+            "insights":        insights,
+            "sector_averages": sector_averages,
         }
     except HTTPException:
         raise
