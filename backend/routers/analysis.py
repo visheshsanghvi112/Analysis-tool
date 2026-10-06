@@ -98,8 +98,24 @@ def _compute_quick_metrics(ticker: str) -> dict | None:
         tail_95 = returns[returns <= np.percentile(returns, 5)]
         cvar_95 = _safe_float(float(tail_95.mean() * 100), default=0.0, ndigits=2) if len(tail_95) > 0 else var_95
 
+        # Fundamental Valuation Multiples
+        try:
+            inf = get_info(ticker) or {}
+        except Exception:
+            inf = {}
+
+        pe_ratio      = _safe_float(inf.get('trailingPE') or inf.get('forwardPE'), default=None, ndigits=2)
+        pb_ratio      = _safe_float(inf.get('priceToBook'), default=None, ndigits=2)
+        ev_ebitda     = _safe_float(inf.get('enterpriseToEbitda'), default=None, ndigits=2)
+        roe           = _safe_float(inf.get('returnOnEquity') * 100.0 if inf.get('returnOnEquity') is not None else None, default=None, ndigits=2)
+        profit_margin = _safe_float(inf.get('profitMargins') * 100.0 if inf.get('profitMargins') is not None else None, default=None, ndigits=2)
+        div_yield     = _safe_float(inf.get('dividendYield') * 100.0 if inf.get('dividendYield') is not None else None, default=None, ndigits=2)
+        market_cap    = inf.get('marketCap')
+        company_name  = inf.get('shortName') or inf.get('longName') or ticker.replace('.NS', '').replace('.BO', '')
+
         return {
             'ticker':        ticker,
+            'company_name':  company_name,
             'current_price': _safe_float(current_price, default=0.0, ndigits=2),
             'ret_1m':        ret_1m,
             'ret_3m':        ret_3m,
@@ -114,6 +130,13 @@ def _compute_quick_metrics(ticker: str) -> dict | None:
             'max_drawdown':  max_drawdown,
             'rsi':           rsi,
             'pct_from_high': pct_from_high,
+            'pe_ratio':      pe_ratio,
+            'pb_ratio':      pb_ratio,
+            'ev_ebitda':     ev_ebitda,
+            'roe':           roe,
+            'profit_margin': profit_margin,
+            'dividend_yield': div_yield,
+            'market_cap':    market_cap,
             'ml_signal':     None,
             'ml_return':     None,
             'garch_vol':     None,
@@ -730,7 +753,28 @@ def sector_rank_endpoint(ticker: str = Query(...)):
             'median_vol':    _safe_float(float(np.median(vol_vals)), 0.0, 2) if vol_vals else None,
         }
 
-        # Decorate each stock with alpha, tier, and actionable signal
+        # Valuation & Risk-Return Medians
+        pe_vals        = [m['pe_ratio'] for m in ranked if m.get('pe_ratio') is not None and m['pe_ratio'] > 0]
+        pb_vals        = [m['pb_ratio'] for m in ranked if m.get('pb_ratio') is not None and m['pb_ratio'] > 0]
+        ev_vals        = [m['ev_ebitda'] for m in ranked if m.get('ev_ebitda') is not None and m['ev_ebitda'] > 0]
+        roe_vals       = [m['roe'] for m in ranked if m.get('roe') is not None]
+        margin_vals    = [m['profit_margin'] for m in ranked if m.get('profit_margin') is not None]
+
+        median_pe        = _safe_float(float(np.median(pe_vals)), None, 2) if pe_vals else None
+        median_pb        = _safe_float(float(np.median(pb_vals)), None, 2) if pb_vals else None
+        median_ev_ebitda = _safe_float(float(np.median(ev_vals)), None, 2) if ev_vals else None
+        median_roe       = _safe_float(float(np.median(roe_vals)), None, 2) if roe_vals else None
+        median_margin    = _safe_float(float(np.median(margin_vals)), None, 2) if margin_vals else None
+        median_1y        = _safe_float(float(np.median(ret_1y_vals)), 0.0, 2) if ret_1y_vals else 0.0
+        median_vol       = _safe_float(float(np.median(vol_vals)), 20.0, 2) if vol_vals else 20.0
+
+        sector_averages['median_pe']        = median_pe
+        sector_averages['median_pb']        = median_pb
+        sector_averages['median_ev_ebitda'] = median_ev_ebitda
+        sector_averages['median_roe']       = median_roe
+        sector_averages['median_margin']    = median_margin
+
+        # Decorate each stock with alpha, tier, valuation premium/discount, and 2D quadrant
         for m in ranked:
             # Alpha vs sector average
             m['alpha_3m'] = _safe_float(m['ret_3m'] - avg_3m, 0.0, 2) if m.get('ret_3m') is not None else 0.0
@@ -746,6 +790,39 @@ def sector_rank_endpoint(ticker: str = Query(...)):
                 m['tier'] = 'MARKET PERFORMER'
             else:
                 m['tier'] = 'LAGGARD'
+
+            # Relative Valuation vs Sector Median
+            if m.get('pe_ratio') is not None and median_pe and median_pe > 0:
+                pe_disc = round(((m['pe_ratio'] - median_pe) / median_pe) * 100.0, 1)
+                m['pe_vs_sector'] = pe_disc
+                if pe_disc <= -20.0:
+                    m['valuation_verdict'] = 'DEEP VALUE'
+                elif pe_disc <= 10.0:
+                    m['valuation_verdict'] = 'FAIR VALUE'
+                elif pe_disc <= 35.0:
+                    m['valuation_verdict'] = 'GROWTH PREMIUM'
+                else:
+                    m['valuation_verdict'] = 'HIGH PREMIUM'
+            else:
+                m['pe_vs_sector'] = None
+                m['valuation_verdict'] = 'FAIR VALUE'
+
+            # Risk-Return 2D Quadrant
+            ret1 = m.get('ret_1y') if m.get('ret_1y') is not None else (m.get('ret_3m') or 0.0)
+            vol  = m.get('annual_vol') or 20.0
+
+            if ret1 >= median_1y and vol <= median_vol:
+                m['quadrant'] = 'ALPHA_COMPOUNDER'
+                m['quadrant_label'] = 'Alpha Compounder'
+            elif ret1 >= median_1y and vol > median_vol:
+                m['quadrant'] = 'HIGH_BETA_LEADER'
+                m['quadrant_label'] = 'High-Beta Momentum'
+            elif ret1 < median_1y and vol <= median_vol:
+                m['quadrant'] = 'DEFENSIVE_CONSOLIDATOR'
+                m['quadrant_label'] = 'Defensive Safe'
+            else:
+                m['quadrant'] = 'UNDERPERFORMING_TRAP'
+                m['quadrant_label'] = 'Underperforming Trap'
 
             # Ensure an informative momentum/trend signal is available
             if not m.get('ml_signal'):
@@ -771,20 +848,36 @@ def sector_rank_endpoint(ticker: str = Query(...)):
         total         = len(ranked)
 
         insights = {
-            'sector':             sector,
-            'total_peers':        total,
-            'queried_rank':       queried_rank,
-            'queried_tier':       queried_stock.get('tier', 'NEUTRAL') if queried_stock else 'NEUTRAL',
-            'queried_alpha_3m':   queried_stock.get('alpha_3m', 0.0) if queried_stock else 0.0,
-            'queried_alpha_1y':   queried_stock.get('alpha_1y', 0.0) if queried_stock else 0.0,
-            'best_momentum':      best_momentum['ticker'],
-            'best_risk_adj':      best_sharpe['ticker'],
-            'best_ml_signal':     best_ml['ticker'],
-            'lowest_vol':         lowest_vol['ticker'],
-            'sector_3m_avg':      avg_3m,
-            'sector_1y_avg':      avg_1y,
-            'sector_sharpe_avg':  avg_sharpe,
-            'sector_vol_avg':     avg_vol,
+            'sector':                 sector,
+            'total_peers':            total,
+            'queried_rank':           queried_rank,
+            'queried_tier':           queried_stock.get('tier', 'NEUTRAL') if queried_stock else 'NEUTRAL',
+            'queried_alpha_3m':       queried_stock.get('alpha_3m', 0.0) if queried_stock else 0.0,
+            'queried_alpha_1y':       queried_stock.get('alpha_1y', 0.0) if queried_stock else 0.0,
+            'queried_pe_vs_sector':   queried_stock.get('pe_vs_sector') if queried_stock else None,
+            'queried_quadrant':       queried_stock.get('quadrant') if queried_stock else None,
+            'queried_quadrant_label': queried_stock.get('quadrant_label') if queried_stock else None,
+            'best_momentum':          best_momentum['ticker'],
+            'best_risk_adj':          best_sharpe['ticker'],
+            'best_ml_signal':         best_ml['ticker'],
+            'lowest_vol':             lowest_vol['ticker'],
+            'sector_3m_avg':          avg_3m,
+            'sector_1y_avg':          avg_1y,
+            'sector_sharpe_avg':      avg_sharpe,
+            'sector_vol_avg':         avg_vol,
+            'median_pe':              median_pe,
+            'median_roe':             median_roe,
+            'median_1y':              median_1y,
+            'median_vol':             median_vol,
+        }
+
+        quadrant_meta = {
+            "median_vol": median_vol,
+            "median_return": median_1y,
+            "vol_min": min(vol_vals) if vol_vals else 10.0,
+            "vol_max": max(vol_vals) if vol_vals else 40.0,
+            "ret_min": min(ret_1y_vals) if ret_1y_vals else -20.0,
+            "ret_max": max(ret_1y_vals) if ret_1y_vals else 50.0,
         }
 
         return {
@@ -793,6 +886,213 @@ def sector_rank_endpoint(ticker: str = Query(...)):
             "ranked":          ranked,
             "insights":        insights,
             "sector_averages": sector_averages,
+            "quadrant_meta":   quadrant_meta,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sector-chart")
+def sector_chart_endpoint(
+    ticker: str = Query(..., description="Active ticker symbol"),
+    period: str = Query("6mo", description="Lookback: 1mo, 3mo, 6mo, 1y, ytd")
+):
+    """
+    Returns rebased comparative percentage performance curves for the active stock
+    and its primary sector competitors, plus an equal-weighted sector benchmark index
+    and statistical pair ratio Z-score mean-reversion analysis.
+    """
+    try:
+        ticker_clean = ticker.upper().strip()
+        peer_info = get_peers(ticker_clean)
+        sector = peer_info["sector"]
+        peers = peer_info.get("peers", [])
+
+        # Map period format
+        p_norm = period.lower().strip()
+        PERIOD_MAP = {
+            '1m': '1mo', '1mo': '1mo',
+            '3m': '3mo', '3mo': '3mo',
+            '6m': '6mo', '6mo': '6mo',
+            '1y': '1y',  'ytd': 'ytd'
+        }
+        yf_period = PERIOD_MAP.get(p_norm, '6mo')
+
+        # Limit to queried + top 4 sector peers to keep chart crystal clear
+        chart_tickers = [ticker_clean] + [p for p in peers[:4] if p != ticker_clean]
+
+        histories = {}
+        with ThreadPoolExecutor(max_workers=min(len(chart_tickers), 6)) as executor:
+            future_to_t = {executor.submit(get_history, t, yf_period): t for t in chart_tickers}
+            for fut in as_completed(future_to_t):
+                t = future_to_t[fut]
+                try:
+                    df = fut.result()
+                    if df is not None and not df.empty and 'Close' in df:
+                        s = df['Close'].copy()
+                        s.index = [d.strftime('%Y-%m-%d') for d in s.index]
+                        histories[t] = s
+                except Exception:
+                    pass
+
+        if not histories or ticker_clean not in histories:
+            raise HTTPException(status_code=503, detail="Could not fetch historical chart data")
+
+        df_combined = pd.DataFrame(histories).ffill().dropna()
+        if df_combined.empty or len(df_combined) < 2:
+            raise HTTPException(status_code=400, detail="Insufficient price history for comparison")
+
+        # Rebase to 0.0% at index 0
+        rebased = ((df_combined / df_combined.iloc[0]) - 1.0) * 100.0
+        dates = list(rebased.index)
+
+        # Equal-weighted sector average curve
+        sector_bench = rebased.mean(axis=1)
+
+        PALETTE = ['#10b981', '#a855f7', '#06b6d4', '#f97316', '#ec4899', '#6366f1']
+
+        series = []
+        for i, sym in enumerate(chart_tickers):
+            if sym in rebased.columns:
+                is_q = (sym == ticker_clean)
+                col_color = '#3b82f6' if is_q else PALETTE[(i) % len(PALETTE)]
+                s_vals = [round(float(v), 2) for v in rebased[sym]]
+                series.append({
+                    "ticker": sym,
+                    "name": sym.replace('.NS', '').replace('.BO', ''),
+                    "is_queried": is_q,
+                    "color": col_color,
+                    "final_return": s_vals[-1] if s_vals else 0.0,
+                    "data": s_vals,
+                })
+
+        # Pair Spread Z-Score vs primary peer
+        pair_spread = None
+        other_peers = [p for p in chart_tickers if p != ticker_clean and p in df_combined.columns]
+        if other_peers:
+            top_peer = other_peers[0]
+            ratio = (df_combined[ticker_clean] / df_combined[top_peer]).dropna()
+            if len(ratio) >= 15:
+                w = min(60, len(ratio))
+                roll_m = ratio.rolling(w, min_periods=10).mean()
+                roll_s = ratio.rolling(w, min_periods=10).std()
+                z = (ratio - roll_m) / (roll_s + 1e-9)
+                cur_z = round(float(z.iloc[-1]), 2)
+                cur_r = round(float(ratio.iloc[-1]), 4)
+                mean_r = round(float(roll_m.iloc[-1]), 4)
+
+                if cur_z <= -1.75:
+                    status = "STATISTICALLY_OVERSOLD"
+                    action = "Spread mean-reversion buy opportunity"
+                elif cur_z >= 1.75:
+                    status = "STATISTICALLY_OVERBOUGHT"
+                    action = "Spread overextended vs historical average"
+                else:
+                    status = "EQUILIBRIUM"
+                    action = "Trading within normal historical valuation band"
+
+                sym_a = ticker_clean.replace('.NS', '').replace('.BO', '')
+                sym_b = top_peer.replace('.NS', '').replace('.BO', '')
+                insight = (
+                    f"{sym_a}/{sym_b} ratio is {cur_r} (Mean: {mean_r}, Z-Score: {cur_z:+.2f}σ). {action}."
+                )
+
+                pair_spread = {
+                    "primary_peer": top_peer,
+                    "ratio": cur_r,
+                    "mean_ratio": mean_r,
+                    "z_score": cur_z,
+                    "status": status,
+                    "insight": insight,
+                }
+
+        benchmark_vals = [round(float(v), 2) for v in sector_bench]
+        benchmark_obj = {
+            "name": f"{sector} Benchmark",
+            "color": "#f59e0b",
+            "final_return": benchmark_vals[-1] if benchmark_vals else 0.0,
+            "data": benchmark_vals,
+        }
+
+        return {
+            "ticker": ticker_clean,
+            "sector": sector,
+            "period": period,
+            "dates": dates,
+            "series": series,
+            "benchmark": benchmark_obj,
+            "pair_spread": pair_spread,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/multi-compare")
+def multi_compare_endpoint(
+    ticker: str = Query(..., description="Base stock ticker symbol"),
+    peers: str = Query(..., description="Comma-separated list of peer tickers, e.g. INFY.NS,WIPRO.NS,HCLTECH.NS")
+):
+    """
+    Computes side-by-side scorecard across up to 5 instruments in parallel,
+    pinpointing category leaders across return, risk, and valuation multiples.
+    """
+    try:
+        ticker_clean = ticker.upper().strip()
+        peer_list = [p.upper().strip() for p in peers.split(",") if p.strip()]
+        
+        all_tickers = [ticker_clean] + [p for p in peer_list if p != ticker_clean]
+        if len(all_tickers) > 6:
+            all_tickers = all_tickers[:6]
+
+        all_metrics = []
+        with ThreadPoolExecutor(max_workers=min(len(all_tickers), 6)) as executor:
+            future_to_t = {executor.submit(_compute_quick_metrics, t): t for t in all_tickers}
+            for fut in as_completed(future_to_t):
+                try:
+                    m = fut.result()
+                    if m:
+                        all_metrics.append(m)
+                except Exception:
+                    pass
+
+        if not all_metrics:
+            raise HTTPException(status_code=404, detail="Could not compute metrics for the requested tickers")
+
+        # Sort so queried ticker is first, then rest
+        all_metrics.sort(key=lambda x: 0 if x['ticker'] == ticker_clean else 1)
+
+        def pick_leader(key, higher_is_better=True):
+            valid = [m for m in all_metrics if m.get(key) is not None]
+            if not valid:
+                return None
+            if higher_is_better:
+                return max(valid, key=lambda x: x[key])['ticker']
+            else:
+                return min(valid, key=lambda x: x[key])['ticker']
+
+        leaders = {
+            'ret_1m': pick_leader('ret_1m', True),
+            'ret_3m': pick_leader('ret_3m', True),
+            'ret_1y': pick_leader('ret_1y', True),
+            'sharpe': pick_leader('sharpe', True),
+            'sortino': pick_leader('sortino', True),
+            'annual_vol': pick_leader('annual_vol', False),
+            'max_drawdown': pick_leader('max_drawdown', True),
+            'pe_ratio': pick_leader('pe_ratio', False),
+            'pb_ratio': pick_leader('pb_ratio', False),
+            'roe': pick_leader('roe', True),
+            'profit_margin': pick_leader('profit_margin', True),
+        }
+
+        return {
+            "queried_ticker": ticker_clean,
+            "metrics": all_metrics,
+            "leaders": leaders,
+            "total_stocks": len(all_metrics)
         }
     except HTTPException:
         raise

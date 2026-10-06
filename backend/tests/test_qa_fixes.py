@@ -217,3 +217,53 @@ def test_sector_rank_computation_and_aggregates():
             assert r["ml_signal"] in ["STRONG BUY", "BUY", "HOLD", "SELL"]
 
 
+def test_sector_chart_endpoint_normalized_returns():
+    from routers.analysis import sector_chart_endpoint
+    import pandas as pd
+    import numpy as np
+
+    dates = pd.date_range(end=pd.Timestamp.now(), periods=30, freq="D")
+    df_a = pd.DataFrame({"Close": np.linspace(100, 110, 30)}, index=dates)
+    df_b = pd.DataFrame({"Close": np.linspace(200, 240, 30)}, index=dates)
+
+    def mock_hist(t, period="3mo", interval="1d"):
+        return df_a if "INFY" in t else df_b
+
+    with patch("routers.analysis.get_history", side_effect=mock_hist):
+        res = sector_chart_endpoint(ticker="INFY.NS", period="3mo")
+        assert res["ticker"] == "INFY.NS"
+        assert res["period"] == "3mo"
+        assert "series" in res
+        series_tickers = [s["ticker"] for s in res["series"]]
+        assert "INFY.NS" in series_tickers
+        assert "benchmark" in res
+        assert res["benchmark"]["name"] == "IT Benchmark"
+        assert len(res["benchmark"]["data"]) == len(res["dates"])
+
+        infy_series = next(s for s in res["series"] if s["ticker"] == "INFY.NS")
+        # Base return must start at 0.0%
+        assert infy_series["data"][0] == 0.0
+        # Final point should match approx +10%
+        assert infy_series["data"][-1] == pytest.approx(10.0, rel=1e-1)
+        assert "pair_spread" in res
+
+
+def test_multi_compare_endpoint_and_leaders():
+    from routers.analysis import multi_compare_endpoint
+
+    dummy = {
+        "TCS.NS": {"ticker": "TCS.NS", "company_name": "Tata Consultancy Services", "current_price": 3500.0, "ret_1m": 2.0, "ret_1y": 20.0, "sharpe": 1.5, "pe_ratio": 28.0, "roe": 45.0, "annual_vol": 16.0},
+        "INFY.NS": {"ticker": "INFY.NS", "company_name": "Infosys", "current_price": 1800.0, "ret_1m": 4.0, "ret_1y": 30.0, "sharpe": 1.2, "pe_ratio": 24.0, "roe": 30.0, "annual_vol": 19.0},
+        "WIPRO.NS": {"ticker": "WIPRO.NS", "company_name": "Wipro", "current_price": 480.0, "ret_1m": -1.0, "ret_1y": 10.0, "sharpe": 0.8, "pe_ratio": 20.0, "roe": 15.0, "annual_vol": 22.0},
+    }
+
+    with patch("routers.analysis._compute_quick_metrics", side_effect=lambda t: dummy.get(t)):
+        res = multi_compare_endpoint(ticker="TCS.NS", peers="INFY.NS,WIPRO.NS")
+        assert res["queried_ticker"] == "TCS.NS"
+        assert len(res["metrics"]) == 3
+        assert res["leaders"]["ret_1y"] == "INFY.NS"  # Highest 1y return
+        assert res["leaders"]["pe_ratio"] == "WIPRO.NS" # Lowest PE ratio
+        assert res["leaders"]["roe"] == "TCS.NS"       # Highest ROE
+        assert res["leaders"]["annual_vol"] == "TCS.NS" # Lowest volatility
+
+
