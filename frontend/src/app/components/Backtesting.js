@@ -402,10 +402,10 @@ export default function Backtesting({ ticker }) {
           {/* Trade log toggle & CSV Export */}
           {data.trades?.length > 0 && (
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <button
                   onClick={() => setShowTrades((p) => !p)}
-                  className="flex items-center gap-2 text-[10px] font-bold text-slate-400 hover:text-white transition cursor-pointer"
+                  className="flex items-center gap-2 text-[10px] font-bold text-slate-400 hover:text-white transition cursor-pointer touch-manipulation"
                 >
                   <BarChart2 className="h-3.5 w-3.5" />
                   {showTrades ? 'Hide' : 'Show'} Trade Log ({data.trades.length} most recent)
@@ -413,7 +413,7 @@ export default function Backtesting({ ticker }) {
                 </button>
                 <button
                   onClick={exportTradesCSV}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/[0.04] hover:bg-white/[0.08] text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 border border-white/[0.06] transition cursor-pointer"
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/[0.04] hover:bg-white/[0.08] text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 border border-white/[0.06] transition cursor-pointer touch-manipulation"
                   title="Export simulated trades to CSV"
                 >
                   <Download className="h-3 w-3" />
@@ -422,20 +422,22 @@ export default function Backtesting({ ticker }) {
               </div>
 
               {showTrades && (
-                <div className="rounded-lg bg-white/[0.02] border border-white/[0.05] p-2 space-y-1 max-h-64 overflow-y-auto">
-                  {/* Header */}
-                  <div className="flex items-center gap-2 px-2 text-[9px] text-slate-600 font-bold uppercase tracking-wider pb-1 border-b border-white/[0.04]">
-                    <span className="w-5" />
-                    <span className="w-2" />
-                    <span className="w-20">Entry</span>
-                    <span className="w-4" />
-                    <span className="w-20">Exit</span>
-                    <span className="w-20 text-right">Buy @</span>
-                    <span className="w-4" />
-                    <span className="w-20 text-right">Sell @</span>
-                    <span className="ml-auto">P&amp;L</span>
+                <div className="rounded-lg bg-white/[0.02] border border-white/[0.05] p-2 space-y-1 max-h-64 overflow-y-auto overflow-x-auto">
+                  <div className="min-w-[440px] space-y-1">
+                    {/* Header */}
+                    <div className="flex items-center gap-2 px-2 text-[9px] text-slate-600 font-bold uppercase tracking-wider pb-1 border-b border-white/[0.04]">
+                      <span className="w-5" />
+                      <span className="w-2" />
+                      <span className="w-20">Entry</span>
+                      <span className="w-4" />
+                      <span className="w-20">Exit</span>
+                      <span className="w-20 text-right">Buy @</span>
+                      <span className="w-4" />
+                      <span className="w-20 text-right">Sell @</span>
+                      <span className="ml-auto">P&amp;L</span>
+                    </div>
+                    {data.trades.map((t, i) => <TradeRow key={i} trade={t} idx={i} currSym={currSym} loc={loc} />)}
                   </div>
-                  {data.trades.map((t, i) => <TradeRow key={i} trade={t} idx={i} currSym={currSym} loc={loc} />)}
                 </div>
               )}
             </div>

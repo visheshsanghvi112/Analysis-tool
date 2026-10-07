@@ -80,19 +80,27 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
     }
   }, [isOpen, allTickers.length]);
 
-  // ── 4. Focus input when opened & listen for Escape key ───────────────────
+  // ── 4. Focus input when opened, lock body scroll & listen for Escape key ───
   useEffect(() => {
     if (isOpen) {
+      document.body.style.overflow = 'hidden';
       setTimeout(() => searchInputRef.current?.focus(), 150);
       const handleKeyDown = (e) => {
         if (e.key === 'Escape') onClose();
       };
       window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
+      return () => {
+        document.body.style.overflow = '';
+        window.removeEventListener('keydown', handleKeyDown);
+      };
     } else {
+      document.body.style.overflow = '';
       setSearchQuery('');
       setSearchResults([]);
     }
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [isOpen, onClose]);
 
   // ── 5. Batch-fetch live price quotes for all watchlist items ───────────
@@ -397,7 +405,7 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
                     {/* Delete action */}
                     <button
                       onClick={(e) => removeTicker(item.symbol, e)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-all"
+                      className="opacity-70 sm:opacity-0 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-all cursor-pointer touch-manipulation"
                       title="Remove from watchlist"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -411,7 +419,7 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
         </div>
 
         {/* ── Drawer Footer ─────────────────────────────────────────────── */}
-        <div className="p-3.5 border-t border-white/[0.08] bg-black/40 flex items-center justify-between text-[11px] text-slate-500">
+        <div className="p-3.5 pb-[max(14px,env(safe-area-inset-bottom))] border-t border-white/[0.08] bg-black/40 flex items-center justify-between text-[11px] text-slate-500">
           <div className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             <span>100% Live Quotes</span>

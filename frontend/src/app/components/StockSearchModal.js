@@ -105,15 +105,21 @@ export default function StockSearchModal({ isOpen, onClose, onSelect, currentTic
     return () => window.removeEventListener('keydown', handleGlobalKey);
   }, [isOpen, onClose]);
 
-  // Reset & focus on open
+  // Reset & focus on open, lock body scroll
   useEffect(() => {
     if (isOpen) {
       setQuery('');
       setSelectedCategory('all');
       setResults([]);
       setActiveIdx(0);
+      document.body.style.overflow = 'hidden';
       setTimeout(() => inputRef.current?.focus(), 50);
+    } else {
+      document.body.style.overflow = '';
     }
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [isOpen]);
 
   // Filter items by category
@@ -299,11 +305,11 @@ export default function StockSearchModal({ isOpen, onClose, onSelect, currentTic
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-4 sm:pt-20 p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-2xl bg-[#0c0c10] border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden text-slate-200 flex flex-col max-h-[82vh]"
+        className="w-full max-w-2xl bg-[#0c0c10] border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden text-slate-200 flex flex-col max-h-[90vh] sm:max-h-[82vh]"
         onClick={e => e.stopPropagation()}
       >
         {/* Search Bar Header */}
@@ -341,7 +347,7 @@ export default function StockSearchModal({ isOpen, onClose, onSelect, currentTic
               <button
                 key={cat.id}
                 onClick={() => handleCategoryChange(cat.id)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer touch-manipulation ${
                   isSelected 
                     ? 'bg-blue-600 text-white shadow-sm' 
                     : 'bg-white/[0.03] text-slate-400 hover:text-slate-200 hover:bg-white/[0.06]'
@@ -450,7 +456,7 @@ export default function StockSearchModal({ isOpen, onClose, onSelect, currentTic
 
         {/* Modal Footer Key Hints */}
         <div className="px-4 py-2.5 border-t border-white/[0.06] bg-black/40 flex items-center justify-between text-[11px] text-slate-500">
-          <div className="flex items-center gap-4">
+          <div className="hidden sm:flex items-center gap-3">
             <span className="flex items-center gap-1">
               <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-slate-400 font-mono text-[10px]">↑↓</kbd> Navigate
             </span>
@@ -458,13 +464,16 @@ export default function StockSearchModal({ isOpen, onClose, onSelect, currentTic
               <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-slate-400 font-mono text-[10px]">↵</kbd> Select
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-slate-400 font-mono text-[10px]">Tab</kbd> Switch Tab
+              <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-slate-400 font-mono text-[10px]">Tab</kbd> Tab
             </span>
             <span className="flex items-center gap-1">
               <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-slate-400 font-mono text-[10px]">Esc</kbd> Close
             </span>
           </div>
-          <span className="hidden sm:inline text-slate-500 text-[10px]">
+          <span className="sm:hidden text-slate-400 text-[11px]">
+            Tap any instrument to analyze
+          </span>
+          <span className="text-slate-500 text-[10px]">
             StockIQ Smart Search v2.0
           </span>
         </div>

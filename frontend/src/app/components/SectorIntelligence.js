@@ -573,21 +573,22 @@ function ValuationMatrix({ ranked, averages, ticker, onSelectPeer }) {
       </div>
 
       {/* Full Valuation Multiples Table */}
-      <div style={{ border: '1px solid #1a1a1a', borderRadius: '10px', overflow: 'hidden', background: '#0e0e0e' }}>
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: '1.8fr 1fr 1fr 1fr 1fr 1.2fr 80px', 
-          gap: '8px', padding: '10px 14px', background: '#141414', 
-          fontSize: '10px', color: '#777', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' 
-        }}>
-          <span>Company / Asset</span>
-          <span style={{ textAlign: 'right' }}>P/E Ratio</span>
-          <span style={{ textAlign: 'right' }}>P/B Ratio</span>
-          <span style={{ textAlign: 'right' }}>EV/EBITDA</span>
-          <span style={{ textAlign: 'right' }}>ROE (%)</span>
-          <span style={{ textAlign: 'center' }}>Valuation Standing</span>
-          <span style={{ textAlign: 'center' }}>Action</span>
-        </div>
+      <div className="overflow-x-auto rounded-xl border border-white/[0.08] bg-[#0e0e0e]">
+        <div style={{ minWidth: '680px' }}>
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: '1.8fr 1fr 1fr 1fr 1fr 1.2fr 80px', 
+            gap: '8px', padding: '10px 14px', background: '#141414', 
+            fontSize: '10px', color: '#777', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' 
+          }}>
+            <span>Company / Asset</span>
+            <span style={{ textAlign: 'right' }}>P/E Ratio</span>
+            <span style={{ textAlign: 'right' }}>P/B Ratio</span>
+            <span style={{ textAlign: 'right' }}>EV/EBITDA</span>
+            <span style={{ textAlign: 'right' }}>ROE (%)</span>
+            <span style={{ textAlign: 'center' }}>Valuation Standing</span>
+            <span style={{ textAlign: 'center' }}>Action</span>
+          </div>
 
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           {ranked.map((m, i) => {
@@ -683,6 +684,7 @@ function ValuationMatrix({ ranked, averages, ticker, onSelectPeer }) {
           })}
         </div>
       </div>
+    </div>
     </div>
   );
 }
@@ -881,21 +883,21 @@ export default function SectorIntelligence({ ticker, onSelectPeer }) {
                 </p>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+              <div className="flex items-center gap-3 sm:gap-5 flex-wrap sm:flex-nowrap mt-3 sm:mt-0 justify-between w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-white/[0.06]">
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ fontSize: '11px', color: '#778899', display: 'block' }}>3M Alpha vs Sector</span>
                   <span style={{ fontSize: '16px', fontWeight: 800, color: (queriedData.alpha_3m ?? 0) >= 0 ? '#00e699' : '#ff4d4d' }}>
                     {(queriedData.alpha_3m ?? 0) > 0 ? '+' : ''}{queriedData.alpha_3m ?? 0}%
                   </span>
                 </div>
-                <div style={{ width: '1px', height: '32px', background: '#1e293b' }} />
+                <div className="hidden sm:block" style={{ width: '1px', height: '32px', background: '#1e293b' }} />
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ fontSize: '11px', color: '#778899', display: 'block' }}>P/E vs Sector Med</span>
                   <span style={{ fontSize: '16px', fontWeight: 800, color: (queriedData.pe_vs_sector ?? 0) <= 0 ? '#00e699' : '#f59e0b' }}>
                     {queriedData.pe_vs_sector !== null ? `${queriedData.pe_vs_sector > 0 ? '+' : ''}${queriedData.pe_vs_sector}%` : '–'}
                   </span>
                 </div>
-                <div style={{ width: '1px', height: '32px', background: '#1e293b' }} />
+                <div className="hidden sm:block" style={{ width: '1px', height: '32px', background: '#1e293b' }} />
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ fontSize: '11px', color: '#778899', display: 'block' }}>Composite Score</span>
                   <p style={{ fontSize: '26px', fontWeight: 900, color: SCORE_COLOR(queriedData.score), margin: 0, lineHeight: 1 }}>
@@ -907,7 +909,7 @@ export default function SectorIntelligence({ ticker, onSelectPeer }) {
           )}
 
           {/* ── View Navigation Tabs ───────────────────────────────────── */}
-          <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', background: '#111', padding: '4px', borderRadius: '10px', border: '1px solid #1f1f1f', overflowX: 'auto' }}>
+          <div className="flex gap-1.5 mb-4 bg-[#111] p-1 rounded-xl border border-[#1f1f1f] overflow-x-auto no-scrollbar">
             {[
               { id: 'overview',   label: 'Leaderboard & Scorecards', icon: BarChart2 },
               { id: 'chart',      label: 'Performance Overlay (%)',   icon: LineChart },
@@ -920,8 +922,9 @@ export default function SectorIntelligence({ ticker, onSelectPeer }) {
                 <button
                   key={tab.id}
                   onClick={() => setActiveView(tab.id)}
+                  className="flex-1 min-w-[130px] sm:min-w-0"
                   style={{
-                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                     padding: '8px 12px', whiteSpace: 'nowrap',
                     background: isA ? '#1e293b' : 'transparent',
                     border: `1px solid ${isA ? '#3b82f650' : 'transparent'}`,
@@ -1008,127 +1011,129 @@ export default function SectorIntelligence({ ticker, onSelectPeer }) {
               </div>
 
               {/* Table */}
-              <div style={{ border: '1px solid #1a1a1a', borderRadius: '10px', overflow: 'hidden', background: '#0e0e0e' }}>
-                <div style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: '40px 1.8fr 1fr 1fr 1fr 1fr 80px', 
-                  gap: '8px', padding: '10px 14px', background: '#141414', 
-                  fontSize: '10px', color: '#777', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' 
-                }}>
-                  <span>Rank</span>
-                  <span>Asset</span>
-                  <span style={{ textAlign: 'right' }}>Score</span>
-                  <span style={{ textAlign: 'right' }}>3M Return</span>
-                  <span style={{ textAlign: 'right' }}>1Y Return</span>
-                  <span style={{ textAlign: 'right' }}>Sharpe</span>
-                  <span style={{ textAlign: 'center' }}>Action</span>
-                </div>
+              <div className="overflow-x-auto rounded-xl border border-white/[0.08] bg-[#0e0e0e]">
+                <div style={{ minWidth: '660px' }}>
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: '40px 1.8fr 1fr 1fr 1fr 1fr 80px', 
+                    gap: '8px', padding: '10px 14px', background: '#141414', 
+                    fontSize: '10px', color: '#777', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' 
+                  }}>
+                    <span>Rank</span>
+                    <span>Asset</span>
+                    <span style={{ textAlign: 'right' }}>Score</span>
+                    <span style={{ textAlign: 'right' }}>3M Return</span>
+                    <span style={{ textAlign: 'right' }}>1Y Return</span>
+                    <span style={{ textAlign: 'right' }}>Sharpe</span>
+                    <span style={{ textAlign: 'center' }}>Action</span>
+                  </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {displayedPeers.map((m, i) => {
-                    const sym = m.ticker.replace('.NS','').replace('.BO','');
-                    const isQueried = m.ticker === ticker;
-                    const ret3m = m.ret_3m;
-                    const ret1y = m.ret_1y;
-                    const tier = TIER_CONFIG[m.tier] || TIER_CONFIG['MARKET PERFORMER'];
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {displayedPeers.map((m, i) => {
+                      const sym = m.ticker.replace('.NS','').replace('.BO','');
+                      const isQueried = m.ticker === ticker;
+                      const ret3m = m.ret_3m;
+                      const ret1y = m.ret_1y;
+                      const tier = TIER_CONFIG[m.tier] || TIER_CONFIG['MARKET PERFORMER'];
 
-                    return (
-                      <div
-                        key={m.ticker}
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: '40px 1.8fr 1fr 1fr 1fr 1fr 80px',
-                          gap: '8px',
-                          alignItems: 'center',
-                          padding: '11px 14px',
-                          background: isQueried ? '#141e33' : i % 2 === 0 ? '#0c0c0c' : '#0e0e0e',
-                          borderBottom: '1px solid #181818',
-                          transition: 'background 0.15s',
-                        }}
-                      >
-                        <span style={{ fontSize: '13px', textAlign: 'center', fontWeight: 700, color: '#888' }}>
-                          {m.rank <= 3 ? MEDAL[m.rank - 1] : `#${m.rank}`}
-                        </span>
-
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '13px', fontWeight: 800, color: isQueried ? '#60a5fa' : '#fff' }}>
-                              {sym}
-                            </span>
-                            {isQueried && (
-                              <span style={{ fontSize: '8px', background: '#3b82f625', color: '#60a5fa', border: '1px solid #3b82f640', borderRadius: '3px', padding: '1px 4px', fontWeight: 800 }}>
-                                YOU
-                              </span>
-                            )}
-                            <span style={{ fontSize: '8px', background: tier.bg, color: tier.color, border: `1px solid ${tier.border}`, borderRadius: '3px', padding: '1px 4px', fontWeight: 700 }}>
-                              {m.tier}
-                            </span>
-                          </div>
-                          <div style={{ marginTop: '4px', maxWidth: '120px' }}>
-                            <ScoreBar score={m.score} />
-                          </div>
-                        </div>
-
-                        <div style={{ textAlign: 'right' }}>
-                          <span style={{ fontSize: '14px', fontWeight: 800, color: SCORE_COLOR(m.score) }}>
-                            {m.score}
+                      return (
+                        <div
+                          key={m.ticker}
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '40px 1.8fr 1fr 1fr 1fr 1fr 80px',
+                            gap: '8px',
+                            alignItems: 'center',
+                            padding: '11px 14px',
+                            background: isQueried ? '#141e33' : i % 2 === 0 ? '#0c0c0c' : '#0e0e0e',
+                            borderBottom: '1px solid #181818',
+                            transition: 'background 0.15s',
+                          }}
+                        >
+                          <span style={{ fontSize: '13px', textAlign: 'center', fontWeight: 700, color: '#888' }}>
+                            {m.rank <= 3 ? MEDAL[m.rank - 1] : `#${m.rank}`}
                           </span>
-                        </div>
 
-                        <div style={{ textAlign: 'right' }}>
-                          {ret3m !== null && ret3m !== undefined ? (
-                            <div>
-                              <span style={{ fontSize: '12px', fontWeight: 700, color: ret3m >= 0 ? '#00e699' : '#ff4d4d' }}>
-                                {ret3m > 0 ? '+' : ''}{ret3m}%
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '13px', fontWeight: 800, color: isQueried ? '#60a5fa' : '#fff' }}>
+                                {sym}
                               </span>
-                              {m.alpha_3m !== null && m.alpha_3m !== undefined && (
-                                <span style={{ display: 'block', fontSize: '9px', color: m.alpha_3m >= 0 ? '#00e699aa' : '#ff4d4daa' }}>
-                                  {m.alpha_3m > 0 ? '+' : ''}{m.alpha_3m}% α
+                              {isQueried && (
+                                <span style={{ fontSize: '8px', background: '#3b82f625', color: '#60a5fa', border: '1px solid #3b82f640', borderRadius: '3px', padding: '1px 4px', fontWeight: 800 }}>
+                                  YOU
                                 </span>
                               )}
+                              <span style={{ fontSize: '8px', background: tier.bg, color: tier.color, border: `1px solid ${tier.border}`, borderRadius: '3px', padding: '1px 4px', fontWeight: 700 }}>
+                                {m.tier}
+                              </span>
                             </div>
-                          ) : (
-                            <span style={{ color: '#555', fontSize: '12px' }}>–</span>
-                          )}
-                        </div>
+                            <div style={{ marginTop: '4px', maxWidth: '120px' }}>
+                              <ScoreBar score={m.score} />
+                            </div>
+                          </div>
 
-                        <div style={{ textAlign: 'right' }}>
-                          {ret1y !== null && ret1y !== undefined ? (
-                            <span style={{ fontSize: '12px', fontWeight: 700, color: ret1y >= 0 ? '#00e699' : '#ff4d4d' }}>
-                              {ret1y > 0 ? '+' : ''}{ret1y}%
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 800, color: SCORE_COLOR(m.score) }}>
+                              {m.score}
                             </span>
-                          ) : (
-                            <span style={{ color: '#555', fontSize: '12px' }}>–</span>
-                          )}
-                        </div>
+                          </div>
 
-                        <div style={{ textAlign: 'right' }}>
-                          <span style={{ fontSize: '12px', fontWeight: 600, color: (m.sharpe ?? 0) >= 1 ? '#00e699' : '#ccc' }}>
-                            {m.sharpe !== null && m.sharpe !== undefined ? m.sharpe : '–'}
-                          </span>
-                        </div>
+                          <div style={{ textAlign: 'right' }}>
+                            {ret3m !== null && ret3m !== undefined ? (
+                              <div>
+                                <span style={{ fontSize: '12px', fontWeight: 700, color: ret3m >= 0 ? '#00e699' : '#ff4d4d' }}>
+                                  {ret3m > 0 ? '+' : ''}{ret3m}%
+                                </span>
+                                {m.alpha_3m !== null && m.alpha_3m !== undefined && (
+                                  <span style={{ display: 'block', fontSize: '9px', color: m.alpha_3m >= 0 ? '#00e699aa' : '#ff4d4daa' }}>
+                                    {m.alpha_3m > 0 ? '+' : ''}{m.alpha_3m}% α
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span style={{ color: '#555', fontSize: '12px' }}>–</span>
+                            )}
+                          </div>
 
-                        <div style={{ textAlign: 'center' }}>
-                          {isQueried ? (
-                            <span style={{ fontSize: '10px', color: '#555', fontWeight: 600 }}>Active</span>
-                          ) : (
-                            <button
-                              onClick={() => onSelectPeer && onSelectPeer(m.ticker)}
-                              style={{
-                                background: '#1a2234', border: '1px solid #3b82f640',
-                                borderRadius: '6px', padding: '4px 8px', color: '#60a5fa',
-                                fontSize: '10px', fontWeight: 700, cursor: 'pointer',
-                                display: 'inline-flex', alignItems: 'center', gap: '3px'
-                              }}
-                            >
-                              <BarChart2 style={{ width: '10px', height: '10px' }} />
-                              <span>Compare</span>
-                            </button>
-                          )}
+                          <div style={{ textAlign: 'right' }}>
+                            {ret1y !== null && ret1y !== undefined ? (
+                              <span style={{ fontSize: '12px', fontWeight: 700, color: ret1y >= 0 ? '#00e699' : '#ff4d4d' }}>
+                                {ret1y > 0 ? '+' : ''}{ret1y}%
+                              </span>
+                            ) : (
+                              <span style={{ color: '#555', fontSize: '12px' }}>–</span>
+                            )}
+                          </div>
+
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 600, color: (m.sharpe ?? 0) >= 1 ? '#00e699' : '#ccc' }}>
+                              {m.sharpe !== null && m.sharpe !== undefined ? m.sharpe : '–'}
+                            </span>
+                          </div>
+
+                          <div style={{ textAlign: 'center' }}>
+                            {isQueried ? (
+                              <span style={{ fontSize: '10px', color: '#555', fontWeight: 600 }}>Active</span>
+                            ) : (
+                              <button
+                                onClick={() => onSelectPeer && onSelectPeer(m.ticker)}
+                                style={{
+                                  background: '#1a2234', border: '1px solid #3b82f640',
+                                  borderRadius: '6px', padding: '4px 8px', color: '#60a5fa',
+                                  fontSize: '10px', fontWeight: 700, cursor: 'pointer',
+                                  display: 'inline-flex', alignItems: 'center', gap: '3px'
+                                }}
+                              >
+                                <BarChart2 style={{ width: '10px', height: '10px' }} />
+                                <span>Compare</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>

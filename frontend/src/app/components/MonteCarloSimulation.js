@@ -45,9 +45,9 @@ function ChartContainer({ height = 280, children }) {
 const fmt = (n, decimals = 2) =>
   n == null ? 'N/A' : Number(n).toFixed(decimals);
 
-function StatCard({ label, value, sub, accent }) {
+function StatCard({ label, value, sub, accent, className = '' }) {
   return (
-    <div className="rounded-lg bg-white/[0.02] border border-white/[0.05] p-3 flex flex-col gap-0.5">
+    <div className={`rounded-lg bg-white/[0.02] border border-white/[0.05] p-3 flex flex-col gap-0.5 ${className}`}>
       <p className="text-[9px] uppercase tracking-wider font-bold text-slate-400">{label}</p>
       <p className={`text-sm font-bold ${accent || 'text-white'}`}>{value}</p>
       {sub && <p className="text-[9px] text-slate-400 leading-tight">{sub}</p>}
@@ -566,6 +566,7 @@ export default function MonteCarloSimulation({ ticker }) {
               label="Extreme Bounds (Max / Min)"
               value={`${currSym}${fmt(stats.max_simulated_price)} / ${currSym}${fmt(stats.min_simulated_price)}`}
               sub="Simulated range"
+              className="col-span-2 md:col-span-1"
             />
           </div>
 

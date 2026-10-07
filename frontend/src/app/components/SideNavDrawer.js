@@ -371,7 +371,7 @@ export default function SideNavDrawer({ isOpen, onClose, onOpenSearch, onOpenWat
         </div>
 
         {/* ── Footer ───────────────────────────────────────────── */}
-        <div className="p-4 border-t border-white/[0.08] bg-black/40 text-[11px] text-slate-500 flex items-center justify-between">
+        <div className="p-4 pb-[max(16px,env(safe-area-inset-bottom))] border-t border-white/[0.08] bg-black/40 text-[11px] text-slate-500 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
             <span className="text-slate-400 font-medium">NSE · BSE · Global</span>

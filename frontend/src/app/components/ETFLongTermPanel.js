@@ -801,7 +801,7 @@ export default function ETFLongTermPanel({ ticker }) {
         {/* Metric Segregation: Secondary-Market Divergence & Regulatory NAV TE */}
         {(performance?.secondary_market_divergence?.divergence_annual != null || performance?.tracking_error_annual != null) && (
           <div className="pt-2.5 border-t border-white/[0.05] mt-2.5 space-y-2">
-            <div className="flex items-center justify-between text-[10px]">
+            <div className="flex flex-wrap items-center justify-between gap-1 text-[10px]">
               <span className="text-slate-400 font-medium">
                 Secondary-Market Return Divergence (Annual)
               </span>
@@ -838,7 +838,7 @@ export default function ETFLongTermPanel({ ticker }) {
             )}
 
             {/* Regulatory NAV Tracking Error disclosure */}
-            <div className="flex items-center justify-between text-[10px] pt-1 text-slate-500">
+            <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] pt-1 text-slate-500">
               <span>Regulatory NAV Tracking Error (SEBI Definition)</span>
               <span className="font-semibold text-slate-400 italic">
                 {performance?.regulatory_nav_tracking_error != null
@@ -849,7 +849,7 @@ export default function ETFLongTermPanel({ ticker }) {
 
             {/* Premium/(Discount) to iNAV */}
             {performance?.secondary_market_dislocation?.premium_discount_pct != null && (
-              <div className="flex items-center justify-between text-[10px] pt-0.5">
+              <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] pt-0.5">
                 <span className="text-slate-500">Premium/(Discount) to iNAV</span>
                 <span className={`font-bold ${
                   Math.abs(performance.secondary_market_dislocation.premium_discount_pct) < 0.5 ? 'text-emerald-400' :

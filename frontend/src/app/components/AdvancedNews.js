@@ -513,7 +513,7 @@ export default function AdvancedNews({ ticker, companyName }) {
               </div>
 
               {/* Sentiment Filter Pills */}
-              <div className="flex items-center gap-1 p-0.5 rounded-lg bg-white/[0.02] border border-white/[0.05] text-[10px]">
+              <div className="flex items-center gap-1 p-0.5 rounded-lg bg-white/[0.02] border border-white/[0.05] text-[10px] max-w-full overflow-x-auto no-scrollbar">
                 {[
                   { id: 'ALL', label: `All (${articles.length})` },
                   { id: 'POSITIVE', label: `Bullish (${positiveCount})`, activeColor: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30' },
@@ -523,7 +523,7 @@ export default function AdvancedNews({ ticker, companyName }) {
                   <button
                     key={f.id}
                     onClick={() => setSentimentFilter(f.id)}
-                    className={`px-2 py-0.5 rounded border transition cursor-pointer font-medium ${
+                    className={`px-2 py-0.5 rounded border transition cursor-pointer font-medium whitespace-nowrap flex-shrink-0 touch-manipulation ${
                       sentimentFilter === f.id
                         ? f.activeColor || 'bg-white/[0.1] text-white font-bold border-white/20'
                         : 'border-transparent text-slate-400 hover:text-slate-200'

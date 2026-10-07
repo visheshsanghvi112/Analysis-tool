@@ -339,7 +339,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
               {/* Mobile Search Quick-Trigger */}
               <button
                 onClick={() => setSpotlightOpen(true)}
-                className="md:hidden flex items-center justify-center p-2 rounded-lg bg-white/[0.06] border border-white/[0.12] text-slate-300 hover:text-white transition cursor-pointer"
+                className="md:hidden flex items-center justify-center p-2 rounded-lg bg-white/[0.06] border border-white/[0.12] text-slate-300 hover:text-white transition cursor-pointer touch-manipulation"
                 title="Search stocks (⌘K)"
                 aria-label="Search stocks"
               >
@@ -349,6 +349,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
               {/* Intraday Desk Link */}
               <Link
                 href={currentTicker ? `/intraday?ticker=${encodeURIComponent(currentTicker)}` : '/intraday'}
+                className="touch-manipulation"
                 style={{
                   display: 'flex', alignItems: 'center', gap: '6px',
                   padding: '6px 11px', background: 'rgba(16, 185, 129, 0.08)',
@@ -367,6 +368,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
               {/* Watchlist button */}
               <button
                 onClick={() => setWatchlistOpen(true)}
+                className="touch-manipulation"
                 style={{
                   display: 'flex', alignItems: 'center', gap: '6px',
                   padding: '6px 12px', background: 'rgba(234, 179, 8, 0.08)',
@@ -399,6 +401,7 @@ const Header = ({ onTickerSelect, currentTicker }) => {
               {/* ── Menu Bar Icon on the RIGHT SIDE ───────────────────── */}
               <button
                 onClick={() => setSideNavOpen(true)}
+                className="touch-manipulation"
                 style={{
                   display: 'flex', alignItems: 'center', gap: '6px',
                   padding: '6px 12px', background: 'rgba(255, 255, 255, 0.06)',

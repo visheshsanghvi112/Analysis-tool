@@ -443,7 +443,7 @@ export default function SIPCalculator({ ticker }) {
         </div>
 
         {/* Mode Selector Tabs */}
-        <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
+        <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold max-w-full overflow-x-auto no-scrollbar">
           {[
             { id: 'sip', label: 'Regular SIP' },
             { id: 'stepup', label: 'Step-Up SIP' },
@@ -453,7 +453,7 @@ export default function SIPCalculator({ ticker }) {
             <button
               key={m.id}
               onClick={() => setCalcMode(m.id)}
-              className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer whitespace-nowrap flex-shrink-0 touch-manipulation ${
                 calcMode === m.id
                   ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30'
                   : 'text-slate-400 hover:text-slate-200'
@@ -919,10 +919,10 @@ export default function SIPCalculator({ ticker }) {
 
       {/* ── Year-by-Year Schedule (Expandable Table) ───────────────────────── */}
       <div className="pt-2 border-t border-slate-800">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <button
             onClick={() => setShowSchedule(v => !v)}
-            className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-white transition cursor-pointer font-semibold"
+            className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-white transition cursor-pointer font-semibold touch-manipulation"
           >
             <Layers className="h-3.5 w-3.5 text-emerald-400" />
             {showSchedule ? 'Hide Yearly Compounding Schedule' : 'View Year-by-Year Amortization Schedule'}
@@ -933,14 +933,14 @@ export default function SIPCalculator({ ticker }) {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleCopySchedule}
-                className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer font-mono"
+                className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer font-mono touch-manipulation"
               >
                 {copiedSchedule ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copiedSchedule ? 'Copied' : 'Copy'}</span>
               </button>
               <button
                 onClick={handleExportScheduleCSV}
-                className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition cursor-pointer font-mono"
+                className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition cursor-pointer font-mono touch-manipulation"
                 title="Download compounding schedule as CSV for Excel / Google Sheets"
               >
                 <Download className="w-3.5 h-3.5" />
@@ -952,7 +952,7 @@ export default function SIPCalculator({ ticker }) {
 
         {showSchedule && (
           <div className="mt-3 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80">
-            <table className="w-full text-left text-xs font-mono">
+            <table className="w-full min-w-[560px] text-left text-xs font-mono">
               <thead className="bg-slate-900/90 text-slate-400 border-b border-slate-800 uppercase text-[10px]">
                 <tr>
                   <th className="py-2.5 px-3">Timeline</th>

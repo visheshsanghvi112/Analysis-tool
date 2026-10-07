@@ -27,6 +27,9 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
   useEffect(() => {
     if (!isOpen || !ticker) return;
 
+    // Lock body scroll while modal is active
+    document.body.style.overflow = 'hidden';
+
     let isMounted = true;
     setLoading(true);
 
@@ -59,7 +62,10 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
       setLoading(false);
     });
 
-    return () => { isMounted = false; };
+    return () => { 
+      isMounted = false;
+      document.body.style.overflow = '';
+    };
   }, [isOpen, ticker]);
 
   if (!isOpen) return null;
@@ -89,32 +95,32 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-4xl bg-[#0e0e12] border border-white/10 rounded-2xl shadow-2xl overflow-hidden text-slate-200 my-8 animate-in fade-in zoom-in-95 duration-200"
+        className="w-full max-w-4xl bg-[#0e0e12] border border-white/10 rounded-2xl shadow-2xl overflow-hidden text-slate-200 my-2 sm:my-8 animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Top Bar (Hidden on print) */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08] bg-white/[0.02] print:hidden">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-white/[0.08] bg-white/[0.02] print:hidden gap-2 flex-wrap">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
               <FileText className="w-4 h-4" />
             </div>
-            <div>
-              <h2 className="text-sm font-bold text-white tracking-wide">
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold text-white tracking-wide truncate">
                 {isETF ? 'Executive ETF Intelligence Memo' : 'Executive Equity Research Memo'}
               </h2>
-              <p className="text-[11px] text-slate-400">Institutional Snapshot · {ticker} {isETF ? '(Exchange Traded Fund)' : ''}</p>
+              <p className="text-[11px] text-slate-400 truncate">Institutional Snapshot · {ticker} {isETF ? '(Exchange Traded Fund)' : ''}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0 ml-auto">
             <button
               onClick={handlePrint}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow transition-all cursor-pointer"
             >
-              <Printer className="w-3.5 h-3.5" /> Print / Save PDF
+              <Printer className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Print / Save PDF</span><span className="sm:hidden">Print</span>
             </button>
             <button
               onClick={onClose}
@@ -126,9 +132,9 @@ export default function ResearchReportModal({ isOpen, onClose, ticker }) {
         </div>
 
         {/* Printable Report Body */}
-        <div className="p-8 bg-[#0a0a0d] print:bg-white print:text-black print:p-6" id="printable-research-report">
+        <div className="p-4 sm:p-8 bg-[#0a0a0d] print:bg-white print:text-black print:p-6" id="printable-research-report">
           {/* Print Header */}
-          <div className="flex items-start justify-between border-b border-white/10 pb-6 mb-6 print:border-black">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between border-b border-white/10 pb-4 sm:pb-6 mb-6 print:border-black gap-3">
             <div>
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-black tracking-tight text-white print:text-black">

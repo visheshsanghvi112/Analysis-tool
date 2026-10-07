@@ -529,8 +529,8 @@ function PortfolioOptimizer({ optResult, loading, error, onRebalance }) {
             </div>
 
             {/* Weights Compare Table */}
-            <div className="max-h-[120px] overflow-y-auto border border-white/[0.05] rounded-lg">
-              <table className="w-full text-[10px] border-collapse">
+            <div className="max-h-[120px] overflow-y-auto overflow-x-auto border border-white/[0.05] rounded-lg">
+              <table className="w-full min-w-[280px] text-[10px] border-collapse">
                 <thead>
                   <tr className="bg-white/[0.03] border-b border-white/[0.05] sticky top-0">
                     <th className="px-2.5 py-1.5 text-left text-[8px] text-slate-400 font-bold uppercase">Asset</th>

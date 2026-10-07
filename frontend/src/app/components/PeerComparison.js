@@ -19,8 +19,8 @@ function fmt(val, suffix = '') {
 }
 
 function WinnerBadge({ isWinner, isTie }) {
-  if (isTie) return <span style={{ fontSize: '9px', background: '#ffffff10', color: '#aaa', borderRadius: '4px', padding: '1px 5px', fontWeight: 700 }}>TIE</span>;
-  if (isWinner) return <span style={{ fontSize: '9px', background: '#00e69920', color: '#00e699', borderRadius: '4px', padding: '1px 5px', fontWeight: 700 }}>✓ WIN</span>;
+  if (isTie) return <span style={{ fontSize: '9px', background: '#ffffff10', color: '#aaa', borderRadius: '4px', padding: '1px 5px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', lineHeight: 1.2 }}>TIE</span>;
+  if (isWinner) return <span style={{ fontSize: '9px', background: '#00e69920', color: '#00e699', borderRadius: '4px', padding: '1px 5px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', lineHeight: 1.2 }}>✓ WIN</span>;
   return null;
 }
 
@@ -32,16 +32,16 @@ function MetricRow({ label, valA, valB, winner, tickerA, tickerB, unit = '', hig
   const colorB = wB === 'win' ? '#00e699' : wB === 'lose' ? '#ff4d4d' : '#e2e8f0';
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '8px', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1c1c1c' }}>
-      <div style={{ textAlign: 'right' }}>
-        <span style={{ fontSize: '13px', fontWeight: 700, color: colorA }}>{valA !== null && valA !== undefined ? `${valA}${unit}` : '–'}</span>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '8px', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1c1c1c' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', flexWrap: 'wrap', textAlign: 'right' }}>
         {wA === 'win' && <WinnerBadge isWinner />}
         {wA === 'tie' && <WinnerBadge isTie />}
+        <span style={{ fontSize: '13px', fontWeight: 700, color: colorA }}>{valA !== null && valA !== undefined ? `${valA}${unit}` : '–'}</span>
       </div>
-      <div style={{ textAlign: 'center' }}>
+      <div style={{ textAlign: 'center', padding: '0 4px', minWidth: '80px', maxWidth: '140px' }}>
         <span style={{ fontSize: '10px', color: '#666', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
       </div>
-      <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '6px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '13px', fontWeight: 700, color: colorB }}>{valB !== null && valB !== undefined ? `${valB}${unit}` : '–'}</span>
         {wB === 'win' && <WinnerBadge isWinner />}
         {wB === 'tie' && <WinnerBadge isTie />}
@@ -460,14 +460,14 @@ export default function PeerComparison({ ticker, initialPeer = null }) {
             const currSymA = isUSA ? '$' : '₹';
             const currSymB = isUSB ? '$' : '₹';
             return (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '8px', marginBottom: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '8px', marginBottom: '8px' }}>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ background: '#1c2a3a', border: '1px solid #3b82f630', borderRadius: '8px', padding: '8px 12px' }}>
                     <p style={{ fontSize: '14px', fontWeight: 800, color: '#3b82f6', margin: 0 }}>{symA}</p>
                     <p style={{ fontSize: '10px', color: '#555', margin: 0 }}>{currSymA}{comparison.metrics_a.current_price?.toLocaleString()}</p>
                   </div>
                 </div>
-                <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '40px' }}>
                   <span style={{ fontSize: '10px', color: '#444', fontWeight: 700 }}>VS</span>
                 </div>
                 <div>
@@ -499,13 +499,13 @@ export default function PeerComparison({ ticker, initialPeer = null }) {
               <MetricRow label="ML Predicted Return" valA={comparison.metrics_a.ml_return} valB={comparison.metrics_b.ml_return} winner={comparison.winners.ml_return} tickerA={comparison.ticker_a} tickerB={comparison.ticker_b} unit="%" />
             )}
             {(comparison.metrics_a.ml_signal || comparison.metrics_b.ml_signal) && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '8px', alignItems: 'center', padding: '10px 0' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '8px', alignItems: 'center', padding: '10px 0' }}>
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ fontSize: '11px', fontWeight: 800, color: SIGNAL_COLOR[comparison.metrics_a.ml_signal] || '#aaa' }}>
                     {comparison.metrics_a.ml_signal || '–'}
                   </span>
                 </div>
-                <div style={{ textAlign: 'center' }}>
+                <div style={{ textAlign: 'center', padding: '0 4px', minWidth: '80px', maxWidth: '140px' }}>
                   <span style={{ fontSize: '10px', color: '#666', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>ML Signal</span>
                 </div>
                 <div>
@@ -702,7 +702,7 @@ export default function PeerComparison({ ticker, initialPeer = null }) {
                 </table>
               </div>
 
-              <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', color: '#666' }}>
+              <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', color: '#666', flexWrap: 'wrap', gap: '6px' }}>
                 <span>💡 Click any peer chip above to add/remove it from this multi-stock comparison basket (up to 5 stocks).</span>
                 <span>👑 = Category Leader</span>
               </div>
