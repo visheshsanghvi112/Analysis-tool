@@ -332,6 +332,7 @@ const checkIsETF = (ticker) => {
 /* ── Dashboard ────────────────────────────────────────────────────── */
 export default function Dashboard() {
   const [selectedTicker, setSelectedTicker] = useState('');
+  const [companyName, setCompanyName]       = useState('');
   const [isLoading, setIsLoading]           = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [confirmedETF, setConfirmedETF]     = useState(null);
@@ -567,6 +568,9 @@ export default function Dashboard() {
                   <LivePrice 
                     ticker={selectedTicker} 
                     onDataLoaded={(quote) => {
+                      if (quote?.name || quote?.longName || quote?.shortName) {
+                        setCompanyName(quote.name || quote.longName || quote.shortName);
+                      }
                       if (quote?.asset_type) {
                         setConfirmedETF(quote.asset_type === 'ETF' || quote.asset_type === 'MUTUALFUND');
                       } else if (quote?.longName && /\b(etf|bees)\b/i.test(quote.longName)) {
@@ -583,7 +587,7 @@ export default function Dashboard() {
                     <MLPrediction ticker={selectedTicker} />
                   </div>
                   <div id="news-section">
-                    <AdvancedNews ticker={selectedTicker} />
+                    <AdvancedNews ticker={selectedTicker} companyName={companyName} />
                   </div>
                 </div>
               </div>

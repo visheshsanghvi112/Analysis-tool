@@ -87,35 +87,31 @@ def calculate_fibonacci_levels(data):
     )
 
 
-def fetch_news_sentiment(ticker):
+def fetch_news_sentiment(ticker, return_decision=False):
     try:
-        search_term = ticker.replace('.NS', '').replace('.BO', '')
-        is_us = not ticker.endswith('.NS') and not ticker.endswith('.BO') and not ticker.startswith('^')
-        query = f"{search_term}+stock" if is_us else f"{search_term}+stock+India"
-        hl_gl = "hl=en-US&gl=US&ceid=US:en" if is_us else "hl=en-IN&gl=IN&ceid=IN:en"
-        url = f"https://news.google.com/rss/search?q={query}&{hl_gl}"
-        feed    = feedparser.parse(url)
-        entries = feed.entries[:10]
-        if not entries:
-            return 0.0, 0.0, []
-
-        sentiment_score = subjectivity_score = 0.0
+        from services.intelligent_news_reader import intelligent_news_reader
+        res = intelligent_news_reader.fetch_live_stock_news(ticker)
+        articles = res.get('articles', [])
+        sentiment_info = res.get('sentiment', {})
+        avg_sent = sentiment_info.get('overall_sentiment', 0.0)
+        avg_subj = 0.5
         headlines = []
-        for entry in entries:
-            text     = entry.get('title', '') + ' ' + entry.get('summary', '')
-            analysis = TextBlob(text)
-            sentiment_score    += analysis.sentiment.polarity
-            subjectivity_score += analysis.sentiment.subjectivity
+        for a in articles[:10]:
             headlines.append({
-                'title':     entry.get('title', ''),
-                'link':      entry.get('link', ''),
-                'published': entry.get('published', ''),
-                'polarity':  round(analysis.sentiment.polarity, 3),
+                'title':     a.get('title', ''),
+                'link':      a.get('link', ''),
+                'published': a.get('published', ''),
+                'polarity':  round(a.get('sentiment', 0.0), 3),
+                'age_days':  a.get('age_days', 0.0),
+                'recency_bucket': a.get('recency_bucket', '24h'),
             })
-
-        n = len(entries)
-        return sentiment_score / n, subjectivity_score / n, headlines
+        decision = res.get('decision', {})
+        if return_decision:
+            return avg_sent, avg_subj, headlines, decision
+        return avg_sent, avg_subj, headlines
     except Exception:
+        if return_decision:
+            return 0.0, 0.0, [], {}
         return 0.0, 0.0, []
 
 
@@ -569,7 +565,15 @@ def analyze_ticker(ticker, start_date=None, end_date=None):
     risk                = calculate_risk_metrics(closed_candles['Close'])
     rs_data             = calculate_relative_strength(ticker, start_date, end_date)
 
-    avg_sent, avg_subj, headlines = fetch_news_sentiment(ticker)
+    avg_sent, avg_subj, headlines, news_decision = fetch_news_sentiment(ticker, return_decision=True)
+
+    # Harmonize Core Signal with CRO Risk Gate to prevent internal conflict
+    if news_decision and news_decision.get('is_buy_vetoed'):
+        if signal == 'BUY':
+            signal = 'HOLD'
+            signal_score = min(signal_score, 0)
+        veto_reason = news_decision.get('veto_reason') or 'Severe 15-day news tail risk detected.'
+        signal_reasons.append(f"Risk Gate VETO: {veto_reason}")
 
     # Trim chart data to the user's requested range
     chart_df = sd.copy().dropna(subset=['Close'])
@@ -634,6 +638,7 @@ def analyze_ticker(ticker, start_date=None, end_date=None):
             'subjectivity':round(avg_subj,  3),
             'label':       'Positive' if avg_sent > 0.05 else 'Negative' if avg_sent < -0.05 else 'Neutral',
             'headlines':   headlines,
+            'decision':    news_decision,
         },
         'data_status': {
             'live_quote':         'OK' if ('live_p' in locals() and live_p > 0) else 'UNAVAILABLE',

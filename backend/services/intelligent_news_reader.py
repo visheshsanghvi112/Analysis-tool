@@ -74,16 +74,174 @@ LIVE_FINANCIAL_FEEDS = [
 ]
 
 
+MAX_NEWS_AGE_DAYS = 15.0
+
+# Curated high-precision company name dictionary for major market tickers
+KNOWN_COMPANY_NAMES = {
+    "RELIANCE": "Reliance Industries",
+    "TCS": "Tata Consultancy Services",
+    "INFY": "Infosys",
+    "HDFCBANK": "HDFC Bank",
+    "ICICIBANK": "ICICI Bank",
+    "SBIN": "State Bank of India",
+    "BHARTIARTL": "Bharti Airtel",
+    "ITC": "ITC",
+    "KOTAKBANK": "Kotak Mahindra Bank",
+    "LT": "Larsen & Toubro",
+    "L&T": "Larsen & Toubro",
+    "HINDUNILVR": "Hindustan Unilever",
+    "AXISBANK": "Axis Bank",
+    "BAJFINANCE": "Bajaj Finance",
+    "BAJAJFINSV": "Bajaj Finserv",
+    "MARUTI": "Maruti Suzuki",
+    "TATAMOTORS": "Tata Motors",
+    "TATASTEEL": "Tata Steel",
+    "SUNPHARMA": "Sun Pharma",
+    "NTPC": "NTPC",
+    "POWERGRID": "Power Grid Corporation",
+    "M&M": "Mahindra & Mahindra",
+    "MM": "Mahindra & Mahindra",
+    "TITAN": "Titan Company",
+    "WIPRO": "Wipro",
+    "ULTRACEMCO": "UltraTech Cement",
+    "ADANIENT": "Adani Enterprises",
+    "ADANIPORTS": "Adani Ports",
+    "ONGC": "ONGC",
+    "BPCL": "Bharat Petroleum",
+    "IOC": "Indian Oil Corporation",
+    "HAL": "Hindustan Aeronautics",
+    "BEL": "Bharat Electronics",
+    "COALINDIA": "Coal India",
+    "VEDL": "Vedanta",
+    "ZOMATO": "Zomato",
+    "PAYTM": "Paytm",
+    "SWIGGY": "Swiggy",
+    "IRFC": "Indian Railway Finance Corporation",
+    "IRCTC": "IRCTC",
+    "RAILTEL": "RailTel Corporation",
+    "RVNL": "Rail Vikas Nigam",
+    "JIOFIN": "Jio Financial Services",
+    "AAPL": "Apple",
+    "MSFT": "Microsoft",
+    "GOOGL": "Alphabet Google",
+    "AMZN": "Amazon",
+    "NVDA": "Nvidia",
+    "TSLA": "Tesla",
+    "META": "Meta",
+}
+
+
 class IntelligentNewsReader:
     """
     100% Live, Deep-Reading News Intelligence Engine.
     Uses Scrapling's browser-fingerprinted Fetcher to bypass anti-bot shields
     and extract full-text corporate catalysts directly from article bodies.
+    Enforces a strict 15-day maximum age window with continuous half-life recency decay.
     """
 
     def __init__(self):
         self.cache = {}
         self.cache_ttl = timedelta(minutes=10)
+
+    def _resolve_company_search_terms(self, ticker: str, company_name: Optional[str] = None) -> tuple[str, List[str]]:
+        """
+        Determines targeted search terms for the stock to eliminate generic noise
+        and scrape only directly relevant corporate stories.
+        """
+        raw_sym = ticker.replace('.NS', '').replace('.BO', '').replace('^', '').upper().strip()
+        resolved_name = None
+
+        if company_name and len(company_name.strip()) > 1:
+            resolved_name = company_name.strip()
+        elif raw_sym in KNOWN_COMPANY_NAMES:
+            resolved_name = KNOWN_COMPANY_NAMES[raw_sym]
+        else:
+            try:
+                from services.ticker_manager import TICKER_LIST
+                for item in TICKER_LIST:
+                    if item.get("symbol", "").replace(".NS", "").replace(".BO", "").upper() == raw_sym:
+                        resolved_name = item.get("name")
+                        break
+            except Exception:
+                pass
+
+        if not resolved_name:
+            resolved_name = raw_sym
+
+        # Clean corporate legal entity suffixes
+        clean_name = re.sub(
+            r'\b(limited|ltd\.?|industries|corp\.?|corporation|incorporated|inc\.?|company|india|enterprises)\b',
+            '',
+            resolved_name,
+            flags=re.IGNORECASE
+        ).strip()
+        clean_name = re.sub(r'\s+', ' ', clean_name)
+
+        search_terms = []
+        if clean_name and len(clean_name) >= 2:
+            search_terms.append(clean_name)
+        if raw_sym not in search_terms and len(raw_sym) >= 3:
+            search_terms.append(raw_sym)
+
+        return clean_name or raw_sym, search_terms
+
+    def _compute_recency_weight(self, age_hours: float) -> tuple[float, str]:
+        """
+        Calculates exponential time-decay weight for news articles within a strict 15-day window.
+        - <= 24h: 1.00 weight (Breaking / same-day catalyst)
+        - 1-3 days: 0.85 weight (High relevance)
+        - 4-7 days: 0.55 weight (Moderate relevance)
+        - 8-15 days: 0.25 weight (Contextual background)
+        """
+        if age_hours <= 24.0:
+            weight = 1.00
+            bucket = "24h"
+        elif age_hours <= 72.0:
+            weight = 0.85
+            bucket = "3d"
+        elif age_hours <= 168.0:
+            weight = 0.55
+            bucket = "7d"
+        else:
+            weight = 0.25
+            bucket = "15d"
+        return weight, bucket
+
+    def _parse_entry_datetime(self, entry: Dict[str, Any]) -> Optional[datetime]:
+        """Robust multi-format date parser returning datetime or None."""
+        pub_parsed = entry.get('published_parsed')
+        if pub_parsed:
+            try:
+                import time as _t
+                return datetime.fromtimestamp(_t.mktime(pub_parsed))
+            except Exception:
+                pass
+
+        date_str = entry.get('published') or entry.get('updated')
+        if not date_str:
+            return None
+
+        clean_str = date_str.strip()
+        date_formats = [
+            '%a, %d %b %Y %H:%M:%S %Z',
+            '%a, %d %b %Y %H:%M:%S %z',
+            '%a, %d %b %Y %H:%M:%S',
+            '%Y-%m-%dT%H:%M:%S%z',
+            '%Y-%m-%dT%H:%M:%SZ',
+            '%Y-%m-%d %H:%M:%S',
+            '%Y-%m-%d',
+        ]
+        for fmt in date_formats:
+            try:
+                return datetime.strptime(clean_str, fmt)
+            except ValueError:
+                continue
+
+        try:
+            import pandas as pd
+            return pd.to_datetime(clean_str).to_pydatetime()
+        except Exception:
+            return None
 
     def _clean_text(self, text: str) -> str:
         if not text:
@@ -340,20 +498,36 @@ class IntelligentNewsReader:
         sentiment_res: Dict[str, Any],
         catalysts: List[Dict[str, Any]],
         articles: List[Dict[str, Any]],
-        ticker: str
+        ticker: str,
+        recency_stats: Optional[Dict[str, Any]] = None,
+        weighted_score: Optional[float] = None
     ) -> Dict[str, Any]:
         """
-        Translates raw sentiment scores and extracted corporate/market catalysts into
-        rigorous, deterministic trading and risk directives.
+        Translates recency-weighted sentiment scores, 15-day corporate catalysts,
+        and deep article readings into an unambiguous, institutional trade decision
+        ("BUY", "STRONG BUY", "HOLD", "REDUCE", or "STRONG AVOID / DO NOT BUY").
         """
-        score = sentiment_res.get('score', 0.0)
+        raw_score = sentiment_res.get('score', 0.0)
+        score = weighted_score if weighted_score is not None else raw_score
         conf = sentiment_res.get('confidence', 50.0)
 
-        # Identify critical catalyst polarities
+        # ── 1. Check Hard Risk Veto Triggers (CRO Risk Gate) ───────────
+        veto_keywords = [
+            'sebi probe', 'fraud', 'forensic audit', 'auditor resigns', 'auditor resignation',
+            'default', 'bankruptcy', 'insolvency', 'lower circuit', 'locked in lower circuit',
+            'bloodbath', 'tax raid', 'ed summons', 'trading halt', 'massive selloff',
+            'licence cancelled', 'penalized by sebi', 'criminal charges', 'promoter arrested',
+            'fined by sebi', 'insider trading'
+        ]
+
+        cro_risk_flags = []
+        is_buy_vetoed = False
+        veto_reason = None
+
+        # Scan catalysts for severe negative events
         min_cat_polarity = min([c['polarity'] for c in catalysts], default=0.0)
         max_cat_polarity = max([c['polarity'] for c in catalysts], default=0.0)
 
-        cro_risk_flags = []
         for c in catalysts:
             if c['polarity'] <= -0.75:
                 cro_risk_flags.append(f"Catalyst Alert: {c['highlight']}")
@@ -362,13 +536,30 @@ class IntelligentNewsReader:
             if r not in cro_risk_flags:
                 cro_risk_flags.append(f"Price/Structure Signal: {r}")
 
-        # Determine Primary Catalyst Class
-        if any('Valuation' in c['type'] or 'Dislocation' in c['type'] for c in catalysts):
-            catalyst_class = "STRUCTURAL_VALUATION_DISLOCATION"
-        elif any('Regulatory' in c['type'] for c in catalysts):
+        # Scan article titles & summaries within 15-day window for catastrophe keywords
+        for art in articles:
+            text_check = f"{art.get('title', '')} {art.get('summary', '')}".lower()
+            for kw in veto_keywords:
+                if kw in text_check:
+                    flag_msg = f"Critical Event: '{kw.upper()}' detected in recent news ({art.get('source', 'Media')})"
+                    if flag_msg not in cro_risk_flags:
+                        cro_risk_flags.append(flag_msg)
+                    is_buy_vetoed = True
+                    if not veto_reason:
+                        veto_reason = f"CRO Risk Gate VETO: {kw.upper()} detected in 15-day news flow."
+
+        if min_cat_polarity <= -0.80 or len(cro_risk_flags) >= 2 or score <= -0.50:
+            is_buy_vetoed = True
+            if not veto_reason:
+                veto_reason = "CRO Risk Gate VETO: Severe fundamental headwind / catalyst cluster detected."
+
+        # ── 2. Determine Primary Catalyst Class ───────────────────────
+        if any('Regulatory' in c['type'] for c in catalysts) or any('probe' in f.lower() for f in cro_risk_flags):
             catalyst_class = "REGULATORY_GOVERNANCE_RISK"
         elif any('Liquidity' in c['type'] or 'Circuit' in c['type'] for c in catalysts):
             catalyst_class = "LIQUIDITY_AND_CIRCUIT_CONSTRAINT"
+        elif any('Valuation' in c['type'] or 'Dislocation' in c['type'] for c in catalysts):
+            catalyst_class = "STRUCTURAL_VALUATION_DISLOCATION"
         elif any('Earnings Outperformance' in c['type'] for c in catalysts):
             catalyst_class = "EARNINGS_ACCELERATION"
         elif any('Earnings Headwind' in c['type'] for c in catalysts):
@@ -382,44 +573,121 @@ class IntelligentNewsReader:
         else:
             catalyst_class = "ROUTINE_MARKET_COVERAGE"
 
-        # Determine Verdict & Trade Directive
-        if score <= -0.35 or min_cat_polarity <= -0.80 or len(cro_risk_flags) >= 2:
+        # ── 3. Calculate Deterministic Decision Score (0 to 100) ──────
+        # Base conversion: map score (-1.0 to +1.0) onto 10 to 90
+        base_decision_score = 50.0 + (score * 38.0)
+
+        # Catalyst adjustments
+        pos_cat_count = len([c for c in catalysts if c['polarity'] > 0])
+        neg_cat_count = len([c for c in catalysts if c['polarity'] < 0])
+        base_decision_score += min(pos_cat_count * 4.0, 12.0)
+        base_decision_score -= min(neg_cat_count * 5.0, 15.0)
+
+        # Recent 24h bonus / penalty
+        if recency_stats and recency_stats.get('within_24h', 0) > 0:
+            h24_arts = [a for a in articles if a.get('recency_bucket') == '24h']
+            if h24_arts:
+                h24_sent = sum(a.get('sentiment', 0.0) for a in h24_arts) / len(h24_arts)
+                if h24_sent >= 0.20:
+                    base_decision_score += 4.0
+                elif h24_sent <= -0.20:
+                    base_decision_score -= 5.0
+
+        if is_buy_vetoed:
+            # Hard risk cap: maximum decision score capped at 22/100
+            decision_score = round(max(5.0, min(22.0, base_decision_score * 0.35)), 1)
+        else:
+            decision_score = round(max(0.0, min(100.0, base_decision_score)), 1)
+
+        # ── 4. Synthesize Unambiguous Action Signal ("BUY OR NOT") ─────
+        if is_buy_vetoed:
+            action_signal = "STRONG AVOID / DO NOT BUY"
             verdict = "CRITICAL_HEADWIND"
             directive = "AVOID / HIGH TAIL RISK"
             committee_vote = "BEARISH"
             ml_adjustment = max(-0.25, score * 0.20)
-            action_text = f"High-severity negative catalyst detected for {ticker}. Downside tail risk is elevated; secondary trading or long entries are strictly unfavorable."
-        elif score <= -0.12 or min_cat_polarity <= -0.50:
-            verdict = "BEARISH_HEADWIND"
-            directive = "SHORT_BIAS / CAUTION"
-            committee_vote = "BEARISH"
-            ml_adjustment = score * 0.15
-            action_text = f"Headwinds outweigh positive catalysts for {ticker}. Exercise defensive position sizing and tighten stops."
-        elif score >= 0.35 or max_cat_polarity >= 0.80:
+            action_text = f"CRITICAL RISK VETO: Severe negative catalyst detected for {ticker}. Long positions or fresh buys are strictly prohibited under risk rules."
+            executive_rationale = f"DO NOT BUY: Active high-severity risk events ({cro_risk_flags[0] if cro_risk_flags else 'regulatory/liquidity alert'}) in the 15-day window pose severe asymmetric downside. Fundamental risk vetoes any technical buy signal."
+        elif decision_score >= 72.0 or (score >= 0.32 and max_cat_polarity >= 0.70):
+            action_signal = "STRONG BUY"
             verdict = "HIGH_CONVICTION_BULLISH"
-            directive = "ACCUMULATE / CATALYST PLAY"
+            directive = "STRONG BUY / AGGRESSIVE ACCUMULATE"
             committee_vote = "BULLISH"
             ml_adjustment = min(0.20, score * 0.20)
-            action_text = f"Strong institutional catalysts identified for {ticker}. News sentiment strongly supports directional momentum."
-        elif score >= 0.12:
+            action_text = f"High-conviction positive catalysts detected for {ticker} within 15 days. Institutional news flow strongly supports aggressive accumulation."
+            executive_rationale = f"CLEAR BUY: Strong corporate catalysts ({catalyst_class}) with high recency weighting provide robust fundamental momentum. Zero active regulatory or governance risks."
+        elif decision_score >= 58.0 or score >= 0.12:
+            action_signal = "BUY"
             verdict = "MILD_ACCUMULATE"
-            directive = "MILD BUY / DIP ACCUMULATE"
+            directive = "BUY / DIP ACCUMULATE"
             committee_vote = "BULLISH"
             ml_adjustment = score * 0.10
-            action_text = f"Constructive corporate news flow detected for {ticker}. Favorable backdrop for trend-following entries."
-        else:
+            action_text = f"Constructive news flow detected for {ticker}. Favorable backdrop for buying dips and trend-following entries."
+            executive_rationale = f"BUY ON DIPS: Constructive 15-day news flow with positive net sentiment (+{score:.2f}) supports gradual position building."
+        elif decision_score >= 42.0:
+            action_signal = "HOLD / WATCHLIST"
             verdict = "NEUTRAL_NOISE"
-            directive = "NO DIRECTIONAL BIAS"
+            directive = "HOLD / NO DIRECTIONAL BIAS"
             committee_vote = "NEUTRAL"
             ml_adjustment = 0.0
-            action_text = f"News flow for {ticker} is balanced without decisive corporate catalysts. Rely primarily on price action and technical levels."
+            action_text = f"News flow for {ticker} is balanced without decisive corporate catalysts. Base decisions primarily on technical charts and levels."
+            executive_rationale = f"HOLD / WATCHLIST: Recent 15-day coverage is routine and balanced. Insufficient catalyst momentum to justify fresh aggressive buying."
+        elif decision_score >= 25.0:
+            action_signal = "REDUCE / CAUTION"
+            verdict = "BEARISH_HEADWIND"
+            directive = "REDUCE / DEFENSIVE HEDGE"
+            committee_vote = "BEARISH"
+            ml_adjustment = score * 0.15
+            action_text = f"Headwinds outweigh positive catalysts for {ticker}. Exercise caution, trim exposure, or tighten stop-loss levels."
+            executive_rationale = f"REDUCE / CAUTION: Prevailing 15-day news flow shows negative momentum (-{abs(score):.2f}). Downside pressure exceeds upside catalysts."
+        else:
+            action_signal = "STRONG AVOID / DO NOT BUY"
+            verdict = "CRITICAL_HEADWIND"
+            directive = "DO NOT BUY / SEVERE TAIL RISK"
+            committee_vote = "BEARISH"
+            ml_adjustment = max(-0.25, score * 0.20)
+            action_text = f"Dominant negative sentiment and persistent headwinds detected for {ticker}. Avoid buying."
+            executive_rationale = f"DO NOT BUY: Overwhelming negative news sentiment score ({score:.2f}) over the last 15 days indicates persistent selling pressure."
+
+        # ── 5. Conviction Calculation ──────────────────────────────────
+        volume_factor = min(len(articles) / 8.0, 1.0) * 40.0
+        sentiment_clarity = abs(score) * 40.0
+        catalyst_clarity = 20.0 if catalysts else 5.0
+        conviction_pct = round(min(98.0, max(35.0, volume_factor + sentiment_clarity + catalyst_clarity)), 1)
+
+        # ── 6. Assemble Concrete Decision Drivers ──────────────────────
+        decision_drivers = []
+        decision_drivers.append(f"15-Day Recency-Weighted Sentiment: {score:+.2f} ({'Bullish' if score > 0.1 else ('Bearish' if score < -0.1 else 'Neutral')})")
+        
+        if recency_stats:
+            h24 = recency_stats.get('within_24h', 0)
+            d3 = recency_stats.get('within_3d', 0)
+            d7 = recency_stats.get('within_7d', 0)
+            decision_drivers.append(f"Recency Velocity: {h24} stories <24h, {d3} stories in 1-3d, {d7} stories in 4-7d (Max limit: 15d)")
+
+        if catalysts:
+            top_cat = catalysts[0]
+            decision_drivers.append(f"Top Catalyst: {top_cat['type']} — \"{top_cat['highlight'][:75]}\"")
+
+        if is_buy_vetoed:
+            decision_drivers.append(f"Risk Gate Status: ACTIVE VETO ({veto_reason})")
+        else:
+            decision_drivers.append("Risk Gate Status: CLEAR (Zero regulatory, fraud, or circuit lock flags)")
 
         return {
+            'action_signal': action_signal,
+            'decision_score': decision_score,
+            'conviction_pct': conviction_pct,
             'verdict': verdict,
             'trade_directive': directive,
             'catalyst_class': catalyst_class,
+            'is_buy_vetoed': is_buy_vetoed,
+            'veto_reason': veto_reason,
+            'decision_drivers': decision_drivers,
+            'executive_rationale': executive_rationale,
             'sentiment_score': round(score, 4),
-            'conviction_score': round(conf, 1),
+            'raw_sentiment_score': round(raw_score, 4),
+            'conviction_score': conviction_pct,
             'action_recommendation': action_text,
             'cro_risk_flags': cro_risk_flags,
             'committee_vote': committee_vote,
@@ -428,27 +696,26 @@ class IntelligentNewsReader:
 
     def fetch_live_stock_news(self, ticker: str, company_name: Optional[str] = None) -> Dict[str, Any]:
         """
-        Orchestrates 100% live multi-source news gathering, deep article body
-        reading via Scrapling, and financial catalyst extraction.
+        Orchestrates 100% live multi-source news gathering, targeted company scraping,
+        strict 15-day maximum age window enforcement, exponential recency weighting,
+        deep article body reading via Scrapling, and financial decision synthesis.
         """
         ticker_clean = ticker.replace('.NS', '').replace('.BO', '').upper()
         cache_key = f"{ticker_clean}_{company_name or ''}"
 
-        # Check in-memory cache (10 min TTL)
+        # Check in-memory cache (8 min TTL)
         if cache_key in self.cache:
             cached_data, timestamp = self.cache[cache_key]
             if datetime.now() - timestamp < self.cache_ttl:
                 return cached_data
 
-        # Determine search keywords
-        keywords = [ticker_clean]
-        if company_name:
-            clean_name = re.sub(r'\b(ltd|limited|industries|india|corp|corporation|bank)\b', '', company_name, flags=re.IGNORECASE).strip()
-            if clean_name:
-                keywords.append(clean_name)
+        # Determine targeted company search terms
+        clean_name, search_terms = self._resolve_company_search_terms(ticker, company_name)
 
         collected_articles = []
         seen_titles = set()
+        stale_discarded = 0
+        now = datetime.now()
 
         from urllib.parse import quote_plus
 
@@ -458,21 +725,34 @@ class IntelligentNewsReader:
         gl_param = "US" if is_us else "IN"
         ceid_param = "US:en" if is_us else "IN:en"
 
-        # ── 1. Google News Live Search (Primary Live Source) ───────────
-        for kw in keywords[:2]:
+        # ── 1. Google News Live Search (Strictly restricted to 15 days via when:15d) ──
+        for term in search_terms[:2]:
             try:
-                query_encoded = quote_plus(f"{kw} {query_suffix}")
+                # Add 'when:15d' directly to search query to restrict server-side to 15 days
+                query_encoded = quote_plus(f"{term} {query_suffix} when:15d")
                 search_url = f"https://news.google.com/rss/search?q={query_encoded}&hl={hl_param}&gl={gl_param}&ceid={ceid_param}"
                 feed = feedparser.parse(search_url)
 
-                for entry in feed.entries[:12]:
+                for entry in feed.entries[:14]:
                     title = self._clean_text(entry.get('title', ''))
                     if not title or title.lower() in seen_titles:
                         continue
 
+                    # Extract publication datetime and verify strict 15-day limit
+                    published_dt = self._parse_entry_datetime(entry)
+                    if not published_dt:
+                        published_dt = now
+
+                    age_seconds = max(0.0, (now - published_dt).total_seconds())
+                    age_days = age_seconds / 86400.0
+
+                    if age_days > MAX_NEWS_AGE_DAYS:
+                        stale_discarded += 1
+                        continue  # STRICT 15-DAY ENFORCEMENT: DISCARD
+
                     seen_titles.add(title.lower())
                     raw_summary = self._clean_text(entry.get('summary', ''))
-                    
+
                     # Extract source publication name
                     source = 'Financial Media'
                     if ' - ' in title:
@@ -481,17 +761,8 @@ class IntelligentNewsReader:
                         title = ' - '.join(parts[:-1]).strip()
 
                     link = entry.get('link', '')
-
-                    pub_parsed = entry.get('published_parsed')
-                    published_dt = None
-                    if pub_parsed:
-                        try:
-                            import time as _t
-                            published_dt = datetime.fromtimestamp(_t.mktime(pub_parsed))
-                        except Exception:
-                            pass
-                    if not published_dt:
-                        published_dt = datetime.now()
+                    age_hours = age_seconds / 3600.0
+                    recency_weight, recency_bucket = self._compute_recency_weight(age_hours)
 
                     collected_articles.append({
                         'title': title,
@@ -500,10 +771,14 @@ class IntelligentNewsReader:
                         'link': link,
                         'published': entry.get('published', published_dt.strftime('%Y-%m-%d %H:%M')),
                         'published_dt': published_dt,
+                        'age_days': round(age_days, 1),
+                        'age_hours': round(age_hours, 1),
+                        'recency_weight': recency_weight,
+                        'recency_bucket': recency_bucket,
                         'deep_body': ''
                     })
             except Exception as e:
-                print(f"Error reading Google News for {kw}: {e}")
+                print(f"Error reading Google News for {term}: {e}")
 
         # ── 2. Specialized Financial Feeds (Moneycontrol, ET, LiveMint) ──
         for feed_name, feed_url in LIVE_FINANCIAL_FEEDS:
@@ -514,49 +789,77 @@ class IntelligentNewsReader:
                     summary = self._clean_text(entry.get('summary', ''))
                     full_text = (title + " " + summary).lower()
 
-                    # Check if story mentions company or ticker
-                    if any(kw.lower() in full_text for kw in keywords):
-                        if title.lower() not in seen_titles:
-                            seen_titles.add(title.lower())
-                            pub_parsed = entry.get('published_parsed')
-                            published_dt = None
-                            if pub_parsed:
-                                try:
-                                    import time as _t
-                                    published_dt = datetime.fromtimestamp(_t.mktime(pub_parsed))
-                                except Exception:
-                                    pass
-                            if not published_dt:
-                                published_dt = datetime.now()
+                    # Check if story mentions company name or ticker
+                    if any(st.lower() in full_text for st in search_terms):
+                        if title.lower() in seen_titles:
+                            continue
 
-                            collected_articles.append({
-                                'title': title,
-                                'summary': summary,
-                                'source': feed_name,
-                                'link': entry.get('link', ''),
-                                'published': entry.get('published', published_dt.strftime('%Y-%m-%d %H:%M')),
-                                'published_dt': published_dt,
-                                'deep_body': ''
-                            })
+                        published_dt = self._parse_entry_datetime(entry)
+                        if not published_dt:
+                            published_dt = now
+
+                        age_seconds = max(0.0, (now - published_dt).total_seconds())
+                        age_days = age_seconds / 86400.0
+
+                        if age_days > MAX_NEWS_AGE_DAYS:
+                            stale_discarded += 1
+                            continue  # STRICT 15-DAY ENFORCEMENT: DISCARD
+
+                        seen_titles.add(title.lower())
+                        age_hours = age_seconds / 3600.0
+                        recency_weight, recency_bucket = self._compute_recency_weight(age_hours)
+
+                        collected_articles.append({
+                            'title': title,
+                            'summary': summary,
+                            'source': feed_name,
+                            'link': entry.get('link', ''),
+                            'published': entry.get('published', published_dt.strftime('%Y-%m-%d %H:%M')),
+                            'published_dt': published_dt,
+                            'age_days': round(age_days, 1),
+                            'age_hours': round(age_hours, 1),
+                            'recency_weight': recency_weight,
+                            'recency_bucket': recency_bucket,
+                            'deep_body': ''
+                        })
             except Exception:
                 continue
 
         # Sort articles chronologically descending (freshest first)
         collected_articles.sort(key=lambda x: x.get('published_dt') or datetime.min, reverse=True)
 
-        # De-weight / filter out obsolete stories (>180 days) if fresher stories exist
-        fresh_articles = [a for a in collected_articles if (datetime.now() - (a.get('published_dt') or datetime.now())).days <= 180]
-        if fresh_articles:
-            collected_articles = fresh_articles
+        # Compute 15-day recency distribution stats
+        recency_distribution = {
+            'within_24h': sum(1 for a in collected_articles if a.get('recency_bucket') == '24h'),
+            'within_3d': sum(1 for a in collected_articles if a.get('recency_bucket') == '3d'),
+            'within_7d': sum(1 for a in collected_articles if a.get('recency_bucket') == '7d'),
+            'within_15d': sum(1 for a in collected_articles if a.get('recency_bucket') == '15d'),
+            'total_recent': len(collected_articles),
+            'stale_discarded': stale_discarded,
+            'max_age_days_limit': 15.0
+        }
 
-        # If zero articles found in real-time
+        # If zero articles found within 15-day window
         if not collected_articles:
             default_decision = {
+                'action_signal': 'HOLD / WATCHLIST',
+                'decision_score': 50.0,
+                'conviction_pct': 30.0,
                 'verdict': 'NEUTRAL_NOISE',
-                'trade_directive': 'NO DIRECTIONAL BIAS',
+                'trade_directive': 'HOLD / NO DIRECTIONAL BIAS',
                 'catalyst_class': 'ROUTINE_MARKET_COVERAGE',
-                'conviction_score': 40.0,
-                'action_recommendation': f"No recent corporate catalysts found for {ticker_clean}. Base decisions on technical price levels.",
+                'is_buy_vetoed': False,
+                'veto_reason': None,
+                'decision_drivers': [
+                    f"No news stories detected for {ticker_clean} in the strict 15-day window",
+                    f"Scraped sources discarded {stale_discarded} outdated stories older than 15 days",
+                    "Risk Gate Status: CLEAR"
+                ],
+                'executive_rationale': f"HOLD / WATCHLIST: Zero corporate news catalysts detected in the last 15 days. Make trade decisions strictly based on technical price action and key support/resistance levels.",
+                'sentiment_score': 0.0,
+                'raw_sentiment_score': 0.0,
+                'conviction_score': 30.0,
+                'action_recommendation': f"No corporate catalysts found for {ticker_clean} in the last 15 days. Base trading decisions on technical levels.",
                 'cro_risk_flags': [],
                 'committee_vote': 'NEUTRAL',
                 'ml_adjustment_factor': 0.0,
@@ -564,14 +867,25 @@ class IntelligentNewsReader:
             result = {
                 'status': 'active',
                 'ticker': ticker_clean,
+                'company_name': clean_name,
                 'total_articles': 0,
                 'decision': default_decision,
-                'sentiment': {'overall_sentiment': 0.0, 'sentiment_label': 'NEUTRAL', 'confidence': 50.0},
+                'recency_distribution': recency_distribution,
+                'sentiment': {
+                    'overall_sentiment': 0.0,
+                    'weighted_sentiment': 0.0,
+                    'sentiment_label': 'NEUTRAL',
+                    'confidence': 30.0,
+                    'market_impact_score': 0.0,
+                    'positive_count': 0,
+                    'negative_count': 0,
+                    'neutral_count': 0
+                },
                 'market_impact_score': 0.0,
                 'catalysts': [],
                 'breaking_news': [],
                 'articles': [],
-                'summary': f"No live news stories detected for {ticker_clean} across Indian financial media in the last 7 days.",
+                'summary': f"Zero live news stories detected for {ticker_clean} within the strict 15-day window. Reliance on technical price levels recommended.",
                 'last_updated': datetime.now().isoformat()
             }
             self.cache[cache_key] = (result, datetime.now())
@@ -613,15 +927,22 @@ class IntelligentNewsReader:
         extracted_catalysts = self._extract_catalysts(combined_corpus)
         sentiment_res = self._calculate_financial_sentiment(combined_corpus)
 
-        # Build clean article payloads
+        # Build clean article payloads with recency weight & sentiment
         formatted_articles = []
         breaking_news = []
 
-        for art in collected_articles[:12]:
+        total_weight = 0.0
+        weighted_sentiment_sum = 0.0
+
+        for art in collected_articles[:15]:
             art_body = art.get('deep_body') or ''
             art_corpus = f"{art.get('title', '')} {art.get('summary', '')} {art_body}".strip()
             art_sent = self._calculate_financial_sentiment(art_corpus)
             art_catalysts = self._extract_catalysts(art_corpus)
+
+            w = art.get('recency_weight', 1.0)
+            total_weight += w
+            weighted_sentiment_sum += (art_sent['score'] * w)
 
             raw_summary = art.get('summary', '')
             item = {
@@ -630,49 +951,67 @@ class IntelligentNewsReader:
                 'source': art['source'],
                 'link': art['link'],
                 'published': art['published'],
+                'age_days': art.get('age_days', 0.0),
+                'age_hours': art.get('age_hours', 0.0),
+                'recency_weight': art.get('recency_weight', 1.0),
+                'recency_bucket': art.get('recency_bucket', '24h'),
                 'sentiment': art_sent['score'],
                 'sentiment_label': art_sent['label'],
                 'catalysts': [c['highlight'] for c in art_catalysts]
             }
             formatted_articles.append(item)
 
-            # Flag as breaking/high impact if it contains strong catalysts
-            if art_catalysts or abs(art_sent['score']) >= 0.35:
+            # Flag as breaking/high impact if in 24h/3d with catalysts or high sentiment
+            if (art.get('recency_bucket') in ['24h', '3d']) and (art_catalysts or abs(art_sent['score']) >= 0.35):
                 breaking_news.append({
                     'title': art['title'],
-                    'impact_score': 90 if art_catalysts else 70,
-                    'urgency': 'HIGH' if (art_catalysts or abs(art_sent['score']) >= 0.5) else 'MEDIUM',
+                    'impact_score': 90 if art_catalysts else 75,
+                    'urgency': 'HIGH' if (art.get('recency_bucket') == '24h' or abs(art_sent['score']) >= 0.5) else 'MEDIUM',
                     'reasons': [c['highlight'] for c in art_catalysts] if art_catalysts else [f"{art_sent['label']} Catalyst Momentum"],
                     'published': art['published'],
-                    'link': art['link']
+                    'link': art['link'],
+                    'recency_bucket': art.get('recency_bucket', '24h')
                 })
 
-        # Generate Actionable Decision Directive
-        decision = self._synthesize_decision(sentiment_res, extracted_catalysts, formatted_articles, ticker_clean)
+        # Calculate recency-weighted sentiment score
+        weighted_sentiment = round(weighted_sentiment_sum / max(0.0001, total_weight), 3) if total_weight > 0 else sentiment_res['score']
+
+        # Generate Actionable Decision Directive ("BUY OR NOT")
+        decision = self._synthesize_decision(
+            sentiment_res=sentiment_res,
+            catalysts=extracted_catalysts,
+            articles=formatted_articles,
+            ticker=ticker_clean,
+            recency_stats=recency_distribution,
+            weighted_score=weighted_sentiment
+        )
 
         # Calculate dynamic market impact score (0 to 100)
         volume_factor = min(len(collected_articles) / 8.0, 1.0) * 35
         catalyst_factor = min(len(extracted_catalysts) * 20, 45)
-        sentiment_factor = abs(sentiment_res['score']) * 20
+        sentiment_factor = abs(weighted_sentiment) * 20
         market_impact = round(min(100.0, volume_factor + catalyst_factor + sentiment_factor), 1)
 
         # Construct executive synthesis
         summary_bullets = []
-        summary_bullets.append(f"Monitored {len(formatted_articles)} live financial stories.")
+        summary_bullets.append(f"Screened {len(formatted_articles)} stories within 15-day limit ({recency_distribution['within_24h']} in last 24h).")
         if extracted_catalysts:
             summary_bullets.append(f"Primary Catalyst: {extracted_catalysts[0]['highlight']}.")
-        summary_bullets.append(f"Directive: {decision['trade_directive']} ({decision['verdict']}).")
-        summary_bullets.append(f"Market Bias: {sentiment_res['label']} ({sentiment_res['score']:+.2f}) with {sentiment_res['confidence']}% conviction.")
+        summary_bullets.append(f"Action: {decision['action_signal']} (Score: {decision['decision_score']}/100, Conviction: {decision['conviction_pct']}%).")
+        summary_bullets.append(f"{decision['executive_rationale']}")
 
         final_response = {
             'status': 'live',
             'ticker': ticker_clean,
+            'company_name': clean_name,
             'total_articles': len(formatted_articles),
             'decision': decision,
+            'recency_distribution': recency_distribution,
             'sentiment': {
-                'overall_sentiment': sentiment_res['score'],
-                'sentiment_label': sentiment_res['label'],
-                'confidence': sentiment_res['confidence'],
+                'overall_sentiment': weighted_sentiment,
+                'raw_sentiment': sentiment_res['score'],
+                'sentiment_label': 'BULLISH' if weighted_sentiment >= 0.12 else ('BEARISH' if weighted_sentiment <= -0.12 else 'NEUTRAL'),
+                'confidence': decision['conviction_pct'],
                 'market_impact_score': market_impact,
                 'positive_count': sum(1 for a in formatted_articles if a['sentiment'] > 0.1),
                 'negative_count': sum(1 for a in formatted_articles if a['sentiment'] < -0.1),

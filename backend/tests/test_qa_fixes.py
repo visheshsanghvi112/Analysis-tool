@@ -267,3 +267,137 @@ def test_multi_compare_endpoint_and_leaders():
         assert res["leaders"]["annual_vol"] == "TCS.NS" # Lowest volatility
 
 
+def test_strict_15_day_news_filtering_and_decay_weighting():
+    from services.intelligent_news_reader import IntelligentNewsReader, MAX_NEWS_AGE_DAYS
+    reader = IntelligentNewsReader()
+
+    assert MAX_NEWS_AGE_DAYS == 15.0
+
+    # Test exponential recency weighting decay buckets
+    w24, b24 = reader._compute_recency_weight(12.0)
+    assert w24 == 1.00 and b24 == "24h"
+
+    w48, b48 = reader._compute_recency_weight(48.0)
+    assert w48 == 0.85 and b48 == "3d"
+
+    w120, b120 = reader._compute_recency_weight(120.0)
+    assert w120 == 0.55 and b120 == "7d"
+
+    w240, b240 = reader._compute_recency_weight(240.0)
+    assert w240 == 0.25 and b240 == "15d"
+
+    # Test company name resolver for major tickers
+    clean_lt, terms_lt = reader._resolve_company_search_terms("LT.NS")
+    assert "Larsen & Toubro" in terms_lt or "Larsen" in clean_lt
+
+    clean_tata, terms_tata = reader._resolve_company_search_terms("TATAMOTORS.NS")
+    assert "Tata Motors" in terms_tata or "Tata Motors" in clean_tata
+
+
+def test_news_decision_engine_buy_or_not_signals():
+    from services.intelligent_news_reader import IntelligentNewsReader
+    reader = IntelligentNewsReader()
+
+    # Scenario 1: High-conviction Positive Catalyst (Order win, profit surges)
+    pos_text = "Larsen & Toubro wins mega Rs 15,000 crore international EPC contract. Record quarterly profit surges 35% with robust order inflows."
+    pos_sentiment = reader._calculate_financial_sentiment(pos_text)
+    pos_catalysts = reader._extract_catalysts(pos_text)
+    pos_articles = [{"title": pos_text, "summary": pos_text, "source": "Economic Times", "recency_bucket": "24h", "sentiment": 0.6}]
+    
+    pos_decision = reader._synthesize_decision(
+        sentiment_res=pos_sentiment,
+        catalysts=pos_catalysts,
+        articles=pos_articles,
+        ticker="LT.NS",
+        recency_stats={'within_24h': 1, 'within_3d': 0, 'within_7d': 0, 'within_15d': 0, 'total_recent': 1},
+        weighted_score=0.65
+    )
+
+    assert pos_decision["action_signal"] in ["STRONG BUY", "BUY"]
+    assert pos_decision["decision_score"] >= 65.0
+    assert pos_decision["is_buy_vetoed"] is False
+    assert "BUY" in pos_decision["executive_rationale"]
+    assert len(pos_decision["decision_drivers"]) >= 2
+
+    # Scenario 2: Routine Neutral Coverage (Hold / Watchlist)
+    neutral_sentiment = {"score": 0.02, "label": "NEUTRAL", "confidence": 50.0}
+    neutral_catalysts = []
+    neutral_articles = [{"title": "Markets trade flat today", "summary": "Nifty holds key levels", "source": "Media", "recency_bucket": "3d", "sentiment": 0.0}]
+    
+    neutral_decision = reader._synthesize_decision(
+        sentiment_res=neutral_sentiment,
+        catalysts=neutral_catalysts,
+        articles=neutral_articles,
+        ticker="INFY.NS",
+        recency_stats={'within_24h': 0, 'within_3d': 1, 'within_7d': 0, 'within_15d': 0, 'total_recent': 1},
+        weighted_score=0.02
+    )
+
+    assert neutral_decision["action_signal"] == "HOLD / WATCHLIST"
+    assert 42.0 <= neutral_decision["decision_score"] <= 58.0
+    assert neutral_decision["is_buy_vetoed"] is False
+    assert "HOLD" in neutral_decision["executive_rationale"]
+
+    # Scenario 3: Critical Headwind & Hard Risk Veto (SEBI probe / Lower circuit / Fraud)
+    veto_text = "Company promoter summoned under SEBI probe and ED tax raid. Shares locked in lower circuit amid forensic audit."
+    veto_sentiment = reader._calculate_financial_sentiment(veto_text)
+    veto_catalysts = reader._extract_catalysts(veto_text)
+    veto_articles = [{"title": veto_text, "summary": veto_text, "source": "LiveMint", "recency_bucket": "24h", "sentiment": -0.8}]
+    
+    veto_decision = reader._synthesize_decision(
+        sentiment_res=veto_sentiment,
+        catalysts=veto_catalysts,
+        articles=veto_articles,
+        ticker="RISKY.NS",
+        recency_stats={'within_24h': 1, 'within_3d': 0, 'within_7d': 0, 'within_15d': 0, 'total_recent': 1},
+        weighted_score=-0.75
+    )
+
+    assert veto_decision["action_signal"] == "STRONG AVOID / DO NOT BUY"
+    assert veto_decision["is_buy_vetoed"] is True
+    assert veto_decision["decision_score"] <= 22.0
+    assert "DO NOT BUY" in veto_decision["executive_rationale"]
+    assert veto_decision["veto_reason"] is not None
+
+
+def test_engine_signal_harmonization_with_risk_veto():
+    from engine import analyze_ticker
+    import pandas as pd
+    import numpy as np
+    from unittest.mock import patch
+
+    # Mock historical candle data that would normally produce a technical BUY
+    dates = pd.date_range(end=pd.Timestamp.now(tz="Asia/Kolkata"), periods=100, freq="B")
+    t = np.linspace(0, 10, 100)
+    close_prices = 100 + t * 4 + np.sin(t * 3) * 2 # realistic upward trend with normal osc
+    df = pd.DataFrame({
+        "Open": close_prices - 0.5,
+        "High": close_prices + 2.0,
+        "Low": close_prices - 2.0,
+        "Close": close_prices,
+        "Volume": [50000] * 100
+    }, index=dates)
+
+    # Mock news with active risk veto
+    veto_decision = {
+        "action_signal": "STRONG AVOID / DO NOT BUY",
+        "decision_score": 15.0,
+        "is_buy_vetoed": True,
+        "veto_reason": "CRO Risk Gate VETO: SEBI PROBE detected in 15-day news flow."
+    }
+
+    with patch("engine.get_history", return_value=df), \
+         patch("engine.get_quote", return_value={"price": 150.0}), \
+         patch("engine.fetch_fundamentals", return_value={}), \
+         patch("engine.calculate_relative_strength", return_value={}), \
+         patch("engine.fetch_news_sentiment", return_value=(-0.8, 0.5, [], veto_decision)):
+        res = analyze_ticker("TEST.NS")
+        # When vetoed, technical BUY must be overridden to HOLD
+        assert res["summary"]["signal"] != "BUY"
+        assert res["summary"]["signal"] in ["HOLD", "SELL"]
+        assert any("Risk Gate VETO" in reason for reason in res["summary"]["signalReasons"])
+        assert "decision" in res["sentiment"]
+        assert res["sentiment"]["decision"]["is_buy_vetoed"] is True
+
+
+
