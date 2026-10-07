@@ -8,6 +8,7 @@ import {
   AlertTriangle, 
   Zap, 
   TrendingUp, 
+  TrendingDown,
   Clock, 
   BarChart3, 
   ThumbsUp, 
