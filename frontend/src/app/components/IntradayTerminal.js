@@ -109,6 +109,24 @@ export default function IntradayTerminal() {
 
   // Viewport Zoom: 'all' | '60' | '30'
   const [candleSlice, setCandleSlice] = useState('all');
+  // Mobile responsive desk view: 'chart' | 'plan' | 'flow' | 'risk' | 'scanner'
+  const [mobileTab, setMobileTab] = useState('chart');
+  const [showMobileOverlaysModal, setShowMobileOverlaysModal] = useState(false);
+
+  const activeOverlaysCount = useMemo(() => {
+    let count = 0;
+    if (showVWAP) count++;
+    if (showVWAPBands) count++;
+    if (showSupertrend) count++;
+    if (showEMA) count++;
+    if (showEMA200) count++;
+    if (showORB) count++;
+    if (showCamarilla) count++;
+    if (showPDH) count++;
+    if (showCPR) count++;
+    if (candleMode === 'heikin_ashi') count++;
+    return count;
+  }, [showVWAP, showVWAPBands, showSupertrend, showEMA, showEMA200, showORB, showCamarilla, showPDH, showCPR, candleMode]);
 
   // Sub-chart selector
   const [activeSubChart, setActiveSubChart] = useState('volume'); // 'volume' | 'rsi' | 'cvd' | 'macd'
@@ -947,6 +965,44 @@ export default function IntradayTerminal() {
     return { priceMin: min, priceMax: max, xScale: xs, yScale: ys, candleWidth: cw };
   }, [candles, showVWAPBands, showSupertrend, showPDH, showORB, showCamarilla, data]);
 
+  // Mobile touch crosshair and candle inspection handlers
+  const handleChartTouch = useCallback((e) => {
+    if (!e.touches || !e.touches[0] || !candles.length) return;
+    const touch = e.touches[0];
+    const rect = e.currentTarget.getBoundingClientRect();
+    const currentX = ((touch.clientX - rect.left) / rect.width) * chartWidth;
+    const currentY = ((touch.clientY - rect.top) / rect.height) * chartHeight;
+    setHoveredX(currentX);
+    setHoveredY(currentY);
+
+    const innerW = chartWidth - padding.left - padding.right;
+    const relX = currentX - padding.left;
+    const candleIdx = Math.round((relX / Math.max(innerW, 1)) * (candles.length - 1));
+    if (candleIdx >= 0 && candleIdx < candles.length) {
+      setHoveredCandle(candles[candleIdx]);
+    }
+  }, [candles, chartWidth, chartHeight, padding]);
+
+  const handleSubChartTouch = useCallback((e) => {
+    if (!e.touches || !e.touches[0] || !candles.length) return;
+    const touch = e.touches[0];
+    const rect = e.currentTarget.getBoundingClientRect();
+    const currentX = ((touch.clientX - rect.left) / rect.width) * chartWidth;
+    setHoveredX(currentX);
+
+    const innerW = chartWidth - padding.left - padding.right;
+    const relX = currentX - padding.left;
+    const candleIdx = Math.round((relX / Math.max(innerW, 1)) * (candles.length - 1));
+    if (candleIdx >= 0 && candleIdx < candles.length) {
+      setHoveredCandle(candles[candleIdx]);
+    }
+  }, [candles, chartWidth, padding]);
+
+  const handleChartTouchEnd = useCallback(() => {
+    setHoveredCandle(null);
+    setHoveredX(null);
+    setHoveredY(null);
+  }, []);
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col justify-between">
       <div>
@@ -1256,7 +1312,7 @@ export default function IntradayTerminal() {
               ))}
             </div>
 
-            <form onSubmit={handleSearchSubmit} className="relative min-w-[260px]">
+            <form onSubmit={handleSearchSubmit} className="relative w-full md:w-auto md:min-w-[280px]">
               <input
                 ref={searchInputRef}
                 type="text"
@@ -1304,7 +1360,401 @@ export default function IntradayTerminal() {
           </div>
         )}
 
-        {/* ── ACTIVE TICKER HEADLINE BAR ──────────────────────────────────── */}
+
+        {/* ── MOBILE HEADLINE HERO & SNAP CAROUSEL (Visible on <lg) ── */}
+        {data && (
+          <div className="lg:hidden space-y-2.5">
+            <div className={`bg-gradient-to-br from-slate-900/90 to-slate-900/50 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between transition-all duration-300 shadow-md ${
+              priceFlash === 'up'
+                ? 'border border-emerald-400/60 shadow-emerald-500/20'
+                : priceFlash === 'down'
+                ? 'border border-rose-400/60 shadow-rose-500/20'
+                : 'border border-slate-800/80 shadow-black/30'
+            }`}>
+              <div>
+                <div className="flex items-center justify-between gap-1">
+                  <div className="flex items-center gap-1.5 truncate max-w-[220px] sm:max-w-[280px]">
+                    <button
+                      onClick={() => togglePinTicker(ticker)}
+                      className={`p-0.5 rounded transition ${
+                        pinnedTickers.includes(ticker)
+                          ? 'text-amber-400 hover:text-amber-300'
+                          : 'text-slate-600 hover:text-slate-400'
+                      }`}
+                      title={pinnedTickers.includes(ticker) ? 'Unpin from desk' : 'Pin to my desk'}
+                    >
+                      <Star className={`w-3.5 h-3.5 ${pinnedTickers.includes(ticker) ? 'fill-amber-400 text-amber-400' : ''}`} />
+                    </button>
+                    <span className="text-xs font-semibold text-slate-300 truncate" title={data.company_name}>{data.company_name}</span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <InfoBadge infoKey="live_prices" />
+                  </div>
+                </div>
+                <div className="mt-1">
+                  <h2 className={`text-xl sm:text-2xl font-black font-mono tracking-tight transition-colors duration-300 ${
+                    priceFlash === 'up' ? 'text-emerald-300' : priceFlash === 'down' ? 'text-rose-300' : 'text-white'
+                  }`}>
+                    {currSym}{data.current_price?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </h2>
+                  <div className="flex items-center justify-between gap-1 mt-0.5">
+                    <span className={`text-xs font-bold font-mono flex items-center ${data.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {data.change >= 0 ? <ArrowUpRight className="w-3.5 h-3.5 mr-0.5 shrink-0" /> : <ArrowDownRight className="w-3.5 h-3.5 mr-0.5 shrink-0" />}
+                      {data.change >= 0 ? '+' : ''}{data.change} ({data.change >= 0 ? '+' : ''}{data.change_pct}%)
+                    </span>
+                    {/* Live open P&L badge */}
+                    {(() => {
+                      const open = tradeLog.filter(t => t.status === 'OPEN' && t.ticker === ticker.split('.')[0]);
+                      if (!open.length || !data.current_price) return null;
+                      const unrealized = open.reduce((sum, t) => {
+                        const pnl = t.direction === 'LONG'
+                          ? (data.current_price - t.entry) * t.qty
+                          : (t.entry - data.current_price) * t.qty;
+                        return sum + pnl;
+                      }, 0);
+                      return (
+                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
+                          unrealized >= 0 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                        }`}>
+                          {unrealized >= 0 ? '+' : ''}{currSym}{Math.round(unrealized)}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Telemetry: O/H/L & Day Range */}
+              <div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60 font-mono">
+                  <span>O: <strong className="text-slate-200">{currSym}{data.open}</strong></span>
+                  <span>H: <strong className="text-emerald-400">{currSym}{data.high}</strong></span>
+                  <span>L: <strong className="text-rose-400">{currSym}{data.low}</strong></span>
+                </div>
+                {data.high > data.low && data.current_price ? (
+                  <div className="mt-1.5 space-y-0.5">
+                    <div className="w-full bg-slate-800/80 h-1 rounded-full overflow-hidden relative">
+                      <div className="h-full bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-500 w-full" />
+                      <div
+                        className="absolute top-0 bottom-0 w-1.5 bg-white rounded-full shadow-sm ring-1 ring-white/60"
+                        style={{
+                          left: `${Math.max(0, Math.min(97, ((data.current_price - data.low) / (data.high - data.low)) * 100))}%`
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[8px] text-slate-500 font-mono">
+                      <span>LOD</span>
+                      <span className="text-slate-400 font-semibold">
+                        {Math.round(((data.current_price - data.low) / (data.high - data.low)) * 100)}% of Range
+                      </span>
+                      <span>HOD</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-1.5 flex justify-between text-[8px] text-slate-500 font-mono">
+                    <span>Session Open</span>
+                    <span className="text-slate-400">Regular Trading</span>
+                    <span>Close</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex items-stretch gap-2.5 overflow-x-auto snap-x snap-mandatory pb-1 scrollbar-none">
+              <div className="snap-start shrink-0 w-[240px] sm:w-[280px]">
+            <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between shadow-md shadow-black/30">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
+                    Session VWAP
+                    <InfoBadge infoKey="vwap" />
+                  </span>
+                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                    data.current_price >= data.vwap
+                      ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+                      : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                  }`}>
+                    {data.current_price >= data.vwap ? 'ABOVE' : 'BELOW'}
+                  </span>
+                </div>
+                <div className="mt-1">
+                  <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-cyan-300">
+                    {currSym}{data.vwap?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5 font-mono">
+                    Dev: <span className={`font-bold ${data.current_price >= data.vwap ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {data.current_price >= data.vwap ? '+' : ''}
+                      {(((data.current_price - data.vwap) / data.vwap) * 100).toFixed(2)}%
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Bottom Telemetry: VWAP ±2σ Bands */}
+              <div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60 font-mono">
+                  <span>-2σ: <strong className="text-cyan-400">{currSym}{data.vwap_bands?.lower_2 ? Number(data.vwap_bands.lower_2).toFixed(1) : '—'}</strong></span>
+                  <span>+2σ: <strong className="text-cyan-400">{currSym}{data.vwap_bands?.upper_2 ? Number(data.vwap_bands.upper_2).toFixed(1) : '—'}</strong></span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[8px] text-slate-500 font-mono">
+                  <span>Lower Vol Band</span>
+                  <span className="text-cyan-400/80 font-semibold">Institutional Mean</span>
+                  <span>Upper Vol Band</span>
+                </div>
+              </div>
+            </div>
+              </div>
+              <div className="snap-start shrink-0 w-[240px] sm:w-[280px]">
+            <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between shadow-md shadow-black/30">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
+                    Relative Performance
+                    <InfoBadge infoKey="benchmark_relative_strength" />
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400 font-bold px-1.5 py-0.5 bg-slate-950/80 border border-slate-800 rounded">
+                    vs {data.relative_strength?.benchmark_name?.replace('NIFTY ', '') || 'Index'}
+                  </span>
+                </div>
+                <div className="mt-1">
+                  <p className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${(data.relative_strength?.relative_perf_pct ?? data.relative_strength?.alpha_pct) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {(data.relative_strength?.relative_perf_pct ?? data.relative_strength?.alpha_pct) >= 0 ? '+' : ''}{data.relative_strength?.relative_perf_pct ?? data.relative_strength?.alpha_pct}%
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5 truncate font-mono">
+                    Spread: <span className="font-semibold text-slate-200">{data.relative_strength?.status || 'Neutral'}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Bottom Telemetry: Benchmark Index Move & Regime */}
+              <div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60 font-mono">
+                  <span>Idx: <strong className={data.relative_strength?.benchmark_change_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{data.relative_strength?.benchmark_change_pct >= 0 ? '+' : ''}{data.relative_strength?.benchmark_change_pct}%</strong></span>
+                  <span className="text-slate-300 truncate max-w-[140px]">{data.relative_strength?.status || 'Tracking'}</span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[8px] text-slate-500 font-mono">
+                  <span>Lagging</span>
+                  <span className={(data.relative_strength?.relative_perf_pct ?? data.relative_strength?.alpha_pct) >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                    {(data.relative_strength?.relative_perf_pct ?? data.relative_strength?.alpha_pct) >= 0 ? 'Outperforming' : 'Underperforming'}
+                  </span>
+                  <span>Leading</span>
+                </div>
+              </div>
+            </div>
+              </div>
+              <div className="snap-start shrink-0 w-[240px] sm:w-[280px]">
+            <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between shadow-md shadow-black/30">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
+                    Pre-Market Gap
+                    <InfoBadge infoKey="pre_market_gap" />
+                  </span>
+                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                    data.gap_analysis?.gap_pct >= 0 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                  }`}>
+                    {data.gap_analysis?.gap_type?.replace(/_/g, ' ') || 'FLAT'}
+                  </span>
+                </div>
+                <div className="mt-1">
+                  <p className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${data.gap_analysis?.gap_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {data.gap_analysis?.gap_pct >= 0 ? '+' : ''}{data.gap_analysis?.gap_pct}%
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5 font-mono">
+                    Points: <span className="font-semibold text-slate-200">{currSym}{data.gap_analysis?.gap_pts}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Bottom Telemetry: Prev Close & Gap Fill Status */}
+              <div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60 font-mono">
+                  <span>Prev: <strong className="text-slate-300">{currSym}{data.gap_analysis?.prev_close}</strong></span>
+                  <span>Fill: <strong className={data.gap_analysis?.gap_filled ? 'text-emerald-400' : 'text-amber-400'}>
+                    {data.gap_analysis?.gap_filled ? 'FILLED' : `OPEN (${currSym}${data.gap_analysis?.gap_fill_dist})`}
+                  </strong></span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[8px] text-slate-500 font-mono">
+                  <span>Gap Origin</span>
+                  <span className="text-amber-400 truncate max-w-[150px]">{data.gap_analysis?.directive?.split('—')[0] || 'Gap Setup'}</span>
+                  <span>PDC</span>
+                </div>
+              </div>
+            </div>
+              </div>
+              <div className="snap-start shrink-0 w-[240px] sm:w-[280px]">
+            <div className="bg-gradient-to-br from-slate-900/90 to-slate-900/50 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between shadow-md shadow-black/30">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
+                    Quant Bias
+                    <InfoBadge infoKey="intraday_quant_score" />
+                  </span>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                    data.signals.overall_bias.includes('BUY')
+                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                      : data.signals.overall_bias.includes('SELL')
+                      ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                      : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                  }`}>
+                    {data.signals.overall_bias}
+                  </span>
+                </div>
+                <div className="mt-1">
+                  <div className="flex items-baseline gap-1">
+                    <span className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${data.signals.quant_score >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {data.signals.quant_score >= 0 ? '+' : ''}{data.signals.quant_score}
+                    </span>
+                    <span className="text-[11px] text-slate-500 font-mono">/ 100</span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1.5">
+                    <div
+                      className={`h-full transition-all duration-500 ${data.signals.quant_score >= 0 ? 'bg-emerald-400' : 'bg-rose-400'}`}
+                      style={{ width: `${Math.abs(data.signals.quant_score)}%` }}
+                    />
+                  </div>
+                  {data.signals?.extension_state && data.signals.extension_state !== 'NORMAL' && (
+                    <div className="mt-2 px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[9px] text-amber-300 font-mono flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                      <span className="truncate">{data.signals.extension_desc || 'Price extended from VWAP — elevated chase risk.'}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Bottom Telemetry: Signal Confluence Counter */}
+              <div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60 font-mono">
+                  <span>Bull: <strong className="text-emerald-400">{data.signals?.bullish_count || 0}</strong></span>
+                  <span>Bear: <strong className="text-rose-400">{data.signals?.bearish_count || 0}</strong></span>
+                  <span>Conf: <strong className="text-cyan-300">{Math.round((data.signals?.bullish_count || 0) / Math.max(1, (data.signals?.bullish_count || 0) + (data.signals?.bearish_count || 0)) * 100)}%</strong></span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[8px] text-slate-500 font-mono">
+                  <span>Bearish</span>
+                  <span className="text-slate-400">{data.signals?.risk_regime || 'Multi-Model Engine'}</span>
+                  <span>Bullish</span>
+                </div>
+              </div>
+            </div>
+              </div>
+              <div className="snap-start shrink-0 w-[240px] sm:w-[280px]">
+            <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between shadow-md shadow-black/30">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
+                    Supertrend
+                    <InfoBadge infoKey="supertrend" />
+                  </span>
+                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                    data.supertrend_dir === 1 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                  }`}>
+                    {data.supertrend_dir === 1 ? '▲ BULL' : '▼ BEAR'}
+                  </span>
+                </div>
+                <div className="mt-1">
+                  <p className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${data.supertrend_dir === 1 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {currSym}{data.supertrend?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5 font-mono">
+                    RSI:{' '}
+                    <span className={`font-bold ${data.rsi >= 70 ? 'text-rose-400' : data.rsi <= 30 ? 'text-emerald-400' : 'text-slate-200'}`}>
+                      {data.rsi?.toFixed(1)}
+                    </span>
+                    {data.rsi >= 70 && <span className="text-rose-400 ml-1 text-[9px] font-bold">OB</span>}
+                    {data.rsi <= 30 && <span className="text-emerald-400 ml-1 text-[9px] font-bold">OS</span>}
+                  </p>
+                </div>
+              </div>
+
+              {/* Bottom Telemetry: ATR & Moving Average Regime */}
+              <div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60 font-mono">
+                  <span>ATR: <strong className="text-amber-400">{currSym}{data.atr ? Number(data.atr).toFixed(1) : '—'}</strong></span>
+                  <span>EMA: <strong className={data.ema9 > data.ema21 ? 'text-emerald-400' : 'text-rose-400'}>{data.ema9 > data.ema21 ? '9>21 Bull' : '9<21 Bear'}</strong></span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[8px] text-slate-500 font-mono">
+                  <span>Volatility Anchor</span>
+                  <span className="text-slate-400">Trailing Level</span>
+                </div>
+              </div>
+            </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── MOBILE SEGMENTED WORKSTATION TABS (Visible on <lg) ── */}
+        <div className="lg:hidden sticky top-2 z-30 bg-slate-950/95 backdrop-blur-xl border border-slate-800/90 rounded-2xl p-1.5 shadow-xl shadow-black/40">
+          <div className="grid grid-cols-5 gap-1 text-center">
+            <button
+              onClick={() => setMobileTab('chart')}
+              className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl transition text-[11px] font-bold ${
+                mobileTab === 'chart'
+                  ? 'bg-gradient-to-b from-cyan-500/25 to-cyan-500/10 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/20'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Activity className="w-4 h-4 mb-0.5" />
+              <span>Chart</span>
+            </button>
+
+            <button
+              onClick={() => setMobileTab('plan')}
+              className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-xl transition text-[11px] font-bold ${
+                mobileTab === 'plan'
+                  ? 'bg-gradient-to-b from-purple-500/25 to-purple-500/10 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/20'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Target className="w-4 h-4 mb-0.5" />
+              <span>Tactics</span>
+              {data?.trap_detection && data.trap_detection.status !== 'NONE' && (
+                <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-rose-400 animate-ping" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setMobileTab('flow')}
+              className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl transition text-[11px] font-bold ${
+                mobileTab === 'flow'
+                  ? 'bg-gradient-to-b from-amber-500/25 to-amber-500/10 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-500/20'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Compass className="w-4 h-4 mb-0.5" />
+              <span>Pivots</span>
+            </button>
+
+            <button
+              onClick={() => setMobileTab('risk')}
+              className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl transition text-[11px] font-bold ${
+                mobileTab === 'risk'
+                  ? 'bg-gradient-to-b from-emerald-500/25 to-emerald-500/10 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/20'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Scale className="w-4 h-4 mb-0.5" />
+              <span>Risk/Calc</span>
+            </button>
+
+            <button
+              onClick={() => setMobileTab('scanner')}
+              className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-xl transition text-[11px] font-bold ${
+                mobileTab === 'scanner'
+                  ? 'bg-gradient-to-b from-cyan-500/25 to-cyan-500/10 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/20'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Zap className="w-4 h-4 mb-0.5" />
+              <span>Radar</span>
+              {tradeLog.some(t => t.status === 'OPEN') && (
+                <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-emerald-400" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* ── DESKTOP PRO WORKSTATION VIEW (Visible on lg+) ── */}
+        <div className="hidden lg:block space-y-6">
         {data && (
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             {/* 1. Price & Change — with flash animation on tick update */}
@@ -1317,7 +1767,7 @@ export default function IntradayTerminal() {
             }`}>
               <div>
                 <div className="flex items-center justify-between gap-1">
-                  <div className="flex items-center gap-1.5 truncate max-w-[125px]">
+                  <div className="flex items-center gap-1.5 truncate max-w-[220px] sm:max-w-[280px]">
                     <button
                       onClick={() => togglePinTicker(ticker)}
                       className={`p-0.5 rounded transition ${
@@ -1473,7 +1923,7 @@ export default function IntradayTerminal() {
               <div>
                 <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60 font-mono">
                   <span>Idx: <strong className={data.relative_strength?.benchmark_change_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{data.relative_strength?.benchmark_change_pct >= 0 ? '+' : ''}{data.relative_strength?.benchmark_change_pct}%</strong></span>
-                  <span className="text-slate-300 truncate max-w-[85px]">{data.relative_strength?.status || 'Tracking'}</span>
+                  <span className="text-slate-300 truncate max-w-[140px]">{data.relative_strength?.status || 'Tracking'}</span>
                 </div>
                 <div className="mt-1.5 flex items-center justify-between text-[8px] text-slate-500 font-mono">
                   <span>Lagging</span>
@@ -1519,7 +1969,7 @@ export default function IntradayTerminal() {
                 </div>
                 <div className="mt-1.5 flex items-center justify-between text-[8px] text-slate-500 font-mono">
                   <span>Gap Origin</span>
-                  <span className="text-amber-400 truncate max-w-[110px]">{data.gap_analysis?.directive?.split('—')[0] || 'Gap Setup'}</span>
+                  <span className="text-amber-400 truncate max-w-[150px]">{data.gap_analysis?.directive?.split('—')[0] || 'Gap Setup'}</span>
                   <span>PDC</span>
                 </div>
               </div>
@@ -1624,15 +2074,14 @@ export default function IntradayTerminal() {
           </div>
         )}
 
-        {/* ── MAIN CHART & SIDEBAR SECTION ─────────────────────────────────── */}
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-          {/* Main Chart Column (3 spans) */}
-          <div className={`xl:col-span-3 space-y-4 ${
-            fullscreenChart ? 'fixed inset-0 z-[150] bg-slate-950 p-4 overflow-y-auto' : ''
-          }`}>
+          {/* ── MAIN CHART & SIDEBAR SECTION ─────────────────────────────────── */}
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+            <div className={`xl:col-span-3 space-y-4 ${
+              fullscreenChart ? 'fixed inset-0 z-[150] bg-slate-950 p-4 overflow-y-auto' : ''
+            }`}>
             <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-4 sm:p-6 backdrop-blur-md">
               {/* Upper Chart Control Ribbon */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-slate-800">
                 <div className="flex flex-wrap items-center gap-2">
                   {/* Timeframe Selector Pills */}
                   <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800/80">
@@ -1715,7 +2164,61 @@ export default function IntradayTerminal() {
               </div>
 
               {/* Dedicated Overlays & Indicators Ribbon */}
-              <div className="my-3 p-2 bg-slate-950/70 border border-slate-800/80 rounded-2xl flex flex-wrap items-center justify-between gap-2.5">
+              
+              {/* Mobile Quick Overlays Strip */}
+              <div className="lg:hidden my-2.5 p-2 bg-slate-950/70 border border-slate-800/80 rounded-2xl flex items-center justify-between gap-2">
+                <button
+                  onClick={() => setShowMobileOverlaysModal(true)}
+                  className="px-2.5 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-sm"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Overlays</span>
+                  <span className="px-1.5 py-0.2 rounded-full bg-cyan-400 text-slate-950 font-black text-[9px]">
+                    {activeOverlaysCount}
+                  </span>
+                </button>
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none text-xs">
+                  <button
+                    onClick={() => setShowVWAP(!showVWAP)}
+                    className={`px-2 py-1 rounded-lg text-xs font-medium transition shrink-0 ${showVWAP ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}
+                  >
+                    VWAP
+                  </button>
+                  <button
+                    onClick={() => setShowSupertrend(!showSupertrend)}
+                    className={`px-2 py-1 rounded-lg text-xs font-medium transition shrink-0 ${showSupertrend ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}
+                  >
+                    Supertrend
+                  </button>
+                  <button
+                    onClick={() => setShowEMA(!showEMA)}
+                    className={`px-2 py-1 rounded-lg text-xs font-medium transition shrink-0 ${showEMA ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}
+                  >
+                    EMA 9/21
+                  </button>
+                  <button
+                    onClick={() => setShowCPR(!showCPR)}
+                    className={`px-2 py-1 rounded-lg text-xs font-medium transition shrink-0 ${showCPR ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}
+                  >
+                    CPR
+                  </button>
+                  <button
+                    onClick={() => setShowORB(!showORB)}
+                    className={`px-2 py-1 rounded-lg text-xs font-medium transition shrink-0 ${showORB ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}
+                  >
+                    ORB
+                  </button>
+                  <button
+                    onClick={() => setCandleMode(candleMode === 'regular' ? 'heikin_ashi' : 'regular')}
+                    className={`px-2 py-1 rounded-lg text-xs font-medium transition shrink-0 ${candleMode === 'heikin_ashi' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}
+                  >
+                    🥢 HA
+                  </button>
+                </div>
+              </div>
+
+              {/* Dedicated Overlays & Indicators Ribbon (Desktop) */}
+              <div className="hidden lg:flex my-3 p-2 bg-slate-950/70 border border-slate-800/80 rounded-2xl flex-wrap items-center justify-between gap-2.5">
                 {/* Left Group: Technical Indicators */}
                 <div className="flex flex-wrap items-center gap-1.5 text-xs">
                   <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-500 pl-1 pr-1">
@@ -1834,7 +2337,7 @@ export default function IntradayTerminal() {
               </div>
 
               {/* Hover Inspection Bar — with fixed height and live default to prevent jitter */}
-              <div className="h-7 flex items-center justify-between text-[11px] font-mono text-slate-400 px-2.5 bg-slate-950/40 rounded-xl border border-slate-800/40 overflow-x-auto scrollbar-none">
+              <div className="min-h-[28px] py-1 flex items-center justify-between text-[11px] font-mono text-slate-400 px-2.5 bg-slate-950/60 rounded-xl border border-slate-800/60 overflow-x-auto scrollbar-none">
                 {hoveredCandle || (candles.length > 0 ? candles[candles.length - 1] : null) ? (() => {
                   const c = hoveredCandle || candles[candles.length - 1];
                   const isLive = !hoveredCandle;
@@ -1912,7 +2415,7 @@ export default function IntradayTerminal() {
                 {!loading && !error && candles.length > 0 && (
                   <svg
                     viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                    className="w-full h-auto cursor-crosshair select-none"
+                    className="w-full h-auto cursor-crosshair select-none touch-none" onTouchStart={handleChartTouch} onTouchMove={handleChartTouch} onTouchEnd={handleChartTouchEnd} onTouchCancel={handleChartTouchEnd} style={{ touchAction: "none" }}
                     onMouseLeave={() => { setHoveredCandle(null); setHoveredX(null); setHoveredY(null); }}
                     onMouseMove={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
@@ -2383,7 +2886,7 @@ export default function IntradayTerminal() {
                 <div className="flex flex-wrap items-center justify-between gap-2.5 mb-3">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Sub-Indicator:</span>
-                    <div className="flex flex-wrap items-center bg-slate-950/90 p-1 rounded-xl border border-slate-800/80 text-xs shadow-inner gap-1">
+                    <div className="flex items-center gap-1 bg-slate-950/90 p-1 rounded-xl border border-slate-800/80 text-xs shadow-inner overflow-x-auto scrollbar-none">
                       <button
                         onClick={() => setActiveSubChart('volume')}
                         className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
@@ -2447,7 +2950,7 @@ export default function IntradayTerminal() {
 
                 <div className="h-44 sm:h-48 w-full bg-gradient-to-b from-slate-950/90 via-slate-950/70 to-slate-950/90 rounded-2xl border border-slate-800/80 p-2.5 overflow-hidden shadow-inner relative">
                   {activeSubChart === 'volume' && (
-                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full">
+                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full cursor-crosshair select-none touch-none" onTouchStart={handleSubChartTouch} onTouchMove={handleSubChartTouch} onTouchEnd={handleChartTouchEnd} onTouchCancel={handleChartTouchEnd} style={{ touchAction: "none" }}>
                       {(() => {
                         const maxVol = Math.max(...candles.map(c => c.volume || 1), 1);
                         const hasDelta = candles.some(c => (c.buyer_vol || 0) + (c.seller_vol || 0) > 0);
@@ -2495,7 +2998,7 @@ export default function IntradayTerminal() {
                   )}
 
                   {activeSubChart === 'rsi' && (
-                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full">
+                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full cursor-crosshair select-none touch-none" onTouchStart={handleSubChartTouch} onTouchMove={handleSubChartTouch} onTouchEnd={handleChartTouchEnd} onTouchCancel={handleChartTouchEnd} style={{ touchAction: "none" }}>
                       {(() => {
                         const lastCandle = candles[candles.length - 1];
                         const activeCandle = hoveredCandle || lastCandle;
@@ -2535,7 +3038,7 @@ export default function IntradayTerminal() {
                   )}
 
                   {activeSubChart === 'macd' && (
-                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full">
+                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full cursor-crosshair select-none touch-none" onTouchStart={handleSubChartTouch} onTouchMove={handleSubChartTouch} onTouchEnd={handleChartTouchEnd} onTouchCancel={handleChartTouchEnd} style={{ touchAction: "none" }}>
                       {(() => {
                         const histVals = candles.map(c => c.macd_histogram || 0);
                         const macdLine = candles.map(c => c.macd || 0);
@@ -2597,7 +3100,7 @@ export default function IntradayTerminal() {
                   )}
 
                   {activeSubChart === 'cvd' && (
-                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full">
+                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full cursor-crosshair select-none touch-none" onTouchStart={handleSubChartTouch} onTouchMove={handleSubChartTouch} onTouchEnd={handleChartTouchEnd} onTouchCancel={handleChartTouchEnd} style={{ touchAction: "none" }}>
                       {(() => {
                         const cvdVals = candles.map(c => c.cum_delta || 0);
                         const minCvd = Math.min(...cvdVals, 0);
@@ -2626,7 +3129,7 @@ export default function IntradayTerminal() {
                   )}
 
                   {activeSubChart === 'atr' && (
-                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full">
+                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full cursor-crosshair select-none touch-none" onTouchStart={handleSubChartTouch} onTouchMove={handleSubChartTouch} onTouchEnd={handleChartTouchEnd} onTouchCancel={handleChartTouchEnd} style={{ touchAction: "none" }}>
                       {(() => {
                         const atrVals = candles.map(c => c.atr || 0).filter(v => v > 0);
                         const minAtr = atrVals.length ? Math.min(...atrVals) * 0.85 : 0;
@@ -2664,10 +3167,8 @@ export default function IntradayTerminal() {
               </div>
             </div>
 
-
-            {/* ── MULTI-TIMEFRAME CONFLUENCE & TACTICAL SIGNALS ──────────────── */}
-            {data && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {data && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Triple-Screen Confluence Matrix */}
                 <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
                   <div>
@@ -2729,7 +3230,6 @@ export default function IntradayTerminal() {
                     </span>
                   </div>
                 </div>
-
                 {/* Candle Volume Pressure Proxy */}
                 <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
                   <div>
@@ -2791,13 +3291,11 @@ export default function IntradayTerminal() {
                     </span>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
 
-          {/* Right Column: Volume Profile (VPVR) & Camarilla Pivots (1 span) */}
-          <div className="space-y-6">
-            {/* Volume Profile (VPVR) */}
+            <div className="space-y-6">
             {data?.volume_profile && (
               <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl">
                 <div className="flex items-center justify-between mb-4">
@@ -2879,8 +3377,6 @@ export default function IntradayTerminal() {
                 </div>
               </div>
             )}
-
-            {/* CPR & Camarilla Inflection Levels */}
             {(data?.pivots?.camarilla || data?.pivots?.cpr) && (
               <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl">
                 <div className="flex items-center justify-between mb-4">
@@ -3002,10 +3498,9 @@ export default function IntradayTerminal() {
                 </div>
               </div>
             )}
+            </div>
           </div>
-        </div>
 
-        {/* ── REAL-WORLD INTRADAY BATTLE PLAN CARD & EXECUTION ────────────── */}
         {data?.battle_plan?.entry_price && (
           <div className="bg-gradient-to-r from-slate-900 via-slate-900/95 to-slate-950 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800/80">
@@ -3091,8 +3586,6 @@ export default function IntradayTerminal() {
             </div>
           </div>
         )}
-
-        {/* ── TRADER'S EXECUTION SCRATCHPAD & JOURNAL ─────────────────────── */}
         {scratchpadOpen && (
           <div className="bg-slate-900/90 border border-amber-500/30 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl shadow-amber-950/10">
             <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
@@ -3192,8 +3685,7 @@ export default function IntradayTerminal() {
           </div>
         )}
 
-        {/* ── REAL-LIFE FRICTION & SEBI BREAKEVEN CALCULATOR ────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Position Sizing & Friction Calculator */}
           <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
             <div>
@@ -3338,7 +3830,6 @@ export default function IntradayTerminal() {
               )}
             </div>
           </div>
-
           {/* Real-Time Intraday Radar Scanner */}
           <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
             <div>
@@ -3442,11 +3933,9 @@ export default function IntradayTerminal() {
               </button>
             </div>
           </div>
-        </div>
+          </div>
 
-        {/* ── OPTIONS PCR + BLOCK DEALS + TRADE LOG ROW ──────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Options Put-Call Ratio Widget */}
           <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
             <div>
@@ -3569,7 +4058,6 @@ export default function IntradayTerminal() {
               )}
             </div>
           </div>
-
           {/* NSE Block / Bulk Deals */}
           <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
             <div>
@@ -3663,7 +4151,6 @@ export default function IntradayTerminal() {
               )}
             </div>
           </div>
-
           {/* Trade Log with Live P&L */}
           <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
             <div>
@@ -3824,9 +4311,2392 @@ export default function IntradayTerminal() {
               </div>
             </div>
           </div>
+          </div>
         </div>
 
-        {/* ── PRO KEYBOARD SHORTCUTS MODAL ─────────────────────────────────── */}
+        {/* ── MOBILE TOUCH-FIRST SEGMENTED VIEW (Visible on <lg) ── */}
+        <div className="lg:hidden space-y-4">
+
+          {mobileTab === 'chart' && (
+            <div className="space-y-4">
+              <div className={`${
+                fullscreenChart ? 'fixed inset-0 z-[150] bg-slate-950 p-4 overflow-y-auto' : ''
+              }`}>
+            <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-4 sm:p-6 backdrop-blur-md">
+              {/* Upper Chart Control Ribbon */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-slate-800">
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Timeframe Selector Pills */}
+                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800/80">
+                    {TIMEFRAMES.map((tf) => (
+                      <button
+                        key={tf.label}
+                        onClick={() => { setCandleInterval(tf.interval); setPeriod(tf.period); }}
+                        className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+                          candleInterval === tf.interval
+                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/10'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {tf.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Viewport Zoom */}
+                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800/80">
+                    <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 px-1.5 font-mono">Zoom</span>
+                    {[
+                      { id: 'all', label: 'All Day' },
+                      { id: '60', label: '60b' },
+                      { id: '30', label: '30b' },
+                    ].map((z) => (
+                      <button
+                        key={z.id}
+                        onClick={() => setCandleSlice(z.id)}
+                        className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition ${
+                          candleSlice === z.id
+                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/10'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {z.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Right controls: Price Alert & Fullscreen */}
+                <div className="flex items-center gap-2">
+                  {/* Price Alert mini widget */}
+                  {data && (
+                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs ${
+                      alertTriggered
+                        ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-sm shadow-amber-500/20'
+                        : 'bg-slate-950 border-slate-800 text-slate-400'
+                    }`}>
+                      {alertTriggered
+                        ? <Bell className="w-3.5 h-3.5 text-amber-400 animate-bounce" />
+                        : <BellOff className="w-3.5 h-3.5 text-slate-500" />}
+                      <select
+                        value={alertAbove ? 'above' : 'below'}
+                        onChange={e => { setAlertAbove(e.target.value === 'above'); setAlertTriggered(false); }}
+                        className="bg-transparent text-[11px] font-mono focus:outline-none cursor-pointer text-slate-300"
+                      >
+                        <option value="above" className="bg-slate-900">Alert ≥</option>
+                        <option value="below" className="bg-slate-900">Alert ≤</option>
+                      </select>
+                      <input
+                        type="number"
+                        placeholder={data.current_price?.toFixed(0)}
+                        value={alertPrice}
+                        onChange={e => { setAlertPrice(e.target.value); setAlertTriggered(false); }}
+                        className="w-16 bg-transparent font-mono text-xs text-white placeholder-slate-600 focus:outline-none"
+                      />
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => setFullscreenChart(!fullscreenChart)}
+                    className="p-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 hover:text-white transition"
+                    title={fullscreenChart ? 'Exit Fullscreen' : 'Fullscreen Chart'}
+                  >
+                    {fullscreenChart ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Dedicated Overlays & Indicators Ribbon */}
+              
+              {/* Mobile Quick Overlays Strip */}
+              <div className="lg:hidden my-2.5 p-2 bg-slate-950/70 border border-slate-800/80 rounded-2xl flex items-center justify-between gap-2">
+                <button
+                  onClick={() => setShowMobileOverlaysModal(true)}
+                  className="px-2.5 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-sm"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Overlays</span>
+                  <span className="px-1.5 py-0.2 rounded-full bg-cyan-400 text-slate-950 font-black text-[9px]">
+                    {activeOverlaysCount}
+                  </span>
+                </button>
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none text-xs">
+                  <button
+                    onClick={() => setShowVWAP(!showVWAP)}
+                    className={`px-2 py-1 rounded-lg text-xs font-medium transition shrink-0 ${showVWAP ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}
+                  >
+                    VWAP
+                  </button>
+                  <button
+                    onClick={() => setShowSupertrend(!showSupertrend)}
+                    className={`px-2 py-1 rounded-lg text-xs font-medium transition shrink-0 ${showSupertrend ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}
+                  >
+                    Supertrend
+                  </button>
+                  <button
+                    onClick={() => setShowEMA(!showEMA)}
+                    className={`px-2 py-1 rounded-lg text-xs font-medium transition shrink-0 ${showEMA ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}
+                  >
+                    EMA 9/21
+                  </button>
+                  <button
+                    onClick={() => setShowCPR(!showCPR)}
+                    className={`px-2 py-1 rounded-lg text-xs font-medium transition shrink-0 ${showCPR ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}
+                  >
+                    CPR
+                  </button>
+                  <button
+                    onClick={() => setShowORB(!showORB)}
+                    className={`px-2 py-1 rounded-lg text-xs font-medium transition shrink-0 ${showORB ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}
+                  >
+                    ORB
+                  </button>
+                  <button
+                    onClick={() => setCandleMode(candleMode === 'regular' ? 'heikin_ashi' : 'regular')}
+                    className={`px-2 py-1 rounded-lg text-xs font-medium transition shrink-0 ${candleMode === 'heikin_ashi' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}
+                  >
+                    🥢 HA
+                  </button>
+                </div>
+              </div>
+
+              {/* Dedicated Overlays & Indicators Ribbon (Desktop) */}
+              <div className="hidden lg:flex my-3 p-2 bg-slate-950/70 border border-slate-800/80 rounded-2xl flex-wrap items-center justify-between gap-2.5">
+                {/* Left Group: Technical Indicators */}
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-500 pl-1 pr-1">
+                    Overlays:
+                  </span>
+                  <button
+                    onClick={() => setShowVWAP(!showVWAP)}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showVWAP ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full" />
+                    VWAP
+                  </button>
+
+                  <button
+                    onClick={() => setShowVWAPBands(!showVWAPBands)}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showVWAPBands ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 bg-cyan-300/60 rounded-full" />
+                    ±2σ Bands
+                  </button>
+
+                  <button
+                    onClick={() => setShowSupertrend(!showSupertrend)}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showSupertrend ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                    Supertrend
+                  </button>
+
+                  <button
+                    onClick={() => setShowEMA(!showEMA)}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showEMA ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 bg-purple-400 rounded-full" />
+                    EMA 9/21
+                  </button>
+
+                  <button
+                    onClick={() => setShowEMA200(!showEMA200)}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showEMA200 ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 shadow-sm shadow-amber-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                    }`}
+                    title="200-period Exponential Moving Average (Institutional Anchor)"
+                  >
+                    <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
+                    200 EMA
+                  </button>
+                </div>
+
+                {/* Right Group: Key Levels & Heikin-Ashi */}
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-500 pl-1 pr-1">
+                    Levels:
+                  </span>
+                  <button
+                    onClick={() => setShowORB(!showORB)}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showORB ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
+                    ORB 15m
+                  </button>
+
+                  <button
+                    onClick={() => setShowCamarilla(!showCamarilla)}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showCamarilla ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm shadow-rose-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 bg-rose-400 rounded-full" />
+                    Camarilla
+                  </button>
+
+                  <button
+                    onClick={() => setShowPDH(!showPDH)}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showPDH ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
+                    PDH / PDL
+                  </button>
+
+                  <button
+                    onClick={() => setShowCPR(!showCPR)}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      showCPR ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-sm shadow-indigo-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full" />
+                    CPR
+                  </button>
+
+                  <div className="w-px h-4 bg-slate-800 mx-1 hidden sm:block" />
+
+                  <button
+                    onClick={() => setCandleMode(candleMode === 'regular' ? 'heikin_ashi' : 'regular')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                      candleMode === 'heikin_ashi' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/10' : 'bg-slate-900/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                    }`}
+                    title="Toggle Heikin-Ashi Trend-Smoothing Candlesticks (HotKey: 'K')"
+                  >
+                    <span className="text-[11px]">🥢</span>
+                    {candleMode === 'heikin_ashi' ? 'Heikin-Ashi' : 'Candles'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Hover Inspection Bar — with fixed height and live default to prevent jitter */}
+              <div className="min-h-[28px] py-1 flex items-center justify-between text-[11px] font-mono text-slate-400 px-2.5 bg-slate-950/60 rounded-xl border border-slate-800/60 overflow-x-auto scrollbar-none">
+                {hoveredCandle || (candles.length > 0 ? candles[candles.length - 1] : null) ? (() => {
+                  const c = hoveredCandle || candles[candles.length - 1];
+                  const isLive = !hoveredCandle;
+                  return (
+                    <div className="flex items-center gap-3 w-full justify-between shrink-0">
+                      <div className="flex items-center gap-3">
+                        {isLive ? (
+                          <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> LIVE
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-bold">
+                            INSPECT
+                          </span>
+                        )}
+                        {candleMode === 'heikin_ashi' && (
+                          <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 text-[10px] font-bold">
+                            HA SMOOTHED
+                          </span>
+                        )}
+                        <span>Time: <strong className="text-white">{c.time}</strong></span>
+                        <span>O: <strong className="text-slate-200">{c.open}</strong></span>
+                        <span>H: <strong className="text-emerald-400">{c.high}</strong></span>
+                        <span>L: <strong className="text-rose-400">{c.low}</strong></span>
+                        <span>C: <strong className={c.close >= c.open ? 'text-emerald-400' : 'text-rose-400'}>{c.close}</strong></span>
+                        <span>Vol: <strong className="text-cyan-300">{c.volume?.toLocaleString()}</strong></span>
+                        {c.vwap && <span>VWAP: <strong className="text-cyan-400">{c.vwap}</strong></span>}
+                        {c.ema200 > 0 && <span>EMA200: <strong className="text-amber-400">{c.ema200}</strong></span>}
+                        {c.atr > 0 && <span>ATR: <strong className="text-amber-300">{c.atr}</strong></span>}
+                      </div>
+                      <div className="hidden md:flex items-center text-[10px] text-slate-500">
+                        {isLive ? 'Hover candles to inspect' : 'Crosshair active'}
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  <span className="text-slate-500 italic text-[10px]">Awaiting high-frequency market stream...</span>
+                )}
+              </div>
+
+              {/* High-Resolution SVG Candlestick Rendering */}
+              <div className="relative w-full overflow-hidden bg-slate-950/60 rounded-2xl border border-slate-800/60 mt-1">
+                {loading && (
+                  <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-20">
+                    <div className="flex items-center gap-2 text-cyan-400 text-sm font-semibold">
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      Loading High-Frequency Feed...
+                    </div>
+                  </div>
+                )}
+
+                {error && (
+                  <div className="h-72 flex flex-col items-center justify-center p-6 text-center space-y-3">
+                    <div className="flex items-center gap-2 text-rose-400 text-sm font-semibold">
+                      <AlertCircle className="w-5 h-5 shrink-0" />
+                      <span>{error}</span>
+                    </div>
+                    <p className="text-xs text-slate-400 max-w-md">
+                      Intraday chart data may be temporarily unavailable for {ticker} (e.g. market closed, corporate restructuring, or no trades). Select an active liquid stock to continue:
+                    </p>
+                    <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                      {['RELIANCE.NS', 'TCS.NS', 'INFY.NS', 'TATASTEEL.NS', 'NVDA', 'AAPL'].map(sym => (
+                        <button
+                          key={sym}
+                          onClick={() => changeTicker(sym)}
+                          className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-500/50 text-xs font-mono font-bold text-slate-200 hover:text-cyan-400 transition"
+                        >
+                          {sym}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!loading && !error && candles.length > 0 && (
+                  <svg
+                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    className="w-full h-auto cursor-crosshair select-none touch-none" onTouchStart={handleChartTouch} onTouchMove={handleChartTouch} onTouchEnd={handleChartTouchEnd} onTouchCancel={handleChartTouchEnd} style={{ touchAction: "none" }}
+                    onMouseLeave={() => { setHoveredCandle(null); setHoveredX(null); setHoveredY(null); }}
+                    onMouseMove={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const currentX = ((e.clientX - rect.left) / rect.width) * chartWidth;
+                      const currentY = ((e.clientY - rect.top) / rect.height) * chartHeight;
+                      setHoveredX(currentX);
+                      setHoveredY(currentY);
+
+                      const innerW = chartWidth - padding.left - padding.right;
+                      const relX = currentX - padding.left;
+                      const candleIdx = Math.round((relX / Math.max(innerW, 1)) * (candles.length - 1));
+                      if (candleIdx >= 0 && candleIdx < candles.length) {
+                        setHoveredCandle(candles[candleIdx]);
+                      }
+                    }}
+                  >
+                    {/* Horizontal Price Grid Lines */}
+                    {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
+                      const p = priceMin + (priceMax - priceMin) * (1 - pct);
+                      const y = yScale(p);
+                      return (
+                        <g key={i}>
+                          <line
+                            x1={padding.left}
+                            y1={y}
+                            x2={chartWidth - padding.right}
+                            y2={y}
+                            stroke="#334155"
+                            strokeDasharray="3 3"
+                            strokeOpacity={0.4}
+                          />
+                          <text
+                            x={chartWidth - padding.right + 6}
+                            y={y + 3}
+                            fill="#64748b"
+                            fontSize="9"
+                            fontFamily="monospace"
+                          >
+                            {p.toFixed(2)}
+                          </text>
+                        </g>
+                      );
+                    })}
+
+                    {/* ORB Range Box Overlay */}
+                    {showORB && data?.orb && (
+                      <g>
+                        <line
+                          x1={padding.left}
+                          y1={yScale(data.orb.high_15m)}
+                          x2={chartWidth - padding.right}
+                          y2={yScale(data.orb.high_15m)}
+                          stroke="#f59e0b"
+                          strokeDasharray="4 4"
+                          strokeWidth="1.2"
+                          strokeOpacity={0.8}
+                        />
+                        <text
+                          x={padding.left + 6}
+                          y={yScale(data.orb.high_15m) - 4}
+                          fill="#f59e0b"
+                          fontSize="8"
+                          fontFamily="monospace"
+                        >
+                          ORB 15m HIGH ({data.orb.high_15m})
+                        </text>
+
+                        <line
+                          x1={padding.left}
+                          y1={yScale(data.orb.low_15m)}
+                          x2={chartWidth - padding.right}
+                          y2={yScale(data.orb.low_15m)}
+                          stroke="#f59e0b"
+                          strokeDasharray="4 4"
+                          strokeWidth="1.2"
+                          strokeOpacity={0.8}
+                        />
+                        <text
+                          x={padding.left + 6}
+                          y={yScale(data.orb.low_15m) + 10}
+                          fill="#f59e0b"
+                          fontSize="8"
+                          fontFamily="monospace"
+                        >
+                          ORB 15m LOW ({data.orb.low_15m})
+                        </text>
+                      </g>
+                    )}
+
+                    {/* Camarilla Inflection Levels */}
+                    {showCamarilla && data?.pivots?.camarilla && (
+                      <g>
+                        {data.pivots.camarilla.h4 && (
+                          <line x1={padding.left} y1={yScale(data.pivots.camarilla.h4)} x2={chartWidth - padding.right} y2={yScale(data.pivots.camarilla.h4)} stroke="#10b981" strokeWidth="1" strokeDasharray="2 2" />
+                        )}
+                        {data.pivots.camarilla.h3 && (
+                          <line x1={padding.left} y1={yScale(data.pivots.camarilla.h3)} x2={chartWidth - padding.right} y2={yScale(data.pivots.camarilla.h3)} stroke="#f43f5e" strokeWidth="1" strokeDasharray="2 2" />
+                        )}
+                        {data.pivots.camarilla.l3 && (
+                          <line x1={padding.left} y1={yScale(data.pivots.camarilla.l3)} x2={chartWidth - padding.right} y2={yScale(data.pivots.camarilla.l3)} stroke="#10b981" strokeWidth="1" strokeDasharray="2 2" />
+                        )}
+                        {data.pivots.camarilla.l4 && (
+                          <line x1={padding.left} y1={yScale(data.pivots.camarilla.l4)} x2={chartWidth - padding.right} y2={yScale(data.pivots.camarilla.l4)} stroke="#f43f5e" strokeWidth="1" strokeDasharray="2 2" />
+                        )}
+                      </g>
+                    )}
+
+                    {/* Previous Day Benchmark Levels (PDH, PDL, PDC) */}
+                    {showPDH && data?.pivots?.daily_levels && data.pivots.daily_levels.pdh > 0 && (
+                      <g>
+                        {/* PDH Line & Tag */}
+                        <line
+                          x1={padding.left}
+                          y1={yScale(data.pivots.daily_levels.pdh)}
+                          x2={chartWidth - padding.right}
+                          y2={yScale(data.pivots.daily_levels.pdh)}
+                          stroke="#f59e0b"
+                          strokeDasharray="4 3"
+                          strokeWidth="1.2"
+                          strokeOpacity={0.85}
+                        />
+                        <text
+                          x={chartWidth - padding.right + 4}
+                          y={yScale(data.pivots.daily_levels.pdh) + 3}
+                          fill="#f59e0b"
+                          fontSize="8"
+                          fontFamily="monospace"
+                          fontWeight="bold"
+                        >
+                          PDH
+                        </text>
+
+                        {/* PDC Line & Tag */}
+                        {data.pivots.daily_levels.pdc > 0 && (
+                          <>
+                            <line
+                              x1={padding.left}
+                              y1={yScale(data.pivots.daily_levels.pdc)}
+                              x2={chartWidth - padding.right}
+                              y2={yScale(data.pivots.daily_levels.pdc)}
+                              stroke="#94a3b8"
+                              strokeDasharray="2 2"
+                              strokeWidth="1"
+                              strokeOpacity={0.6}
+                            />
+                            <text
+                              x={chartWidth - padding.right + 4}
+                              y={yScale(data.pivots.daily_levels.pdc) + 3}
+                              fill="#94a3b8"
+                              fontSize="8"
+                              fontFamily="monospace"
+                            >
+                              PDC
+                            </text>
+                          </>
+                        )}
+
+                        {/* PDL Line & Tag */}
+                        <line
+                          x1={padding.left}
+                          y1={yScale(data.pivots.daily_levels.pdl)}
+                          x2={chartWidth - padding.right}
+                          y2={yScale(data.pivots.daily_levels.pdl)}
+                          stroke="#06b6d4"
+                          strokeDasharray="4 3"
+                          strokeWidth="1.2"
+                          strokeOpacity={0.85}
+                        />
+                        <text
+                          x={chartWidth - padding.right + 4}
+                          y={yScale(data.pivots.daily_levels.pdl) + 3}
+                          fill="#06b6d4"
+                          fontSize="8"
+                          fontFamily="monospace"
+                          fontWeight="bold"
+                        >
+                          PDL
+                        </text>
+                      </g>
+                    )}
+
+                    {/* Central Pivot Range (CPR: TC, Pivot, BC) */}
+                    {showCPR && data?.pivots?.cpr && data.pivots.cpr.pivot > 0 && (
+                      <g key="cpr-overlay">
+                        {/* Shaded CPR Range Cloud */}
+                        <rect
+                          x={padding.left}
+                          y={Math.min(yScale(data.pivots.cpr.tc), yScale(data.pivots.cpr.bc))}
+                          width={chartWidth - padding.left - padding.right}
+                          height={Math.max(1, Math.abs(yScale(data.pivots.cpr.tc) - yScale(data.pivots.cpr.bc)))}
+                          fill="#6366f1"
+                          fillOpacity={0.08}
+                        />
+
+                        {/* TC Line (Top Central) */}
+                        <line
+                          x1={padding.left}
+                          y1={yScale(data.pivots.cpr.tc)}
+                          x2={chartWidth - padding.right}
+                          y2={yScale(data.pivots.cpr.tc)}
+                          stroke="#818cf8"
+                          strokeDasharray="3 3"
+                          strokeWidth="1.1"
+                          strokeOpacity={0.8}
+                        />
+                        <text
+                          x={chartWidth - padding.right + 4}
+                          y={yScale(data.pivots.cpr.tc) + 3}
+                          fill="#818cf8"
+                          fontSize="8"
+                          fontFamily="monospace"
+                        >
+                          TC
+                        </text>
+
+                        {/* Central Pivot (P) */}
+                        <line
+                          x1={padding.left}
+                          y1={yScale(data.pivots.cpr.pivot)}
+                          x2={chartWidth - padding.right}
+                          y2={yScale(data.pivots.cpr.pivot)}
+                          stroke="#6366f1"
+                          strokeWidth="1.4"
+                          strokeOpacity={0.9}
+                        />
+                        <text
+                          x={chartWidth - padding.right + 4}
+                          y={yScale(data.pivots.cpr.pivot) + 3}
+                          fill="#6366f1"
+                          fontSize="8"
+                          fontFamily="monospace"
+                          fontWeight="bold"
+                        >
+                          CPR-P
+                        </text>
+
+                        {/* BC Line (Bottom Central) */}
+                        <line
+                          x1={padding.left}
+                          y1={yScale(data.pivots.cpr.bc)}
+                          x2={chartWidth - padding.right}
+                          y2={yScale(data.pivots.cpr.bc)}
+                          stroke="#a855f7"
+                          strokeDasharray="3 3"
+                          strokeWidth="1.1"
+                          strokeOpacity={0.8}
+                        />
+                        <text
+                          x={chartWidth - padding.right + 4}
+                          y={yScale(data.pivots.cpr.bc) + 3}
+                          fill="#a855f7"
+                          fontSize="8"
+                          fontFamily="monospace"
+                        >
+                          BC
+                        </text>
+                      </g>
+                    )}
+
+                    {/* VWAP ±2σ Bands */}
+                    {showVWAPBands && (
+                      <g>
+                        <path
+                          d={candles.reduce((acc, c, i) => !c.upper_band_2 ? acc : `${acc}${acc ? ' L' : 'M'} ${xScale(i)} ${yScale(c.upper_band_2)}`, '')}
+                          fill="none"
+                          stroke="#06b6d4"
+                          strokeOpacity={0.35}
+                          strokeWidth="1"
+                          strokeDasharray="2 2"
+                        />
+                        <path
+                          d={candles.reduce((acc, c, i) => !c.lower_band_2 ? acc : `${acc}${acc ? ' L' : 'M'} ${xScale(i)} ${yScale(c.lower_band_2)}`, '')}
+                          fill="none"
+                          stroke="#06b6d4"
+                          strokeOpacity={0.35}
+                          strokeWidth="1"
+                          strokeDasharray="2 2"
+                        />
+                      </g>
+                    )}
+
+                    {/* VWAP Main Line */}
+                    {showVWAP && (
+                      <path
+                        d={candles.reduce((acc, c, i) => !c.vwap ? acc : `${acc}${acc ? ' L' : 'M'} ${xScale(i)} ${yScale(c.vwap)}`, '')}
+                        fill="none"
+                        stroke="#06b6d4"
+                        strokeWidth="1.8"
+                      />
+                    )}
+
+                    {/* EMA 9 and 21 — null-guarded for early candles */}
+                    {showEMA && (
+                      <g>
+                        <path d={candles.reduce((acc, c, i) => !c.ema9 ? acc : `${acc}${acc ? ' L' : 'M'} ${xScale(i)} ${yScale(c.ema9)}`, '')} fill="none" stroke="#a855f7" strokeWidth="1.2" />
+                        <path d={candles.reduce((acc, c, i) => !c.ema21 ? acc : `${acc}${acc ? ' L' : 'M'} ${xScale(i)} ${yScale(c.ema21)}`, '')} fill="none" stroke="#ec4899" strokeWidth="1.2" strokeOpacity={0.8} />
+                      </g>
+                    )}
+
+                    {/* EMA 200 Institutional Anchor */}
+                    {showEMA200 && (
+                      <path
+                        d={candles.reduce((acc, c, i) => !c.ema200 ? acc : `${acc}${acc ? ' L' : 'M'} ${xScale(i)} ${yScale(c.ema200)}`, '')}
+                        fill="none"
+                        stroke="#f59e0b"
+                        strokeWidth="1.8"
+                        strokeDasharray="4 3"
+                        strokeOpacity={0.9}
+                      />
+                    )}
+
+                    {/* Supertrend Stop Line */}
+                    {showSupertrend && (
+                      <g>
+                        {candles.map((c, i) => {
+                          if (i === 0 || !candles[i - 1].supertrend || !c.supertrend || candles[i - 1].supertrend_dir !== c.supertrend_dir) return null;
+                          return (
+                            <line
+                              key={`st-${i}`}
+                              x1={xScale(i - 1)}
+                              y1={yScale(candles[i - 1].supertrend)}
+                              x2={xScale(i)}
+                              y2={yScale(c.supertrend)}
+                              stroke={c.supertrend_dir === 1 ? '#10b981' : '#f43f5e'}
+                              strokeWidth="2"
+                            />
+                          );
+                        })}
+                      </g>
+                    )}
+
+                    {/* Candlesticks & Wicks */}
+                    {candles.map((c, i) => {
+                      const x = xScale(i);
+                      const isUp = c.close >= c.open;
+                      const candleColor = isUp ? '#10b981' : '#f43f5e';
+                      const yOpen = yScale(c.open);
+                      const yClose = yScale(c.close);
+                      const yHigh = yScale(c.high);
+                      const yLow = yScale(c.low);
+                      const bodyY = Math.min(yOpen, yClose);
+                      const bodyHeight = Math.max(Math.abs(yClose - yOpen), 1.5);
+
+                      return (
+                        <g key={i} onMouseEnter={() => setHoveredCandle(c)} className="cursor-pointer">
+                          <line x1={x} y1={yHigh} x2={x} y2={yLow} stroke={candleColor} strokeWidth="1" />
+                          <rect x={x - candleWidth / 2} y={bodyY} width={candleWidth} height={bodyHeight} fill={candleColor} rx={1} />
+                        </g>
+                      );
+                    })}
+
+                    {/* X-axis Labels — max 4 to prevent overlap */}
+                    {candles.map((c, i) => {
+                      if (i % Math.ceil(candles.length / 4) !== 0 && i !== candles.length - 1) return null;
+                      return (
+                        <text key={`x-${i}`} x={xScale(i)} y={chartHeight - 10} fill="#64748b" fontSize="9" fontFamily="monospace" textAnchor="middle">
+                          {c.time}
+                        </text>
+                      );
+                    })}
+
+                    {/* Live Market Price Horizontal Line & Right Axis Badge */}
+                    {data?.current_price && (() => {
+                      const liveY = yScale(data.current_price);
+                      if (liveY < padding.top || liveY > chartHeight - padding.bottom) return null;
+                      const lastX = candles.length > 0 ? xScale(candles.length - 1) : chartWidth - padding.right;
+                      const isUpDay = data.current_price >= (data.prev_close || data.candles?.[0]?.open || data.current_price);
+                      const liveColor = isUpDay ? '#10b981' : '#f43f5e';
+                      return (
+                        <g pointerEvents="none" key="live-price-indicator">
+                          {/* Pulsating radar ping beacon at the active candle tick */}
+                          <circle cx={lastX} cy={liveY} r="7" fill={liveColor} fillOpacity="0.2">
+                            <animate attributeName="r" values="3;9;3" dur="2s" repeatCount="indefinite" />
+                            <animate attributeName="fill-opacity" values="0.6;0.1;0.6" dur="2s" repeatCount="indefinite" />
+                          </circle>
+                          <circle cx={lastX} cy={liveY} r="3" fill={liveColor} />
+
+                          {/* Horizontal dashed price level line across the chart */}
+                          <line
+                            x1={padding.left}
+                            y1={liveY}
+                            x2={chartWidth - padding.right}
+                            y2={liveY}
+                            stroke={liveColor}
+                            strokeWidth="1.2"
+                            strokeDasharray="4 3"
+                            strokeOpacity={0.85}
+                          />
+
+                          {/* Right Y-Axis Illuminated Price Badge */}
+                          <rect
+                            x={chartWidth - padding.right + 2}
+                            y={liveY - 9}
+                            width={padding.right - 4}
+                            height={18}
+                            rx={3}
+                            fill={liveColor}
+                          />
+                          <text
+                            x={chartWidth - padding.right + 5}
+                            y={liveY + 3.5}
+                            fill="#ffffff"
+                            fontSize="8.5"
+                            fontFamily="monospace"
+                            fontWeight="bold"
+                          >
+                            {currSym}{data.current_price.toFixed(2)}
+                          </text>
+                        </g>
+                      );
+                    })()}
+
+                    {/* Crosshair vertical line */}
+                    {hoveredX !== null && (
+                      <line
+                        x1={hoveredX} y1={padding.top}
+                        x2={hoveredX} y2={chartHeight - padding.bottom}
+                        stroke="#06b6d4" strokeWidth="0.7"
+                        strokeDasharray="3 3" strokeOpacity={0.5}
+                        pointerEvents="none"
+                      />
+                    )}
+
+                    {/* Crosshair horizontal line & dynamic Y-axis price label */}
+                    {hoveredY !== null && hoveredY >= padding.top && hoveredY <= chartHeight - padding.bottom && (() => {
+                      const dynamicPrice = priceMax - ((hoveredY - padding.top) / (chartHeight - padding.top - padding.bottom)) * (priceMax - priceMin);
+                      return (
+                        <g pointerEvents="none">
+                          <line
+                            x1={padding.left}
+                            y1={hoveredY}
+                            x2={chartWidth - padding.right}
+                            y2={hoveredY}
+                            stroke="#06b6d4"
+                            strokeWidth="0.7"
+                            strokeDasharray="3 3"
+                            strokeOpacity={0.5}
+                          />
+                          <rect
+                            x={chartWidth - padding.right + 2}
+                            y={hoveredY - 8}
+                            width={padding.right - 4}
+                            height={16}
+                            rx={3}
+                            fill="#0f172a"
+                            stroke="#06b6d4"
+                            strokeWidth="1"
+                          />
+                          <text
+                            x={chartWidth - padding.right + 5}
+                            y={hoveredY + 3.5}
+                            fill="#38bdf8"
+                            fontSize="8"
+                            fontFamily="monospace"
+                            fontWeight="bold"
+                          >
+                            {currSym}{dynamicPrice.toFixed(2)}
+                          </text>
+                        </g>
+                      );
+                    })()}
+                  </svg>
+                )}
+              </div>
+
+              {/* Sub-Chart Selector */}
+              <div className="mt-4 pt-4 border-t border-slate-800/80">
+                <div className="flex flex-wrap items-center justify-between gap-2.5 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Sub-Indicator:</span>
+                    <div className="flex items-center gap-1 bg-slate-950/90 p-1 rounded-xl border border-slate-800/80 text-xs shadow-inner overflow-x-auto scrollbar-none">
+                      <button
+                        onClick={() => setActiveSubChart('volume')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          activeSubChart === 'volume'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.2)] font-bold'
+                            : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                        }`}
+                      >
+                        Volume &amp; Delta
+                      </button>
+                      <button
+                        onClick={() => setActiveSubChart('rsi')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          activeSubChart === 'rsi'
+                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_12px_rgba(56,189,248,0.2)] font-bold'
+                            : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                        }`}
+                      >
+                        RSI (14)
+                      </button>
+                      <button
+                        onClick={() => setActiveSubChart('macd')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          activeSubChart === 'macd'
+                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-[0_0_12px_rgba(168,85,247,0.2)] font-bold'
+                            : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                        }`}
+                      >
+                        MACD (12,26,9)
+                      </button>
+                      <button
+                        onClick={() => setActiveSubChart('cvd')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          activeSubChart === 'cvd'
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.2)] font-bold'
+                            : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                        }`}
+                      >
+                        Volume Delta Proxy
+                      </button>
+                      <button
+                        onClick={() => setActiveSubChart('atr')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          activeSubChart === 'atr'
+                            ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40 shadow-[0_0_12px_rgba(249,115,22,0.2)] font-bold'
+                            : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                        }`}
+                      >
+                        ATR Volatility (14)
+                      </button>
+                    </div>
+                    <InfoBadge infoKey={activeSubChart === 'cvd' ? 'order_flow_delta' : activeSubChart === 'volume' ? 'order_flow_delta' : activeSubChart === 'macd' ? 'macd_cross' : 'rsi'} />
+                  </div>
+
+                  <div className="hidden sm:flex items-center gap-2 text-[11px] font-mono text-slate-400">
+                    <span className="px-2 py-0.5 rounded-md bg-slate-950 border border-slate-800/80 text-slate-300">
+                      Active: <strong className="text-white uppercase">{activeSubChart}</strong>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="h-44 sm:h-48 w-full bg-gradient-to-b from-slate-950/90 via-slate-950/70 to-slate-950/90 rounded-2xl border border-slate-800/80 p-2.5 overflow-hidden shadow-inner relative">
+                  {activeSubChart === 'volume' && (
+                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full cursor-crosshair select-none touch-none" onTouchStart={handleSubChartTouch} onTouchMove={handleSubChartTouch} onTouchEnd={handleChartTouchEnd} onTouchCancel={handleChartTouchEnd} style={{ touchAction: "none" }}>
+                      {(() => {
+                        const maxVol = Math.max(...candles.map(c => c.volume || 1), 1);
+                        const hasDelta = candles.some(c => (c.buyer_vol || 0) + (c.seller_vol || 0) > 0);
+                        const lastCandle = candles[candles.length - 1];
+                        const activeCandle = hoveredCandle || lastCandle;
+                        return (
+                          <>
+                            {/* Horizontal guideline */}
+                            <line x1={padding.left} y1={50} x2={chartWidth - padding.right} y2={50} stroke="#334155" strokeDasharray="3 3" strokeOpacity={0.25} />
+                            <text x={padding.left + 4} y={14} fill="#94a3b8" fontSize="8" fontFamily="monospace" fontWeight="bold">
+                              Vol: <tspan fill="#ffffff">{activeCandle?.volume?.toLocaleString() || 0}</tspan>
+                              {hasDelta && (
+                                <>
+                                  <tspan fill="#64748b"> | </tspan>
+                                  <tspan fill="#10b981">Buyers: {activeCandle?.buyer_vol?.toLocaleString() || 0}</tspan>
+                                  <tspan fill="#64748b"> | </tspan>
+                                  <tspan fill="#f43f5e">Sellers: {activeCandle?.seller_vol?.toLocaleString() || 0}</tspan>
+                                </>
+                              )}
+                              {hoveredCandle && <tspan fill="#38bdf8">{` (${activeCandle?.time})`}</tspan>}
+                            </text>
+                            <text x={chartWidth - padding.right + 4} y={14} fill="#64748b" fontSize="8" fontFamily="monospace">
+                              Max {(maxVol / 1000).toFixed(0)}K
+                            </text>
+                            {candles.map((c, i) => {
+                              const x = xScale(i);
+                              if (hasDelta) {
+                                const bH = ((c.buyer_vol || 0) / maxVol) * 82;
+                                const sH = ((c.seller_vol || 0) / maxVol) * 82;
+                                return (
+                                  <g key={i}>
+                                    <rect x={x - candleWidth / 2} y={96 - bH} width={candleWidth / 2} height={bH} fill="#10b981" fillOpacity={0.85} rx={0.5} />
+                                    <rect x={x} y={96 - sH} width={candleWidth / 2} height={sH} fill="#f43f5e" fillOpacity={0.85} rx={0.5} />
+                                  </g>
+                                );
+                              }
+                              const totalH = ((c.volume || 0) / maxVol) * 82;
+                              const isUp = c.close >= c.open;
+                              return <rect key={i} x={x - candleWidth / 2} y={96 - totalH} width={candleWidth} height={totalH} fill={isUp ? '#10b981' : '#f43f5e'} fillOpacity={0.7} rx={0.5} />;
+                            })}
+                          </>
+                        );
+                      })()}
+                    </svg>
+                  )}
+
+                  {activeSubChart === 'rsi' && (
+                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full cursor-crosshair select-none touch-none" onTouchStart={handleSubChartTouch} onTouchMove={handleSubChartTouch} onTouchEnd={handleChartTouchEnd} onTouchCancel={handleChartTouchEnd} style={{ touchAction: "none" }}>
+                      {(() => {
+                        const lastCandle = candles[candles.length - 1];
+                        const activeCandle = hoveredCandle || lastCandle;
+                        const activeRsi = (activeCandle?.rsi !== undefined && activeCandle?.rsi !== null) ? activeCandle.rsi : 50;
+                        return (
+                          <>
+                            {/* Overbought / Oversold Zones */}
+                            <rect x={padding.left} y={10} width={chartWidth - padding.left - padding.right} height={20} fill="#f43f5e" fillOpacity={0.04} />
+                            <line x1={padding.left} y1={30} x2={chartWidth - padding.right} y2={30} stroke="#f43f5e" strokeDasharray="3 3" strokeOpacity={0.6} />
+                            <text x={padding.left + 4} y={26} fill="#f43f5e" fontSize="8" fontFamily="monospace" fontWeight="bold">OB 70</text>
+
+                            <line x1={padding.left} y1={50} x2={chartWidth - padding.right} y2={50} stroke="#475569" strokeDasharray="2 2" strokeOpacity={0.4} />
+                            <text x={padding.left + 4} y={48} fill="#64748b" fontSize="7" fontFamily="monospace">Mid 50</text>
+
+                            <rect x={padding.left} y={70} width={chartWidth - padding.left - padding.right} height={25} fill="#10b981" fillOpacity={0.04} />
+                            <line x1={padding.left} y1={70} x2={chartWidth - padding.right} y2={70} stroke="#10b981" strokeDasharray="3 3" strokeOpacity={0.6} />
+                            <text x={padding.left + 4} y={82} fill="#10b981" fontSize="8" fontFamily="monospace" fontWeight="bold">OS 30</text>
+
+                            <text x={chartWidth - padding.right - 10} y={16} fill="#94a3b8" fontSize="8" fontFamily="monospace" textAnchor="end">
+                              RSI (14): <tspan fill={activeRsi >= 70 ? '#f43f5e' : activeRsi <= 30 ? '#10b981' : '#38bdf8'} fontWeight="bold">{activeRsi.toFixed(1)}</tspan>
+                              {activeRsi >= 70 ? ' (Overbought)' : activeRsi <= 30 ? ' (Oversold)' : ' (Neutral)'}
+                              {hoveredCandle && ` (${activeCandle?.time})`}
+                            </text>
+                            <path
+                              d={candles.reduce((acc, c, i) => {
+                                const r = (c.rsi !== undefined && c.rsi !== null) ? c.rsi : 50;
+                                return `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${100 - r}`;
+                              }, '')}
+                              fill="none"
+                              stroke="#38bdf8"
+                              strokeWidth="1.8"
+                            />
+                          </>
+                        );
+                      })()}
+                    </svg>
+                  )}
+
+                  {activeSubChart === 'macd' && (
+                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full cursor-crosshair select-none touch-none" onTouchStart={handleSubChartTouch} onTouchMove={handleSubChartTouch} onTouchEnd={handleChartTouchEnd} onTouchCancel={handleChartTouchEnd} style={{ touchAction: "none" }}>
+                      {(() => {
+                        const histVals = candles.map(c => c.macd_histogram || 0);
+                        const macdLine = candles.map(c => c.macd || 0);
+                        const signalLine = candles.map(c => c.macd_signal || 0);
+                        const allVals = [...histVals, ...macdLine, ...signalLine];
+                        const minV = Math.min(...allVals, 0);
+                        const maxV = Math.max(...allVals, 0);
+                        const range = (maxV - minV) || 0.001;
+                        const norm = (v) => 90 - ((v - minV) / range) * 80;
+                        const zeroY = Math.max(10, Math.min(90, norm(0)));
+                        const lastCandle = candles[candles.length - 1];
+                        const activeCandle = hoveredCandle || lastCandle;
+                        return (
+                          <>
+                            {/* Top info badge */}
+                            <text x={padding.left + 4} y={14} fill="#94a3b8" fontSize="8" fontFamily="monospace" fontWeight="bold">
+                              MACD: <tspan fill="#38bdf8">{(activeCandle?.macd || 0).toFixed(2)}</tspan> | Sig: <tspan fill="#f59e0b">{(activeCandle?.macd_signal || 0).toFixed(2)}</tspan> | Hist: <tspan fill={(activeCandle?.macd_histogram || 0) >= 0 ? '#10b981' : '#f43f5e'}>{(activeCandle?.macd_histogram || 0).toFixed(2)}</tspan>
+                              {hoveredCandle && ` (${activeCandle?.time})`}
+                            </text>
+                            {/* Zero line */}
+                            <line x1={padding.left} y1={zeroY} x2={chartWidth - padding.right} y2={zeroY} stroke="#64748b" strokeOpacity={0.6} strokeDasharray="2 2" />
+                            {/* 4-color Histogram bars */}
+                            {candles.map((c, i) => {
+                              const h = c.macd_histogram || 0;
+                              const prevH = i > 0 ? (candles[i-1].macd_histogram || 0) : 0;
+                              const isPos = h >= 0;
+                              const isGrowing = isPos ? h >= prevH : h <= prevH;
+                              const barColor = isPos ? (isGrowing ? '#10b981' : '#34d399') : (isGrowing ? '#f43f5e' : '#fb7185');
+                              const barOpacity = isGrowing ? 0.9 : 0.45;
+                              const y1 = norm(h);
+                              const y2 = zeroY;
+                              return (
+                                <rect
+                                  key={i}
+                                  x={xScale(i) - candleWidth / 2}
+                                  y={Math.min(y1, y2)}
+                                  width={candleWidth}
+                                  height={Math.max(Math.abs(y1 - y2), 0.5)}
+                                  fill={barColor}
+                                  fillOpacity={barOpacity}
+                                  rx={0.5}
+                                />
+                              );
+                            })}
+                            {/* MACD Line */}
+                            <path
+                              d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${norm(c.macd || 0)}`, '')}
+                              fill="none" stroke="#38bdf8" strokeWidth="1.8"
+                            />
+                            {/* Signal Line */}
+                            <path
+                              d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${norm(c.macd_signal || 0)}`, '')}
+                              fill="none" stroke="#f59e0b" strokeWidth="1.4" strokeDasharray="3 2"
+                            />
+                          </>
+                        );
+                      })()}
+                    </svg>
+                  )}
+
+                  {activeSubChart === 'cvd' && (
+                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full cursor-crosshair select-none touch-none" onTouchStart={handleSubChartTouch} onTouchMove={handleSubChartTouch} onTouchEnd={handleChartTouchEnd} onTouchCancel={handleChartTouchEnd} style={{ touchAction: "none" }}>
+                      {(() => {
+                        const cvdVals = candles.map(c => c.cum_delta || 0);
+                        const minCvd = Math.min(...cvdVals, 0);
+                        const maxCvd = Math.max(...cvdVals, 1);
+                        const cvdRange = (maxCvd - minCvd) || 1;
+                        const zeroY = Math.max(10, Math.min(90, 90 - ((0 - minCvd) / cvdRange) * 80));
+                        const lastCandle = candles[candles.length - 1];
+                        const activeCandle = hoveredCandle || lastCandle;
+                        return (
+                          <>
+                            <text x={padding.left + 4} y={14} fill="#94a3b8" fontSize="8" fontFamily="monospace" fontWeight="bold">
+                              Volume Delta Proxy (Price-Location Model): <tspan fill={(activeCandle?.cum_delta || 0) >= 0 ? '#eab308' : '#f43f5e'} fontWeight="bold">{(activeCandle?.cum_delta || 0) >= 0 ? '+' : ''}{(activeCandle?.cum_delta || 0).toLocaleString()} shares</tspan>
+                              {hoveredCandle && ` (${activeCandle?.time})`}
+                            </text>
+                            <line x1={padding.left} y1={zeroY} x2={chartWidth - padding.right} y2={zeroY} stroke="#64748b" strokeOpacity={0.6} strokeDasharray="2 2" />
+                            <path
+                              d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${90 - (((c.cum_delta || 0) - minCvd) / cvdRange) * 80}`, '')}
+                              fill="none"
+                              stroke="#eab308"
+                              strokeWidth="2"
+                            />
+                          </>
+                        );
+                      })()}
+                    </svg>
+                  )}
+
+                  {activeSubChart === 'atr' && (
+                    <svg viewBox={`0 0 ${chartWidth} 100`} className="w-full h-full cursor-crosshair select-none touch-none" onTouchStart={handleSubChartTouch} onTouchMove={handleSubChartTouch} onTouchEnd={handleChartTouchEnd} onTouchCancel={handleChartTouchEnd} style={{ touchAction: "none" }}>
+                      {(() => {
+                        const atrVals = candles.map(c => c.atr || 0).filter(v => v > 0);
+                        const minAtr = atrVals.length ? Math.min(...atrVals) * 0.85 : 0;
+                        const maxAtr = atrVals.length ? Math.max(...atrVals) * 1.15 : 1;
+                        const atrRange = (maxAtr - minAtr) || 1;
+                        const lastCandle = candles[candles.length - 1];
+                        const activeCandle = hoveredCandle || lastCandle;
+                        const currentAtr = activeCandle?.atr || data?.atr || 0;
+                        const atrPct = data?.current_price > 0 ? ((currentAtr / data.current_price) * 100).toFixed(2) : '0';
+                        return (
+                          <>
+                            <text x={padding.left + 4} y={14} fill="#94a3b8" fontSize="8" fontFamily="monospace" fontWeight="bold">
+                              Average True Range (14): <tspan fill="#f59e0b" fontWeight="bold">{currSym}{currentAtr} ({atrPct}% Volatility)</tspan>
+                              <tspan fill="#cbd5e1" dx={8}>Dynamic 1.5× Stop Buffer: ±{currSym}{(currentAtr * 1.5).toFixed(2)}</tspan>
+                              {hoveredCandle && ` (${activeCandle?.time})`}
+                            </text>
+                            {/* ATR Area */}
+                            <path
+                              d={`${candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${90 - (((c.atr || 0) - minAtr) / atrRange) * 70}`, '')} L ${xScale(candles.length - 1)} 90 L ${xScale(0)} 90 Z`}
+                              fill="rgba(245, 158, 11, 0.12)"
+                            />
+                            {/* ATR Line */}
+                            <path
+                              d={candles.reduce((acc, c, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${xScale(i)} ${90 - (((c.atr || 0) - minAtr) / atrRange) * 70}`, '')}
+                              fill="none"
+                              stroke="#f59e0b"
+                              strokeWidth="2"
+                            />
+                          </>
+                        );
+                      })()}
+                    </svg>
+                  )}
+                </div>
+              </div>
+            </div>
+              </div>
+            </div>
+          )}
+
+          {mobileTab === 'plan' && (
+            <div className="space-y-4">
+        {data?.battle_plan?.entry_price && (
+          <div className="bg-gradient-to-r from-slate-900 via-slate-900/95 to-slate-950 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800/80">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-gradient-to-tr from-cyan-500/20 to-purple-500/20 border border-cyan-500/30 rounded-2xl shadow-sm">
+                  <Target className="w-5 h-5 text-cyan-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-white tracking-wide">
+                      Actionable Intraday Battle Plan: <span className="text-cyan-300">{data.battle_plan.setup_name}</span>
+                    </h3>
+                    <InfoBadge infoKey="intraday_battle_plan" />
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Pre-calculated institutional entry, hard stop-loss, and multi-tier profit targets
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={handleCopyPlan}
+                className="px-4 py-2 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 rounded-xl text-xs font-semibold transition flex items-center gap-2 shrink-0 self-start sm:self-auto shadow-sm"
+              >
+                {planCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                {planCopied ? 'Copied to Clipboard!' : 'Copy Plan for Broker / Journal'}
+              </button>
+            </div>
+
+            {/* 4 Core Execution Pods */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 mt-4 text-xs font-mono">
+              {/* Entry */}
+              <div className="p-3.5 bg-gradient-to-b from-slate-950 to-slate-950/80 border border-cyan-500/30 rounded-2xl shadow-[0_0_12px_rgba(56,189,248,0.06)] hover:border-cyan-500/50 transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-cyan-400 font-bold font-sans uppercase tracking-wider">ENTRY TRIGGER</span>
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                </div>
+                <span className="text-lg font-bold text-white block mt-1">{currSym}{data.battle_plan.entry_price}</span>
+                <p className="text-[10px] text-slate-400 mt-1 font-sans truncate">{data.battle_plan.trigger_rule}</p>
+              </div>
+
+              {/* Stop Loss */}
+              <div className="p-3.5 bg-gradient-to-b from-slate-950 to-slate-950/80 border border-rose-500/40 rounded-2xl shadow-[0_0_12px_rgba(244,63,94,0.06)] hover:border-rose-500/60 transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-rose-400 font-bold font-sans uppercase tracking-wider">HARD STOP LOSS</span>
+                  <span className="w-2 h-2 rounded-full bg-rose-400" />
+                </div>
+                <span className="text-lg font-bold text-rose-400 block mt-1">{currSym}{data.battle_plan.stop_loss}</span>
+                <p className="text-[10px] text-slate-400 mt-1 font-sans">Risk: {currSym}{data.battle_plan.risk_per_share} / share</p>
+              </div>
+
+              {/* Target 1 */}
+              <div className="p-3.5 bg-gradient-to-b from-slate-950 to-slate-950/80 border border-emerald-500/40 rounded-2xl shadow-[0_0_12px_rgba(16,185,129,0.06)] hover:border-emerald-500/60 transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-emerald-400 font-bold font-sans uppercase tracking-wider">TARGET 1 (1.5R)</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                </div>
+                <span className="text-lg font-bold text-emerald-400 block mt-1">{currSym}{data.battle_plan.target_1}</span>
+                <p className="text-[10px] text-slate-400 mt-1 font-sans">Scale out 50% & trail stop</p>
+              </div>
+
+              {/* Target 2 */}
+              <div className="p-3.5 bg-gradient-to-b from-slate-950 to-slate-950/80 border border-purple-500/40 rounded-2xl shadow-[0_0_12px_rgba(168,85,247,0.06)] hover:border-purple-500/60 transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-purple-400 font-bold font-sans uppercase tracking-wider">TARGET 2 (2.5R)</span>
+                  <span className="w-2 h-2 rounded-full bg-purple-400" />
+                </div>
+                <span className="text-lg font-bold text-purple-300 block mt-1">{currSym}{data.battle_plan.target_2}</span>
+                <p className="text-[10px] text-slate-400 mt-1 font-sans">Full runner exit target</p>
+              </div>
+            </div>
+
+            {/* Visual Risk:Reward Road Map Strip */}
+            <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[11px] font-mono text-slate-400">
+              <span className="text-rose-400 font-semibold">🛑 Stop: {currSym}{data.battle_plan.stop_loss}</span>
+              <div className="flex-1 mx-4 h-1.5 bg-slate-800 rounded-full overflow-hidden flex">
+                <div className="w-1/4 bg-rose-500/60" />
+                <div className="w-2/4 bg-emerald-500/60" />
+                <div className="w-1/4 bg-purple-500/60" />
+              </div>
+              <span className="text-purple-300 font-semibold">⚖️ {data.battle_plan.rr_ratio || '1:2.0 (Weighted)'}</span>
+              <span className="text-emerald-400 font-semibold ml-3">🎯 T2: {currSym}{data.battle_plan.target_2}</span>
+            </div>
+          </div>
+        )}
+              {data && (
+                <div className="space-y-4">
+                {/* Triple-Screen Confluence Matrix */}
+                <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 shadow-sm">
+                          <Layers className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-white tracking-wide">
+                            Triple-Screen Confluence Matrix
+                          </h3>
+                          <p className="text-[11px] text-slate-400">Elder 3-tier trend & momentum validation</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="px-2.5 py-1 rounded-xl bg-cyan-500/10 border border-cyan-500/30 font-mono font-bold text-xs text-cyan-300">
+                          {data.multi_timeframe?.confluence_score}% Fit
+                        </div>
+                        <InfoBadge infoKey="triple_screen_confluence" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2.5 text-center mb-4 font-mono text-xs">
+                      {data.multi_timeframe?.screens?.map((s, idx) => (
+                        <div key={idx} className="p-3 bg-slate-950/80 border border-slate-800/80 rounded-2xl hover:border-slate-700 transition">
+                          <span className="text-[10px] text-slate-400 block font-sans uppercase font-bold tracking-wider mb-1">
+                            {s.timeframe}
+                          </span>
+                          <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full my-1 ${
+                            s.trend === 'BULLISH'
+                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${s.trend === 'BULLISH' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400 animate-pulse'}`} />
+                            {s.trend}
+                          </span>
+                          <span className="text-[10px] text-slate-400 block font-mono mt-1">
+                            RSI: <strong className="text-slate-200">{s.rsi}</strong>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-slate-950/90 border border-slate-800/80 flex items-center justify-between text-xs">
+                    <span className="text-slate-400 font-medium flex items-center gap-1.5">
+                      <Target className="w-3.5 h-3.5 text-cyan-400" />
+                      Tactical Verdict:
+                    </span>
+                    <span className={`font-bold font-mono px-2.5 py-0.5 rounded-lg border text-xs ${
+                      data.multi_timeframe?.confluence_score >= 70
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                        : data.multi_timeframe?.confluence_score <= 30
+                        ? 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+                        : 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                    }`}>
+                      {data.multi_timeframe?.confluence_bias}
+                    </span>
+                  </div>
+                </div>
+                {/* Candle Volume Pressure Proxy */}
+                <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shadow-sm">
+                          <Flame className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-white tracking-wide">
+                            Candle Volume Pressure Proxy
+                          </h3>
+                          <p className="text-[11px] text-slate-400">Intra-bar price location estimation (Proxy)</p>
+                        </div>
+                      </div>
+                      <InfoBadge infoKey="order_flow_delta" />
+                    </div>
+
+                    <div className="p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800/80 space-y-3">
+                      <div className="flex items-center justify-between text-xs font-mono">
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold">
+                          Buyers: {data.order_flow?.buy_pressure_pct ?? data.volume_delta_proxy?.buy_pressure_pct}%
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/20 text-rose-400 font-bold">
+                          Sellers: {data.order_flow?.sell_pressure_pct ?? data.volume_delta_proxy?.sell_pressure_pct}%
+                        </span>
+                      </div>
+
+                      <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden flex p-0.5 border border-slate-800">
+                        <div
+                          className="bg-gradient-to-r from-emerald-600 to-emerald-400 h-full rounded-l-full transition-all duration-500"
+                          style={{ width: `${data.order_flow?.buy_pressure_pct ?? data.volume_delta_proxy?.buy_pressure_pct}%` }}
+                        />
+                        <div
+                          className="bg-gradient-to-r from-rose-500 to-rose-600 h-full rounded-r-full transition-all duration-500"
+                          style={{ width: `${data.order_flow?.sell_pressure_pct ?? data.volume_delta_proxy?.sell_pressure_pct}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono pt-1">
+                        <span>Net Delta: <strong className={(data.order_flow?.net_delta ?? data.volume_delta_proxy?.net_delta) >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                          {(data.order_flow?.net_delta ?? data.volume_delta_proxy?.net_delta) >= 0 ? '+' : ''}{(data.order_flow?.net_delta ?? data.volume_delta_proxy?.net_delta)?.toLocaleString()} shares
+                        </strong></span>
+                        <span>Total Vol: <strong className="text-white">{data.volume?.toLocaleString()}</strong></span>
+                      </div>
+                      <p className="text-[9px] text-slate-500 font-mono italic text-center pt-1 border-t border-slate-800/40">
+                        * Modeled via candle close-to-range location; not Level 2 tick order flow.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3.5 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                    <span className="flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-amber-400" />
+                      Gap Directive:
+                    </span>
+                    <span className="font-mono text-cyan-300 font-bold bg-cyan-500/10 px-2 py-0.5 rounded-lg border border-cyan-500/25">
+                      {data.gap_analysis?.directive}
+                    </span>
+                  </div>
+                </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {mobileTab === 'flow' && (
+            <div className="space-y-4">
+            {data?.volume_profile && (
+              <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shadow-sm">
+                      <BarChart2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white tracking-wide">
+                        Volume Profile (VPVR)
+                      </h3>
+                      <p className="text-[11px] text-slate-400">Horizontal liquidity & Value Area distribution</p>
+                    </div>
+                  </div>
+                  <InfoBadge infoKey="volume_profile" />
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-xs font-mono mb-3">
+                  <div className="p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+                    <span className="text-[9px] text-amber-400 block font-bold font-sans uppercase tracking-wider">POC Price</span>
+                    <span className="text-sm font-bold text-white block mt-0.5">{currSym}{data.volume_profile.poc_price}</span>
+                    <span className="text-[9px] text-amber-400/80 font-sans block mt-0.5">High Volume Node</span>
+                  </div>
+                  <div className="p-2.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/30">
+                    <span className="text-[9px] text-cyan-400 block font-bold font-sans uppercase tracking-wider">VAL (70%)</span>
+                    <span className="text-sm font-bold text-slate-200 block mt-0.5">{currSym}{data.volume_profile.val_price}</span>
+                    <span className="text-[9px] text-slate-400 font-sans block mt-0.5">Value Area Floor</span>
+                  </div>
+                  <div className="p-2.5 rounded-2xl bg-purple-500/10 border border-purple-500/30">
+                    <span className="text-[9px] text-purple-400 block font-bold font-sans uppercase tracking-wider">VAH (70%)</span>
+                    <span className="text-sm font-bold text-slate-200 block mt-0.5">{currSym}{data.volume_profile.vah_price}</span>
+                    <span className="text-[9px] text-slate-400 font-sans block mt-0.5">Value Area Ceiling</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-slate-800">
+                  {data.volume_profile.profile.map((b, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex items-center gap-2 text-[10px] font-mono py-1 px-2 rounded-xl transition border ${
+                        b.is_poc
+                          ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 font-bold shadow-[0_0_10px_rgba(245,158,11,0.15)]'
+                          : b.in_value_area
+                          ? 'bg-slate-950/70 border-slate-800/80 text-slate-300 hover:border-slate-700'
+                          : 'bg-transparent border-transparent text-slate-500 opacity-60'
+                      }`}
+                    >
+                      <span className="w-14 shrink-0 font-bold">{b.price.toFixed(2)}</span>
+                      <div className="flex-1 bg-slate-900/80 h-2 rounded-full overflow-hidden flex p-0.5 border border-slate-800/40">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            b.is_poc
+                              ? 'bg-gradient-to-r from-amber-500 to-amber-300 shadow-[0_0_6px_rgba(245,158,11,0.5)]'
+                              : b.in_value_area
+                              ? 'bg-gradient-to-r from-cyan-600 to-cyan-400'
+                              : 'bg-slate-700'
+                          }`}
+                          style={{ width: `${Math.min(b.pct_of_total * 4, 100)}%` }}
+                        />
+                      </div>
+                      {b.is_poc ? (
+                        <span className="text-[9px] bg-amber-400 text-black px-1.5 py-0.2 rounded font-black shrink-0 tracking-wider">
+                          POC
+                        </span>
+                      ) : b.in_value_area ? (
+                        <span className="text-[8px] text-cyan-400/70 shrink-0 font-sans">
+                          VA
+                        </span>
+                      ) : (
+                        <span className="w-5 shrink-0" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Value Area Volume:</span>
+                  <span className="font-mono text-cyan-300 font-semibold">70% Standard Deviation</span>
+                </div>
+              </div>
+            )}
+            {(data?.pivots?.camarilla || data?.pivots?.cpr) && (
+              <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 shadow-sm">
+                      <Compass className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white tracking-wide">
+                        CPR &amp; Institutional Pivots
+                      </h3>
+                      <p className="text-[11px] text-slate-400">Floor equilibrium &amp; mean-reversion boundaries</p>
+                    </div>
+                  </div>
+                  <InfoBadge infoKey="camarilla_pivots" />
+                </div>
+
+                {/* Central Pivot Range (CPR) Box */}
+                {data.pivots?.cpr && (
+                  <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-br from-indigo-950/40 via-indigo-950/20 to-slate-950/60 border border-indigo-500/30 space-y-2.5 shadow-inner">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-indigo-300 font-sans flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                        Central Pivot Range (CPR)
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase border ${
+                        data.pivots.cpr.classification === 'NARROW'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.2)]'
+                          : data.pivots.cpr.classification === 'WIDE'
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-[0_0_8px_rgba(245,158,11,0.2)]'
+                          : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                      }`}>
+                        {data.pivots.cpr.classification} CPR ({data.pivots.cpr.width_pct}%)
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-center font-mono text-xs">
+                      <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800">
+                        <span className="text-[9px] text-slate-400 block font-sans uppercase font-bold">TC (Top)</span>
+                        <span className="font-bold text-indigo-300 mt-0.5 block">{currSym}{data.pivots.cpr.tc}</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800">
+                        <span className="text-[9px] text-slate-400 block font-sans uppercase font-bold">Pivot (P)</span>
+                        <span className="font-bold text-white mt-0.5 block">{currSym}{data.pivots.cpr.pivot}</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800">
+                        <span className="text-[9px] text-slate-400 block font-sans uppercase font-bold">BC (Bottom)</span>
+                        <span className="font-bold text-purple-300 mt-0.5 block">{currSym}{data.pivots.cpr.bc}</span>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-300 leading-snug bg-slate-950/60 p-2 rounded-xl border border-slate-800/60">
+                      💡 {data.pivots.cpr.description}
+                    </p>
+                  </div>
+                )}
+
+                {/* Camarilla Pivots Stack */}
+                <div className="space-y-2 text-xs font-mono">
+                  {/* H4 Breakout */}
+                  <div className="flex items-center justify-between p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 hover:border-emerald-500/40 transition">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-emerald-400">H4 Breakout Target</span>
+                        <span className="text-[9px] font-sans px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold uppercase">Acceleration</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Bullish continuation trigger</p>
+                    </div>
+                    <span className="text-sm font-bold text-white">{currSym}{data.pivots.camarilla.h4}</span>
+                  </div>
+
+                  {/* H3 Resistance */}
+                  <div className="flex items-center justify-between p-2.5 rounded-2xl bg-rose-500/10 border border-rose-500/25 hover:border-rose-500/40 transition">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-rose-400">H3 Short Resistance</span>
+                        <span className="text-[9px] font-sans px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 font-bold uppercase">Reversal</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Mean-reversion ceiling</p>
+                    </div>
+                    <span className="text-sm font-bold text-white">{currSym}{data.pivots.camarilla.h3}</span>
+                  </div>
+
+                  {/* Central Floor Pivot (P) */}
+                  <div className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-950/90 border border-slate-800 hover:border-slate-700 transition">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-slate-200">Central Floor Pivot (P)</span>
+                        <span className="text-[9px] font-sans px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-bold uppercase">Equilibrium</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Session baseline balance point</p>
+                    </div>
+                    <span className="text-sm font-bold text-cyan-300">{currSym}{data.pivots.floor.p}</span>
+                  </div>
+
+                  {/* L3 Support */}
+                  <div className="flex items-center justify-between p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 hover:border-emerald-500/40 transition">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-emerald-400">L3 Long Support</span>
+                        <span className="text-[9px] font-sans px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold uppercase">Reversal</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Mean-reversion floor</p>
+                    </div>
+                    <span className="text-sm font-bold text-white">{currSym}{data.pivots.camarilla.l3}</span>
+                  </div>
+
+                  {/* L4 Breakdown */}
+                  <div className="flex items-center justify-between p-2.5 rounded-2xl bg-rose-500/10 border border-rose-500/25 hover:border-rose-500/40 transition">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-rose-400">L4 Breakdown Target</span>
+                        <span className="text-[9px] font-sans px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 font-bold uppercase">Acceleration</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Bearish expansion trigger</p>
+                    </div>
+                    <span className="text-sm font-bold text-white">{currSym}{data.pivots.camarilla.l4}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+                {/* Candle Volume Pressure Proxy */}
+                <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shadow-sm">
+                          <Flame className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-white tracking-wide">
+                            Candle Volume Pressure Proxy
+                          </h3>
+                          <p className="text-[11px] text-slate-400">Intra-bar price location estimation (Proxy)</p>
+                        </div>
+                      </div>
+                      <InfoBadge infoKey="order_flow_delta" />
+                    </div>
+
+                    <div className="p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800/80 space-y-3">
+                      <div className="flex items-center justify-between text-xs font-mono">
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold">
+                          Buyers: {data.order_flow?.buy_pressure_pct ?? data.volume_delta_proxy?.buy_pressure_pct}%
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/20 text-rose-400 font-bold">
+                          Sellers: {data.order_flow?.sell_pressure_pct ?? data.volume_delta_proxy?.sell_pressure_pct}%
+                        </span>
+                      </div>
+
+                      <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden flex p-0.5 border border-slate-800">
+                        <div
+                          className="bg-gradient-to-r from-emerald-600 to-emerald-400 h-full rounded-l-full transition-all duration-500"
+                          style={{ width: `${data.order_flow?.buy_pressure_pct ?? data.volume_delta_proxy?.buy_pressure_pct}%` }}
+                        />
+                        <div
+                          className="bg-gradient-to-r from-rose-500 to-rose-600 h-full rounded-r-full transition-all duration-500"
+                          style={{ width: `${data.order_flow?.sell_pressure_pct ?? data.volume_delta_proxy?.sell_pressure_pct}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono pt-1">
+                        <span>Net Delta: <strong className={(data.order_flow?.net_delta ?? data.volume_delta_proxy?.net_delta) >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                          {(data.order_flow?.net_delta ?? data.volume_delta_proxy?.net_delta) >= 0 ? '+' : ''}{(data.order_flow?.net_delta ?? data.volume_delta_proxy?.net_delta)?.toLocaleString()} shares
+                        </strong></span>
+                        <span>Total Vol: <strong className="text-white">{data.volume?.toLocaleString()}</strong></span>
+                      </div>
+                      <p className="text-[9px] text-slate-500 font-mono italic text-center pt-1 border-t border-slate-800/40">
+                        * Modeled via candle close-to-range location; not Level 2 tick order flow.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3.5 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                    <span className="flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-amber-400" />
+                      Gap Directive:
+                    </span>
+                    <span className="font-mono text-cyan-300 font-bold bg-cyan-500/10 px-2 py-0.5 rounded-lg border border-cyan-500/25">
+                      {data.gap_analysis?.directive}
+                    </span>
+                  </div>
+                </div>
+            </div>
+          )}
+
+          {mobileTab === 'risk' && (
+            <div className="space-y-4">
+          {/* Position Sizing & Friction Calculator */}
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 shadow-sm">
+                    <Scale className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white tracking-wide">
+                      Real-Life Brokerage, STT &amp; Friction Calculator
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Statutory charges, exact position sizing &amp; SEBI breakeven spread check
+                    </p>
+                  </div>
+                </div>
+                <InfoBadge infoKey="brokerage_friction_breakeven" />
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs mb-4">
+                <div>
+                  <label className="text-slate-400 block mb-1 font-medium">Trading Capital ({currSym})</label>
+                  <input
+                    type="number"
+                    value={calcCapital}
+                    onChange={(e) => setCalcCapital(e.target.value)}
+                    className="w-full bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500 transition shadow-inner"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block mb-1 font-medium">Risk % Per Trade</label>
+                  <select
+                    value={calcRiskPct}
+                    onChange={(e) => setCalcRiskPct(Number(e.target.value))}
+                    className="w-full bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500 transition shadow-inner"
+                  >
+                    <option value={0.5}>0.5% (Conservative)</option>
+                    <option value={1.0}>1.0% (Institutional Standard)</option>
+                    <option value={2.0}>2.0% (Aggressive)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block mb-1 font-medium">Margin Leverage</label>
+                  <select
+                    value={calcLeverage}
+                    onChange={(e) => setCalcLeverage(Number(e.target.value))}
+                    className="w-full bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500 transition shadow-inner"
+                  >
+                    <option value={1}>1× (Cash CNC)</option>
+                    <option value={3}>3× (Conservative Margin)</option>
+                    <option value={5}>5× (MIS Intraday)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block mb-1 font-medium">Entry Price ({currSym})</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    value={calcEntry}
+                    onChange={(e) => setCalcEntry(e.target.value)}
+                    className="w-full bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500 transition shadow-inner"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block mb-1 font-medium">Stop Loss ({currSym})</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    value={calcStop}
+                    onChange={(e) => setCalcStop(e.target.value)}
+                    className="w-full bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-cyan-500 transition shadow-inner"
+                  />
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (data?.current_price) {
+                        setCalcEntry(data.current_price.toString());
+                        setCalcStop(data.supertrend?.toString() || (data.current_price * 0.99).toFixed(2));
+                      }
+                    }}
+                    className="w-full py-2 px-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-semibold rounded-xl text-xs transition border border-slate-700 shadow-sm flex items-center justify-center gap-1.5"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Sync Live Price</span>
+                  </button>
+                </div>
+              </div>
+
+              {sizingResults ? (
+                <div className="p-4 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-3.5 shadow-inner">
+                  <div className="grid grid-cols-3 gap-2.5 text-center font-mono">
+                    <div className="p-3 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 hover:border-slate-700 transition">
+                      <span className="text-[10px] text-slate-400 block font-sans uppercase font-bold tracking-wider">EXACT SHARES</span>
+                      <span className="text-xl font-bold text-cyan-300 block mt-1">{sizingResults.exactShares}</span>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 hover:border-slate-700 transition">
+                      <span className="text-[10px] text-slate-400 block font-sans uppercase font-bold tracking-wider">MARGIN NEEDED</span>
+                      <span className="text-xl font-bold text-white block mt-1">{currSym}{sizingResults.marginRequired?.toLocaleString()}</span>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 hover:border-slate-700 transition">
+                      <span className="text-[10px] text-slate-400 block font-sans uppercase font-bold tracking-wider">TOTAL FRICTION</span>
+                      <span className="text-xl font-bold text-amber-400 block mt-1">{currSym}{sizingResults.totalCharges}</span>
+                    </div>
+                  </div>
+
+                  {/* Breakeven Spread Alert */}
+                  <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs font-mono">
+                    <span className="text-slate-300 font-sans flex items-center gap-1.5 font-medium">
+                      ⚠️ Breakeven Spread Needed:
+                    </span>
+                    <span className="text-amber-400 font-bold bg-amber-500/15 px-2.5 py-0.5 rounded-lg border border-amber-500/30">
+                      +{currSym}{sizingResults.breakevenMovePts} (+{sizingResults.breakevenMovePct}%)
+                    </span>
+                  </div>
+
+                  {/* Net Profit Table */}
+                  <div className="grid grid-cols-3 gap-2.5 pt-1 border-t border-slate-800/80 text-xs font-mono">
+                    {sizingResults.riskRewardTargets.map((t, idx) => (
+                      <div key={idx} className="p-2.5 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl hover:border-emerald-500/40 transition">
+                        <span className="text-[10px] text-emerald-400 block font-bold font-sans uppercase tracking-wider">{t.label}</span>
+                        <p className="text-sm font-bold text-white mt-0.5">{currSym}{t.price}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Gross: +{currSym}{t.gross?.toLocaleString()}</p>
+                        <p className={`text-[10px] font-bold mt-0.5 ${t.net >= 0 ? 'text-emerald-300' : 'text-rose-400'}`}>
+                          Net: {t.net >= 0 ? '+' : ''}{currSym}{t.net?.toLocaleString()}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-8 text-center text-slate-400 text-xs bg-slate-950/50 rounded-2xl border border-slate-800/80 leading-relaxed">
+                  Enter valid Entry and Stop Loss prices above to calculate exact position sizing, SEBI statutory friction, and in-pocket net profit.
+                </div>
+              )}
+            </div>
+          </div>
+        {true && (
+          <div className="bg-slate-900/90 border border-amber-500/30 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl shadow-amber-950/10">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shadow-sm">
+                  <Edit3 className="w-4 h-4 text-amber-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-white tracking-wide">
+                      Trader&apos;s Execution Scratchpad &amp; Mental Discipline Journal
+                    </h3>
+                    <InfoBadge infoKey="traders_scratchpad" />
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Live trade thesis, mental stops &amp; execution notes for <strong>{ticker}</strong> — auto-saved locally
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {notesSaved && (
+                  <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                    <CheckCircle2 className="w-3 h-3" /> Saved
+                  </span>
+                )}
+                <button
+                  onClick={addTimestampToNotes}
+                  className="px-2.5 py-1 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 flex items-center gap-1 transition shadow-sm"
+                  title="Insert current local time into journal"
+                >
+                  <Clock className="w-3 h-3 text-cyan-400" />
+                  <span>+ Timestamp</span>
+                </button>
+                <button
+                  onClick={() => {
+                    navigator.clipboard?.writeText(notes || '');
+                    setNotesCopied(true);
+                    setTimeout(() => setNotesCopied(false), 2500);
+                  }}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg border flex items-center gap-1 transition shadow-sm ${notesCopied ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'}`}
+                >
+                  {notesCopied ? <CheckCircle2 className="w-3 h-3" /> : <Copy className="w-3 h-3 text-slate-400" />}
+                  <span>{notesCopied ? 'Copied ✓' : 'Copy'}</span>
+                </button>
+                {clearNotesConfirm ? (
+                  <button
+                    onClick={() => {
+                      setNotes('');
+                      try { localStorage.removeItem('stockiq_intraday_notes_' + ticker); } catch (_) {}
+                      setClearNotesConfirm(false);
+                    }}
+                    className="px-2.5 py-1 text-xs font-bold bg-rose-500/15 text-rose-400 rounded-lg border border-rose-500/30 transition shadow-sm"
+                  >
+                    Confirm?
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setClearNotesConfirm(true)}
+                    onBlur={() => setTimeout(() => setClearNotesConfirm(false), 300)}
+                    className="p-1.5 text-slate-500 hover:text-rose-400 transition"
+                    title="Clear notes"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Discipline Tags */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-3 pb-2 text-[11px]">
+              <span className="text-slate-500 font-mono text-[10px] uppercase font-bold">Discipline Tags:</span>
+              {[
+                { tag: '📌 [VWAP Retest Entry]', color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/25' },
+                { tag: '🛑 [Hard Stop Violation Risk]', color: 'text-rose-400 bg-rose-500/10 border-rose-500/25' },
+                { tag: '🎯 [Camarilla Target Achieved]', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25' },
+                { tag: '⚠️ [Lunch Chop Slump - No Trade]', color: 'text-amber-400 bg-amber-500/10 border-amber-500/25' },
+                { tag: '⚡ [MIS Square-Off Approaching]', color: 'text-purple-400 bg-purple-500/10 border-purple-500/25' },
+              ].map((chip) => (
+                <button
+                  key={chip.tag}
+                  onClick={() => addTemplateTag(chip.tag)}
+                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-mono transition hover:scale-105 active:scale-95 ${chip.color}`}
+                >
+                  {chip.tag}
+                </button>
+              ))}
+            </div>
+
+            {/* Notepad Textarea */}
+            <textarea
+              value={notes}
+              onChange={handleNotesChange}
+              placeholder={`Write your trade hypothesis for ${ticker}...\nExample:\n- 10:15 AM: Bullish reclaim of VWAP with positive CVD (+15,000 delta).\n- Entry: At VWAP retest.\n- Stop Loss: 5m close below Supertrend.\n- Target: Camarilla H3 resistance.`}
+              className="w-full h-28 sm:h-32 bg-slate-950/90 border border-slate-800 rounded-2xl p-3.5 text-xs sm:text-sm font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500/60 shadow-inner resize-y leading-relaxed"
+            />
+          </div>
+        )}
+            </div>
+          )}
+
+          {mobileTab === 'scanner' && (
+            <div className="space-y-4">
+          {/* Real-Time Intraday Radar Scanner */}
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shadow-sm">
+                    <Zap className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white tracking-wide">
+                      Intraday Radar Scanner ({scannerMarket})
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Real-time momentum, ORB breakouts, and VWAP deviations
+                    </p>
+                  </div>
+                </div>
+                <InfoBadge infoKey="intraday_rvol" />
+              </div>
+
+              {scannerLoading ? (
+                <div className="h-48 flex flex-col items-center justify-center text-xs text-slate-400 gap-2">
+                  <RefreshCw className="w-5 h-5 animate-spin text-cyan-400" />
+                  <span>Scanning high-liquidity universe...</span>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-slate-800">
+                  {scannerData.map((item) => (
+                    <div
+                      key={item.ticker}
+                      onClick={() => changeTicker(item.ticker)}
+                      className={`flex items-center justify-between p-3 rounded-2xl border transition cursor-pointer ${
+                        ticker === item.ticker
+                          ? 'bg-cyan-500/15 border-cyan-500/50 shadow-[0_0_12px_rgba(56,189,248,0.15)]'
+                          : 'bg-slate-950/70 hover:bg-slate-950 border-slate-800/80 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-xl ${item.change_pct >= 0 ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'}`}>
+                          {item.change_pct >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-white">{item.ticker.split('.')[0]}</span>
+                            <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full border ${
+                              item.orb_status === 'BREAKOUT' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' :
+                              item.orb_status === 'BREAKDOWN' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
+                              'bg-slate-800/80 text-slate-400 border-slate-700'
+                            }`}>
+                              {item.orb_status}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                            VWAP Dist: <strong className={item.vwap_dist_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                              {item.vwap_dist_pct >= 0 ? '+' : ''}{item.vwap_dist_pct}%
+                            </strong>
+                            {item.rvol && (
+                              <span className={`ml-2 px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                                item.rvol >= 2
+                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                  : item.rvol >= 1.5
+                                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                                  : 'text-slate-500'
+                              }`}>
+                                RVOL {item.rvol}×
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right font-mono">
+                        <span className="text-sm font-bold text-white block">
+                          {item.currency_symbol}{item.price}
+                        </span>
+                        <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-md mt-0.5 ${
+                          item.change_pct >= 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'
+                        }`}>
+                          {item.change_pct >= 0 ? '+' : ''}{item.change_pct}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {scannerData.length === 0 && (
+                    <div className="h-32 flex flex-col items-center justify-center text-xs text-slate-500 gap-2 bg-slate-950/40 rounded-2xl border border-slate-800/60">
+                      <Zap className="w-5 h-5 text-slate-700" />
+                      <span>No high-momentum setups detected in current session.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 pt-3.5 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+              <span>Click any opportunity to load into terminal</span>
+              <button
+                onClick={fetchScanner}
+                className="text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1.5 text-xs bg-cyan-500/10 hover:bg-cyan-500/20 px-3 py-1 rounded-xl border border-cyan-500/30 transition"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Rescan Now
+              </button>
+            </div>
+          </div>
+          {/* Options Put-Call Ratio Widget */}
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 shadow-sm">
+                    <Scale className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white tracking-wide">
+                      Options Put-Call Ratio
+                    </h3>
+                    <p className="text-[11px] text-slate-400">Macro derivatives sentiment &amp; pain</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <InfoBadge infoKey="options_pcr" />
+                  <button
+                    onClick={fetchPCR}
+                    className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition border border-slate-700/60"
+                    title="Refresh PCR data"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${pcrLoading ? 'animate-spin text-cyan-400' : ''}`} />
+                  </button>
+                </div>
+              </div>
+
+              {pcrData ? (
+                pcrData.available === false ? (
+                  <div className="h-44 flex flex-col items-center justify-center p-4 text-center bg-slate-950/50 rounded-2xl border border-slate-800/80">
+                    <Scale className="w-7 h-7 text-slate-600 mb-2" />
+                    <span className="text-xs font-bold text-slate-300 mb-1">Derivatives Unavailable</span>
+                    <p className="text-[11px] text-slate-400 max-w-[220px] leading-relaxed">
+                      {pcrData.message || 'Options chain data is available for US securities and select NSE F&O listings.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3.5">
+                    {pcrData.is_model_approximation ? (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-300 font-mono">
+                        <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                        <span>Model Estimate: NIFTY Momentum &amp; VIX (Not Live Strike OI)</span>
+                      </div>
+                    ) : pcrData.provenance === 'NSE_OFFICIAL_OPTION_CHAIN' ? (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[10px] text-emerald-300 font-mono">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                        <span>NSE India Live Option Chain ({pcrData.benchmark_name})</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-purple-500/10 border border-purple-500/30 text-[10px] text-purple-300 font-mono">
+                        <Scale className="w-3 h-3 text-purple-400 shrink-0" />
+                        <span>{pcrData.benchmark_name || 'Live Options Chain'}</span>
+                      </div>
+                    )}
+
+                    <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800/80 flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-sans uppercase font-bold tracking-wider block">PCR OI Ratio</span>
+                        <div className="flex items-baseline gap-1.5 mt-0.5">
+                          <span className={`text-2xl font-black font-mono ${
+                            pcrData.color === 'bearish' ? 'text-rose-400' :
+                            pcrData.color === 'bullish' ? 'text-emerald-400' : 'text-amber-400'
+                          }`}>
+                            {pcrData.pcr_oi}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono">OI</span>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <span className={`inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase ${
+                          pcrData.color === 'bearish' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-[0_0_8px_rgba(244,63,94,0.2)]' :
+                          pcrData.color === 'bullish' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.2)]' :
+                          'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-[0_0_8px_rgba(245,158,11,0.2)]'
+                        }`}>
+                          {pcrData.sentiment?.replace('_', ' ')}
+                        </span>
+                        <p className="text-[10px] text-slate-400 mt-1 font-mono">{pcrData.expiry_date}</p>
+                      </div>
+                    </div>
+
+                    {/* Put vs Call OI distribution bar */}
+                    <div className="space-y-1.5 p-3 rounded-2xl bg-slate-950/60 border border-slate-800/60">
+                      <div className="flex justify-between text-[10px] font-mono">
+                        <span className="text-emerald-400 font-bold">Calls: {(pcrData.call_oi / 1000).toFixed(0)}K OI</span>
+                        <span className="text-rose-400 font-bold">Puts: {(pcrData.put_oi / 1000).toFixed(0)}K OI</span>
+                      </div>
+                      <div className="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden flex p-0.5 border border-slate-800">
+                        {(() => {
+                          const total = (pcrData.call_oi || 0) + (pcrData.put_oi || 0) || 1;
+                          const callPct = Math.round((pcrData.call_oi / total) * 100);
+                          return (
+                            <>
+                              <div className="bg-gradient-to-r from-emerald-600 to-emerald-400 h-full rounded-l-full transition-all duration-500" style={{ width: `${callPct}%` }} />
+                              <div className="bg-gradient-to-r from-rose-500 to-rose-600 h-full rounded-r-full transition-all duration-500" style={{ width: `${100 - callPct}%` }} />
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    {pcrData.max_pain_strike && (
+                      <div className="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
+                        <span className="text-slate-400 font-medium">Max Pain Strike:</span>
+                        <span className="font-bold font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/25">
+                          {currSym}{pcrData.max_pain_strike}
+                        </span>
+                      </div>
+                    )}
+
+                    <p className="text-[11px] text-slate-400 leading-snug pt-1">
+                      💡 {pcrData.sentiment_label}
+                    </p>
+                  </div>
+                )
+              ) : (
+                <div className="h-44 flex items-center justify-center text-xs text-slate-500">
+                  {pcrLoading ? 'Loading options chain...' : 'No options data available for this ticker'}
+                </div>
+              )}
+            </div>
+          </div>
+          {/* NSE Block / Bulk Deals */}
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-400 shadow-sm">
+                    <Flame className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white tracking-wide">
+                      NSE Block &amp; Bulk Deals
+                    </h3>
+                    <p className="text-[11px] text-slate-400">Institutional smart-money prints</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <InfoBadge infoKey="block_deals" />
+                  {blockDeals && ((blockDeals.block_deals?.length || 0) > 0 || (blockDeals.bulk_deals?.length || 0) > 0) && (
+                    <button
+                      onClick={exportBlockDealsCSV}
+                      title="Export NSE Block & Bulk Deals to CSV"
+                      className="text-xs font-semibold px-2.5 py-1 rounded-lg border bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700 hover:text-orange-400 hover:border-orange-500/40 transition flex items-center gap-1 cursor-pointer shadow-sm"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span className="hidden sm:inline">CSV</span>
+                    </button>
+                  )}
+                  {blockDealsLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />}
+                </div>
+              </div>
+
+              {scannerMarket !== 'IN' ? (
+                <div className="h-44 flex items-center justify-center text-xs text-slate-500 text-center p-4 bg-slate-950/40 rounded-2xl border border-slate-800/60">
+                  Block/Bulk deal feed is available for NSE (Indian market) securities only.
+                </div>
+              ) : blockDeals ? (
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-slate-800">
+                  {[...(blockDeals.block_deals || []).map(d => ({...d, type: 'BLOCK'})),
+                     ...(blockDeals.bulk_deals || []).map(d => ({...d, type: 'BULK'}))].slice(0, 15).map((deal, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => deal.symbol && changeTicker(deal.symbol + '.NS')}
+                      className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-950/70 border border-slate-800/70 hover:border-slate-700 cursor-pointer transition text-xs hover:bg-slate-950"
+                    >
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-white text-xs">{deal.symbol}</span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border uppercase ${
+                            deal.type === 'BLOCK'
+                              ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                              : 'bg-orange-500/20 text-orange-300 border-orange-500/40'
+                          }`}>
+                            {deal.type}
+                          </span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${
+                            deal.trade_type === 'B' || deal.trade_type === 'BUY'
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                              : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                          }`}>
+                            {deal.trade_type === 'B' || deal.trade_type === 'BUY' ? 'BUY' : 'SELL'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1 truncate max-w-[130px] font-sans">
+                          {deal.client || 'Undisclosed'}
+                        </p>
+                      </div>
+
+                      <div className="text-right font-mono">
+                        <span className="text-slate-200 font-bold block">{deal.quantity?.toLocaleString() || '—'}</span>
+                        <p className="text-[10px] text-slate-400 mt-0.5">@ ₹{deal.price || deal.avg_price || '—'}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {blockDeals.block_count === 0 && blockDeals.bulk_count === 0 && (
+                    <div className="h-44 flex flex-col items-center justify-center text-xs text-slate-400 p-4 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center gap-2">
+                      <span className="font-bold text-slate-300">Dedicated Window Schedule</span>
+                      <p className="text-[11px] text-slate-400 max-w-[230px] leading-relaxed">
+                        {blockDeals.next_window || 'Block Deals execute in two windows (08:45 AM & 02:05 PM IST). Bulk deals report at EOD.'}
+                      </p>
+                      <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-cyan-400 font-semibold mt-0.5">
+                        Status: {blockDeals.window_status || 'STANDBY'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="h-44 flex items-center justify-center text-xs text-slate-500">
+                  Loading NSE deal feed...
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Trade Log with Live P&L */}
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-3xl p-5 sm:p-6 backdrop-blur-md shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 shadow-sm">
+                    <BarChart2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white tracking-wide">
+                      Trade Log &amp; P&amp;L Tracker
+                    </h3>
+                    <p className="text-[11px] text-slate-400">Position ledger &amp; win rate telemetry</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <InfoBadge infoKey="trade_log" />
+                  {tradeLog.length > 0 && (
+                    <button
+                      onClick={exportTradeLogCSV}
+                      className="text-xs font-semibold px-2.5 py-1 rounded-lg border bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700 hover:text-emerald-400 hover:border-emerald-500/40 transition flex items-center gap-1 shadow-sm"
+                      title="Export logged trades as CSV spreadsheet"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span className="hidden sm:inline">CSV</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setTradeLogOpen(!tradeLogOpen)}
+                    className={`text-xs font-semibold px-3 py-1 rounded-xl border transition shadow-sm ${
+                      tradeLogOpen
+                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-[0_0_8px_rgba(56,189,248,0.2)] font-bold'
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                    }`}
+                  >
+                    {tradeLogOpen ? 'Hide Form' : '+ Log Trade'}
+                  </button>
+                </div>
+              </div>
+
+              {tradeLogOpen && (
+                <div className="mb-3.5 p-3.5 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-2.5 shadow-inner">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      value={newTrade.ticker}
+                      onChange={e => setNewTrade(p => ({...p, ticker: e.target.value}))}
+                      placeholder="Ticker (e.g. SBIN)"
+                      className="col-span-1 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 shadow-inner"
+                    />
+                    <select
+                      value={newTrade.direction}
+                      onChange={e => setNewTrade(p => ({...p, direction: e.target.value}))}
+                      className="col-span-1 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 shadow-inner"
+                    >
+                      <option value="LONG">LONG</option>
+                      <option value="SHORT">SHORT</option>
+                    </select>
+                    <input
+                      type="number" step="0.05"
+                      value={newTrade.entry}
+                      onChange={e => setNewTrade(p => ({...p, entry: e.target.value}))}
+                      placeholder="Entry price"
+                      className="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 shadow-inner"
+                    />
+                    <input
+                      type="number" step="0.05"
+                      value={newTrade.exit}
+                      onChange={e => setNewTrade(p => ({...p, exit: e.target.value}))}
+                      placeholder="Exit price (optional)"
+                      className="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 shadow-inner"
+                    />
+                    <input
+                      type="number"
+                      value={newTrade.qty}
+                      onChange={e => setNewTrade(p => ({...p, qty: e.target.value}))}
+                      placeholder="Qty / Shares"
+                      className="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 shadow-inner"
+                    />
+                    <button
+                      onClick={() => setNewTrade(p => ({...p, ticker: ticker.split('.')[0], entry: data?.current_price?.toString() || ''}))}
+                      className="bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl px-2 py-1.5 text-xs font-semibold transition border border-slate-700 shadow-sm"
+                    >
+                      Sync Live
+                    </button>
+                  </div>
+                  <button
+                    onClick={addTradeEntry}
+                    className="w-full py-2 bg-gradient-to-r from-cyan-500/20 to-emerald-500/20 hover:from-cyan-500/30 border border-cyan-500/40 text-cyan-300 font-bold rounded-xl text-xs transition shadow-sm"
+                  >
+                    Add to Trade Log
+                  </button>
+                </div>
+              )}
+
+              {/* Trade Log Summary */}
+              {tradeLog.length > 0 && (() => {
+                const closed = tradeLog.filter(t => t.status !== 'OPEN');
+                const totalPnl = closed.reduce((s, t) => s + (t.grossPnl || 0), 0);
+                const wins = closed.filter(t => t.status === 'WIN').length;
+                const winRate = closed.length ? Math.round((wins / closed.length) * 100) : 0;
+                return (
+                  <div className="flex items-center justify-between mb-3 px-2 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800/80">
+                    <span className="text-[11px] font-mono text-slate-400">
+                      {closed.length} closed · <strong className="text-white">{winRate}%</strong> W/R
+                    </span>
+                    <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded-lg border ${
+                      totalPnl >= 0
+                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                        : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                    }`}>
+                      Net P&amp;L: {totalPnl >= 0 ? '+' : ''}{currSym}{totalPnl.toLocaleString()}
+                    </span>
+                  </div>
+                );
+              })()}
+
+              <div className="space-y-2 max-h-52 overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-slate-800">
+                {tradeLog.slice(0, 20).map(t => (
+                  <div key={t.id} className={`flex items-center justify-between p-2.5 rounded-2xl border text-xs transition ${
+                    t.status === 'WIN' ? 'bg-emerald-500/10 border-emerald-500/30' :
+                    t.status === 'LOSS' ? 'bg-rose-500/10 border-rose-500/30' :
+                    'bg-slate-950/70 border-slate-800/80'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase ${
+                        t.direction === 'LONG'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                      }`}>{t.direction}</span>
+                      <div>
+                        <span className="font-bold text-white text-xs">{t.ticker}</span>
+                        <span className="text-slate-500 ml-1.5 font-mono text-[10px]">{t.time}</span>
+                        {t.note && <p className="text-[10px] text-slate-400 mt-0.5 truncate max-w-[110px] font-sans">{t.note}</p>}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5">
+                      <span className={`font-bold font-mono text-xs ${
+                        t.status === 'WIN' ? 'text-emerald-400' :
+                        t.status === 'LOSS' ? 'text-rose-400' : 'text-slate-400'
+                      }`}>
+                        {t.grossPnl !== null ? `${t.grossPnl >= 0 ? '+' : ''}${currSym}{t.grossPnl}` : 'OPEN'}
+                      </span>
+                      <button onClick={() => removeTrade(t.id)} className="text-slate-600 hover:text-rose-400 transition p-1">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {tradeLog.length === 0 && !tradeLogOpen && (
+                  <div className="h-32 flex flex-col items-center justify-center text-xs text-slate-400 p-4 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center gap-1">
+                    <BarChart2 className="w-6 h-6 text-slate-600 mb-1" />
+                    <span>No trades logged in current session.</span>
+                    <span className="text-[11px] text-slate-500">Click &quot;+ Log Trade&quot; to track your live setups.</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── MOBILE OVERLAYS & INDICATORS MODAL ── */}
+        {showMobileOverlaysModal && (
+          <div className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-700/80 rounded-t-3xl sm:rounded-3xl p-5 w-full max-w-md max-h-[85vh] overflow-y-auto space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-cyan-500/15 border border-cyan-500/30 rounded-xl text-cyan-400">
+                    <Layers className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Indicators &amp; Overlays</h3>
+                    <p className="text-xs text-slate-400">Toggle quantitative layers on the chart</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowMobileOverlaysModal(false)}
+                  className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {[
+                  { label: 'Session VWAP', desc: 'Volume Weighted Average Price (Blue)', active: showVWAP, toggle: () => setShowVWAP(!showVWAP), color: 'bg-cyan-400' },
+                  { label: '±2σ VWAP Bands', desc: 'Statistical volatility standard deviation bands', active: showVWAPBands, toggle: () => setShowVWAPBands(!showVWAPBands), color: 'bg-cyan-300' },
+                  { label: 'Supertrend', desc: 'Trailing dynamic stop loss (Green/Red)', active: showSupertrend, toggle: () => setShowSupertrend(!showSupertrend), color: 'bg-emerald-400' },
+                  { label: 'EMA 9 / 21', desc: 'Exponential Moving Average crossover (Purple/Pink)', active: showEMA, toggle: () => setShowEMA(!showEMA), color: 'bg-purple-400' },
+                  { label: '200 EMA', desc: 'Long-term institutional anchor line (Amber)', active: showEMA200, toggle: () => setShowEMA200(!showEMA200), color: 'bg-amber-400' },
+                  { label: 'ORB 15m', desc: 'Opening Range Breakout High & Low range box', active: showORB, toggle: () => setShowORB(!showORB), color: 'bg-amber-500' },
+                  { label: 'Camarilla Pivots', desc: 'H3/H4 resistance & L3/L4 support levels', active: showCamarilla, toggle: () => setShowCamarilla(!showCamarilla), color: 'bg-rose-400' },
+                  { label: 'PDH / PDL', desc: 'Previous Day High and Low boundaries', active: showPDH, toggle: () => setShowPDH(!showPDH), color: 'bg-amber-300' },
+                  { label: 'CPR (Central Pivot)', desc: 'TC, Central Pivot and BC equilibrium cloud', active: showCPR, toggle: () => setShowCPR(!showCPR), color: 'bg-indigo-400' },
+                  { label: 'Heikin-Ashi Candles', desc: 'Noise-filtered trend candlestick mode', active: candleMode === 'heikin_ashi', toggle: () => setCandleMode(candleMode === 'regular' ? 'heikin_ashi' : 'regular'), color: 'bg-cyan-500' },
+                ].map((item, idx) => (
+                  <div
+                    key={idx}
+                    onClick={item.toggle}
+                    className={`flex items-center justify-between p-3 rounded-2xl border transition cursor-pointer ${
+                      item.active
+                        ? 'bg-slate-950/90 border-cyan-500/40'
+                        : 'bg-slate-950/40 border-slate-800/70 opacity-70'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className={`w-2.5 h-2.5 rounded-full ${item.color} ${item.active ? 'ring-2 ring-white/20' : ''}`} />
+                      <div>
+                        <p className="text-xs font-bold text-white">{item.label}</p>
+                        <p className="text-[10px] text-slate-400">{item.desc}</p>
+                      </div>
+                    </div>
+                    <div className={`w-10 h-5 rounded-full p-0.5 transition-colors ${item.active ? 'bg-cyan-500' : 'bg-slate-800'}`}>
+                      <div className={`w-4 h-4 rounded-full bg-white transition-transform ${item.active ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-2 border-t border-slate-800">
+                <button
+                  onClick={() => setShowMobileOverlaysModal(false)}
+                  className="w-full py-2.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-bold text-xs border border-cyan-500/40 transition"
+                >
+                  Apply &amp; Return to Chart
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {showHotkeysModal && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-slate-900 border border-slate-700/80 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
@@ -3887,8 +6757,6 @@ export default function IntradayTerminal() {
 
         </main>
       </div>
-
-      {/* ── GLOBAL SITE FOOTER ── */}
       <footer className="w-full border-t border-slate-900 bg-black/90 backdrop-blur-md py-6 px-4 sm:px-6 lg:px-8 mt-12 text-xs text-slate-400">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
