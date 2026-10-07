@@ -314,22 +314,29 @@ export default function LivePrice({ ticker, onDataLoaded }) {
         {quote ? (
           <>
             {/* Main Price Display */}
-            <div className="flex items-end gap-4 mb-6">
+            <div className="flex flex-wrap items-baseline gap-3 sm:gap-6 mb-5">
               <div>
-                <p className="text-xs text-slate-500 font-mono mb-1 font-semibold">
-                  {quote.ticker}
-                </p>
-                <p className="text-4xl font-black text-white tracking-tight">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-xs text-slate-300 font-mono font-bold bg-white/[0.06] px-2 py-0.5 rounded border border-white/[0.08]">
+                    {quote.ticker}
+                  </span>
+                  {quote.exchange && (
+                    <span className="text-[10px] text-slate-500 font-bold uppercase">
+                      {quote.exchange}
+                    </span>
+                  )}
+                </div>
+                <p className="text-3xl sm:text-4xl font-black text-white tracking-tight tabular-nums">
                   {currSym}{fmt(quote.price, 2, loc)}
                 </p>
               </div>
-              <div className="pb-1">
+              <div className="pb-0.5">
                 <PriceChangeIndicator 
                   change={quote.change} 
                   changePct={quote.changePct}
                   loc={loc}
                 />
-                <p className={`text-sm font-semibold ${up ? 'text-emerald-500' : 'text-red-500'}`}>
+                <p className={`text-xs sm:text-sm font-semibold tabular-nums mt-0.5 ${up ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {quote.change >= 0 ? '+' : ''}{currSym}{fmt(quote.change, 2, loc)} today
                 </p>
               </div>

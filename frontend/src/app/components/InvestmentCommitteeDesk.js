@@ -81,6 +81,75 @@ export default function InvestmentCommitteeDesk({ ticker }) {
     weights = {}
   } = data || {};
 
+  // Derive unambiguous bottom-line institutional decision directive
+  const directive = useMemo(() => {
+    if (!data) return null;
+    const isCroBlocked = risk_gate.state === 'VETO' || trade_geometry.trade_blocked;
+    const isConflicted = active_conflicts.length > 0;
+    
+    if (isCroBlocked) {
+      return {
+        badge: 'STRICT NO-TRADE · CRO VETO',
+        color: 'bg-rose-500/15 border-rose-500/40 text-rose-200',
+        action: 'DO NOT BUY',
+        rationale: risk_gate.risk_factors?.find(r => r.severity === 'HIGH')?.factor 
+          ? `Chief Risk Officer veto triggered by: ${risk_gate.risk_factors.find(r => r.severity === 'HIGH').factor}.`
+          : 'Non-directional risk gate triggered. Asymmetric downside or volatility veto overrides all directional setups.',
+        riskStatus: 'VETOED'
+      };
+    }
+    
+    if (committee_state === 'BULLISH' && action_state === 'LONG_BIAS' && committee_score >= 65) {
+      return {
+        badge: 'STRONG BUY · HIGH CONVICTION',
+        color: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200 shadow-[0_0_20px_rgba(16,185,129,0.12)]',
+        action: 'BUY',
+        rationale: 'Multi-desk consensus bullish. Valuation support aligns with upward technical momentum and cleared CRO risk gate.',
+        riskStatus: 'PASSED'
+      };
+    }
+    
+    if (committee_state === 'BULLISH' && action_state === 'LONG_BIAS') {
+      return {
+        badge: 'ACCUMULATE · BUY ON PULLBACKS',
+        color: 'bg-teal-500/15 border-teal-500/40 text-teal-200',
+        action: 'ACCUMULATE',
+        rationale: 'Long execution bias active. Size position gradually using Half-Kelly sizing and 2x ATR stop protection.',
+        riskStatus: 'PASSED'
+      };
+    }
+
+    if (action_state === 'WAIT' || isConflicted) {
+      return {
+        badge: 'WAIT / MONITOR · DO NOT BUY YET',
+        color: 'bg-amber-500/15 border-amber-500/40 text-amber-200',
+        action: 'WAIT',
+        rationale: isConflicted
+          ? `${active_conflicts[0]?.title || 'Model conflict'}: Wait for price structure or valuation confirmation before entry.`
+          : 'Price extended or setup awaiting trigger. Maintain on watchlist without initiating new long capital.',
+        riskStatus: 'CAUTION'
+      };
+    }
+
+    if (committee_state === 'BEARISH' || action_state === 'SHORT_BIAS') {
+      return {
+        badge: 'AVOID / REDUCE EXPOSURE',
+        color: 'bg-rose-500/15 border-rose-500/40 text-rose-200',
+        action: 'AVOID',
+        rationale: 'Bearish committee consensus or severe valuation/trend deterioration. Protect capital and do not buy.',
+        riskStatus: 'ELEVATED'
+      };
+    }
+
+    return {
+      badge: 'HOLD / NEUTRAL · RANGE-BOUND',
+      color: 'bg-slate-800/40 border-slate-700 text-slate-200',
+      action: 'HOLD',
+      rationale: 'Neutral committee stance. Market consolidating without asymmetric risk/reward edge.',
+      riskStatus: 'NEUTRAL'
+    };
+  }, [data, risk_gate, trade_geometry, active_conflicts, committee_state, action_state, committee_score]);
+
   const getStanceColor = (s) => {
     if (s === 'BULLISH') return { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-400', glow: 'shadow-emerald-500/10' };
     if (s === 'BEARISH') return { bg: 'bg-rose-500/10', border: 'border-rose-500/30', text: 'text-rose-400', glow: 'shadow-rose-500/10' };
@@ -167,7 +236,7 @@ export default function InvestmentCommitteeDesk({ ticker }) {
       ) : (
         <>
           {/* ── Committee Executive Verdict Card ─────────────────── */}
-          <div className={`rounded-2xl border ${stanceStyle.border} ${stanceStyle.bg} p-5 sm:p-6 backdrop-blur-xl relative overflow-hidden shadow-xl transition-all duration-300`}>
+          <div className={`rounded-2xl border ${stanceStyle.border} ${stanceStyle.bg} p-4 sm:p-6 backdrop-blur-xl relative overflow-hidden shadow-xl transition-all duration-300`}>
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 relative z-10">
               <div>
                 <div className="flex items-center gap-2.5 mb-2 flex-wrap">
@@ -195,13 +264,13 @@ export default function InvestmentCommitteeDesk({ ticker }) {
               </div>
 
               {/* Right Controls: Horizon Selector & Interactive Capital Toggle */}
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="bg-black/40 border border-white/10 rounded-xl p-1 flex gap-1 shadow-inner">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <div className="bg-black/40 border border-white/10 rounded-xl p-1 flex gap-1 shadow-inner flex-1 sm:flex-initial">
                   {['intraday', 'swing', 'long_term'].map((h) => (
                     <button
                       key={h}
                       onClick={() => setHorizon(h)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition-all ${
+                      className={`flex-1 sm:flex-initial px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition-all ${
                         horizon === h
                           ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
                           : 'text-slate-400 hover:text-white'
@@ -225,7 +294,7 @@ export default function InvestmentCommitteeDesk({ ticker }) {
                   <span className="hidden sm:inline">Execution Params</span>
                 </button>
 
-                <div className="bg-black/30 border border-white/10 rounded-xl p-2.5 min-w-[120px]">
+                <div className="bg-black/30 border border-white/10 rounded-xl p-2.5 min-w-[110px] sm:min-w-[120px]">
                   <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 mb-1">
                     <span>Confidence</span>
                     <span className="text-white tabular-nums">{committee_confidence}%</span>
@@ -239,6 +308,47 @@ export default function InvestmentCommitteeDesk({ ticker }) {
                 </div>
               </div>
             </div>
+
+            {/* ── Unambiguous Bottom-Line Executive Action Directive ── */}
+            {directive && (
+              <div className={`mt-4 p-3.5 sm:p-4 rounded-xl border ${directive.color} flex flex-col sm:flex-row sm:items-center justify-between gap-3 backdrop-blur-md transition-all`}>
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-black/40 flex items-center justify-center shrink-0 border border-white/10">
+                    {directive.action === 'BUY' || directive.action === 'ACCUMULATE' ? (
+                      <TrendingUp className="h-5 w-5 text-emerald-400" />
+                    ) : directive.action === 'WAIT' ? (
+                      <Clock className="h-5 w-5 text-amber-400" />
+                    ) : (
+                      <ShieldAlert className="h-5 w-5 text-rose-400" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-black uppercase tracking-wider opacity-75">Executive Decision</span>
+                      <span className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                        {directive.badge}
+                      </span>
+                    </div>
+                    <p className="text-xs mt-0.5 opacity-90 font-medium leading-relaxed">
+                      {directive.rationale}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0 self-end sm:self-center border-t sm:border-t-0 pt-2 sm:pt-0 border-white/10 w-full sm:w-auto justify-end">
+                  <div className="text-right">
+                    <span className="text-[9px] block opacity-75 font-semibold uppercase">Risk Gate</span>
+                    <span className="text-xs font-black font-mono">{directive.riskStatus}</span>
+                  </div>
+                  <div className="h-7 w-px bg-white/20" />
+                  <div className="text-right">
+                    <span className="text-[9px] block opacity-75 font-semibold uppercase">Max Sizing</span>
+                    <span className="text-xs font-black font-mono text-white">
+                      {((risk_gate.sizing_cap_pct ?? 1.0) * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ── Interactive Capital & Risk Controls Drawer ──────── */}
             {showSettings && (

@@ -928,35 +928,50 @@ export default function PortfolioTracker() {
             <p className="text-[10px] text-slate-450">{validRows.length} valid · max 15</p>
           </div>
 
-          {/* Column headers */}
-          <div className="grid grid-cols-[2fr_90px_120px_36px] gap-3 px-4 py-2 border-b border-white/[0.04]">
+          {/* Column headers (hidden on mobile, shown on sm:) */}
+          <div className="hidden sm:grid grid-cols-[2fr_90px_120px_36px] gap-3 px-4 py-2 border-b border-white/[0.04]">
             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Stock</p>
             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Qty</p>
             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Buy Price (₹)</p>
             <div />
           </div>
 
-          {/* Rows */}
+          {/* Rows: Card layout on mobile, table row on sm: */}
           <div className="divide-y divide-white/[0.03]">
             {rows.map((row) => (
-              <div key={row.id} className="grid grid-cols-[2fr_90px_120px_36px] gap-3 px-4 py-3 items-center">
-                <TickerSearch value={row.ticker} onChange={v => updateRow(row.id, 'ticker', v)} />
-                <input
-                  type="number" min="0" value={row.qty}
-                  onChange={e => updateRow(row.id, 'qty', e.target.value)}
-                  placeholder="10"
-                  className="px-2.5 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-xs text-white placeholder-slate-600 outline-none focus:border-indigo-500/50 w-full"
-                />
-                <input
-                  type="number" min="0" value={row.buy_price}
-                  onChange={e => updateRow(row.id, 'buy_price', e.target.value)}
-                  placeholder="1500"
-                  className="px-2.5 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-xs text-white placeholder-slate-600 outline-none focus:border-indigo-500/50 w-full"
-                />
-                <button onClick={() => removeRow(row.id)}
-                  className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-rose-500/10 text-slate-600 hover:text-rose-400 transition cursor-pointer">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+              <div key={row.id} className="p-3 sm:px-4 sm:py-3 flex flex-col sm:grid sm:grid-cols-[2fr_90px_120px_36px] gap-2.5 sm:gap-3 sm:items-center">
+                <div className="w-full">
+                  <span className="sm:hidden text-[9px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Stock</span>
+                  <TickerSearch value={row.ticker} onChange={v => updateRow(row.id, 'ticker', v)} />
+                </div>
+                <div className="flex sm:contents items-end sm:items-center gap-2">
+                  <div className="flex-1 sm:w-auto">
+                    <span className="sm:hidden text-[9px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Qty</span>
+                    <input
+                      type="number" min="0" value={row.qty}
+                      onChange={e => updateRow(row.id, 'qty', e.target.value)}
+                      placeholder="10"
+                      className="px-2.5 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-xs text-white placeholder-slate-600 outline-none focus:border-indigo-500/50 w-full"
+                    />
+                  </div>
+                  <div className="flex-1 sm:w-auto">
+                    <span className="sm:hidden text-[9px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Buy Price (₹)</span>
+                    <input
+                      type="number" min="0" value={row.buy_price}
+                      onChange={e => updateRow(row.id, 'buy_price', e.target.value)}
+                      placeholder="1500"
+                      className="px-2.5 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-xs text-white placeholder-slate-600 outline-none focus:border-indigo-500/50 w-full"
+                    />
+                  </div>
+                  <div className="sm:self-center">
+                    <button onClick={() => removeRow(row.id)}
+                      className="h-8 w-8 sm:h-7 sm:w-7 flex items-center justify-center rounded-lg hover:bg-rose-500/10 text-slate-500 hover:text-rose-400 transition cursor-pointer"
+                      title="Remove stock"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -1043,7 +1058,7 @@ export default function PortfolioTracker() {
                   📥 Export CSV
                 </button>
               </div>
-              <table className="w-full text-[11px]">
+              <table className="w-full text-[11px] min-w-[680px]">
                 <thead>
                   <tr className="border-b border-white/[0.04]">
                     {['Stock','Qty','Buy @','LTP','Invested','Value','P&L','Return','Wt%'].map(h => (

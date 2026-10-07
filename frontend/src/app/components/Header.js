@@ -334,8 +334,18 @@ const Header = ({ onTickerSelect, currentTicker }) => {
               )}
             </div>
 
-            {/* ── Right: Intraday Desk + Watchlist + Live + Menu Button ─────────────── */}
+            {/* ── Right: Search (Mobile) + Intraday Desk + Watchlist + Live + Menu Button ─────────────── */}
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {/* Mobile Search Quick-Trigger */}
+              <button
+                onClick={() => setSpotlightOpen(true)}
+                className="md:hidden flex items-center justify-center p-2 rounded-lg bg-white/[0.06] border border-white/[0.12] text-slate-300 hover:text-white transition cursor-pointer"
+                title="Search stocks (⌘K)"
+                aria-label="Search stocks"
+              >
+                <Search className="w-4 h-4 text-slate-300" />
+              </button>
+
               {/* Intraday Desk Link */}
               <Link
                 href={currentTicker ? `/intraday?ticker=${encodeURIComponent(currentTicker)}` : '/intraday'}
@@ -409,23 +419,14 @@ const Header = ({ onTickerSelect, currentTicker }) => {
 
           {/* ── Analysing ticker strip ─────────────────────────────────── */}
           {currentTicker && (
-            <div style={{
-              borderTop: '1px solid #1a1a1a',
-              padding: '8px 0',
-              display: 'flex', alignItems: 'center', gap: '8px',
-            }}>
-              <span style={{ fontSize: '12px', color: '#666' }}>Analysing</span>
-              <span style={{
-                fontSize: '12px', fontWeight: 600, color: '#ededed',
-                background: '#1a1a1a', border: '1px solid #333',
-                borderRadius: '5px', padding: '2px 10px',
-                letterSpacing: '0.04em',
-              }}>
+            <div className="border-t border-white/[0.08] py-2 flex items-center gap-2.5 flex-wrap text-xs">
+              <span className="text-slate-400">Analysing:</span>
+              <span className="font-bold text-white font-mono bg-white/[0.06] border border-white/[0.12] rounded-md px-2.5 py-0.5 tracking-wide">
                 {currentTicker.replace('.NS', '').replace('.BO', '')}
               </span>
-              <span className="v-badge v-badge-green">
-                <span className="live-dot" />
-                Live data
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-semibold text-[11px]">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Live Stream
               </span>
             </div>
           )}

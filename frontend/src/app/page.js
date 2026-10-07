@@ -85,8 +85,9 @@ const LazySection = ({ children, placeholderHeight = 220 }) => {
 
 /* ── Status badge ─────────────────────────────────────────────────── */
 const StatusBadge = ({ icon: Icon, title, subtitle, status, infoKey, targetId }) => {
-  const color = status === 'active' ? '#00c48c' : status === 'loading' ? '#f5a623' : '#444';
-  const bg    = status === 'active' ? 'rgba(0,196,140,0.06)' : 'transparent';
+  const isActive  = status === 'active';
+  const isLoading = status === 'loading';
+
   return (
     <div
       onClick={() => {
@@ -95,24 +96,47 @@ const StatusBadge = ({ icon: Icon, title, subtitle, status, infoKey, targetId })
           if (el) el.scrollIntoView({ behavior: 'smooth' });
         }
       }}
-      className={`v-card ${targetId ? 'cursor-pointer group hover:border-emerald-500/40 transition-all duration-200' : ''}`}
-      style={{ padding: '14px 16px', background: bg, borderColor: status === 'active' ? 'rgba(0,196,140,0.2)' : undefined }}
+      className={`glass-card p-3 sm:p-4 rounded-xl border transition-all duration-200 select-none ${
+        isActive
+          ? 'bg-emerald-500/[0.04] border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-[0_0_20px_rgba(16,185,129,0.12)]'
+          : isLoading
+          ? 'bg-amber-500/[0.04] border-amber-500/20 hover:border-amber-500/40'
+          : 'bg-white/[0.02] border-white/[0.06] hover:border-white/15'
+      } ${targetId ? 'cursor-pointer group' : ''}`}
       title={targetId ? `Click to jump to ${title}` : undefined}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-        <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: color + '18', border: `1px solid ${color}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <Icon style={{ width: '16px', height: '16px', color }} />
+      <div className="flex items-start gap-2.5 sm:gap-3">
+        <div
+          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border transition-transform duration-200 group-hover:scale-105 ${
+            isActive
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+              : isLoading
+              ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+              : 'bg-white/[0.04] border-white/[0.08] text-slate-400'
+          }`}
+        >
+          <Icon className="w-4 h-4" />
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-            <p className="group-hover:text-emerald-300 transition-colors" style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>{title}</p>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <p className="text-xs sm:text-sm font-bold text-white group-hover:text-emerald-300 transition-colors truncate">
+              {title}
+            </p>
             {infoKey && <InfoBadge infoKey={infoKey} />}
           </div>
-          <p style={{ fontSize: '11px', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</p>
+          <p className="text-[11px] text-slate-400 truncate leading-snug">
+            {subtitle}
+          </p>
         </div>
-        {status === 'active'   && <CheckCircle   style={{ width: '14px', height: '14px', color: '#00c48c', flexShrink: 0 }} />}
-        {status === 'loading'  && <Clock         style={{ width: '14px', height: '14px', color: '#f5a623', flexShrink: 0, animation: 'spin 1s linear infinite' }} />}
-        {status === 'inactive' && <AlertTriangle style={{ width: '14px', height: '14px', color: '#444', flexShrink: 0 }} />}
+        {isActive && (
+          <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+        )}
+        {isLoading && (
+          <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5 animate-spin" />
+        )}
+        {!isActive && !isLoading && (
+          <AlertTriangle className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
+        )}
       </div>
     </div>
   );
@@ -120,114 +144,97 @@ const StatusBadge = ({ icon: Icon, title, subtitle, status, infoKey, targetId })
 
 /* ── Hero / Welcome ───────────────────────────────────────────────── */
 const WelcomeScreen = () => (
-  <section style={{
-    fontFamily: 'var(--font-poppins), var(--font-inter), sans-serif',
-    display: 'flex', flexDirection: 'column', alignItems: 'center',
-    padding: '96px 20px 96px', // Increased padding for grander layout
-    animation: 'heroFadeIn 0.5s ease both',
-    position: 'relative',
-    overflow: 'hidden',
-  }}>
-    <style>{`
-      @keyframes heroFadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
-      @keyframes livePulse  { 0%,100% { opacity:1; } 50% { opacity:.4; } }
-      @keyframes spin        { to { transform:rotate(360deg); } }
-      .hero-cta:hover  { transform:scale(1.04); }
-      .hero-cta:active { transform:scale(0.96); }
-      .browse-card:hover { border-color:#333 !important; background:#0a0a0a !important; }
-    `}</style>
+  <section className="flex flex-col items-center py-16 sm:py-24 px-4 relative overflow-hidden text-center max-w-6xl mx-auto">
+    {/* Ambient Background Glow behind heading - strictly bounded within viewport */}
+    <div
+      aria-hidden
+      className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-80 bg-radial from-blue-600/15 via-indigo-600/05 to-transparent blur-3xl pointer-events-none -z-10"
+    />
 
-    {/* Ambient Background Glow behind heading */}
-    <div aria-hidden style={{
-      position: 'absolute',
-      top: '0%',
-      left: '50%',
-      transform: 'translateX(-50%)',
-      width: '100%',
-      height: '350px',
-      background: 'radial-gradient(circle at 50% 30%, rgba(59,130,246,0.06) 0%, rgba(139,92,246,0.02) 50%, transparent 100%)',
-      filter: 'blur(80px)',
-      pointerEvents: 'none',
-      zIndex: 0
-    }} />
-
-    {/* Pill */}
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '5px 16px', borderRadius: '999px', border: '1px solid #282828', background: 'rgba(255,255,255,0.03)', marginBottom: '32px', position: 'relative', zIndex: 1 }}>
-      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#00c48c', animation: 'livePulse 2s ease infinite', flexShrink: 0 }} />
-      <span style={{ fontSize: '12px', color: '#888' }}>Live NSE &amp; BSE · Powered by ML</span>
+    {/* Live Pill */}
+    <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border border-white/[0.12] bg-white/[0.04] backdrop-blur-md mb-6 shadow-sm">
+      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+      <span className="text-xs font-semibold text-slate-300 tracking-wide">
+        Live NSE &amp; BSE · Institutional Multi-Desk Architecture
+      </span>
     </div>
 
     {/* Heading */}
-    <h1 style={{
-      fontSize: 'clamp(38px, 7vw, 68px)', // Increased font size
-      fontWeight: 700, textAlign: 'center',
-      maxWidth: '850px', lineHeight: 1.1, letterSpacing: '-0.04em', marginBottom: '24px',
-      background: 'linear-gradient(to bottom, #ffffff 0%, #ffffff 40%, rgba(255,255,255,0.3) 100%)',
-      WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-      padding: '0 8px',
-      position: 'relative',
-      zIndex: 1
-    }}>
-      Give your portfolio the<br />analysis it deserves
+    <h1 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-tight max-w-4xl leading-[1.08] mb-6 bg-gradient-to-b from-white via-white/95 to-slate-400 bg-clip-text text-transparent px-2">
+      Give your portfolio the<br className="hidden sm:inline" /> analysis it deserves
     </h1>
 
-    {/* Sub */}
-    <p style={{ fontSize: 'clamp(14px, 2vw, 17px)', color: '#888888', textAlign: 'center', maxWidth: '520px', lineHeight: 1.7, marginBottom: '40px', padding: '0 8px', position: 'relative', zIndex: 1 }}>
-      ML predictions, real-time sentiment &amp; institutional risk analytics for NSE and BSE — in one dashboard.
+    {/* Subtitle */}
+    <p className="text-sm sm:text-base md:text-lg text-slate-400 max-w-2xl leading-relaxed mb-8 px-2 font-normal">
+      6-model ML forecasts, 15-day recency-weighted sentiment, deterministic investment committee deliberation, and institutional CRO risk gates — in one unified terminal.
     </p>
 
-    {/* CTAs */}
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center', marginBottom: '80px', position: 'relative', zIndex: 1 }}>
+    {/* Feature Highlight Pills */}
+    <div className="flex flex-wrap items-center justify-center gap-2 mb-8 max-w-3xl">
+      {[
+        { label: '⚡ Live Intraday Terminal', color: 'border-emerald-500/30 text-emerald-300 bg-emerald-500/10' },
+        { label: '🧠 6-Model AI Forecast', color: 'border-blue-500/30 text-blue-300 bg-blue-500/10' },
+        { label: '🏛️ Dialectical Red-Teaming', color: 'border-indigo-500/30 text-indigo-300 bg-indigo-500/10' },
+        { label: '🛡️ Chief Risk Officer Gate', color: 'border-amber-500/30 text-amber-300 bg-amber-500/10' },
+        { label: '📰 15-Day News Intelligence', color: 'border-cyan-500/30 text-cyan-300 bg-cyan-500/10' },
+      ].map((chip) => (
+        <span
+          key={chip.label}
+          className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border backdrop-blur-sm ${chip.color}`}
+        >
+          {chip.label}
+        </span>
+      ))}
+    </div>
+
+    {/* Action Buttons */}
+    <div className="flex flex-wrap items-center justify-center gap-3.5 mb-14 w-full max-w-md">
       <button
-        className="hero-cta"
         onClick={() => { window.dispatchEvent(new CustomEvent('trigger-search-focus')); }}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 30px', fontSize: '14px', fontWeight: 600, borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#ffffff', color: '#000000', transition: 'transform 0.2s ease', letterSpacing: '-0.01em' }}
+        className="flex-1 sm:flex-initial flex items-center justify-center gap-2.5 px-6 py-3.5 text-sm font-bold rounded-xl bg-white text-slate-950 hover:bg-slate-100 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-[0_0_24px_rgba(255,255,255,0.2)] cursor-pointer"
       >
-        Search a stock <ArrowRight style={{ width: '15px', height: '15px' }} />
+        <span>Search any stock</span>
+        <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] bg-slate-900 text-white rounded font-mono font-semibold">⌘K</kbd>
+        <ArrowRight className="w-4 h-4" />
       </button>
+
       <Link
         href="/browse"
-        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 30px', fontSize: '14px', fontWeight: 500, borderRadius: '8px', border: '1px solid #282828', background: 'transparent', color: '#cccccc', textDecoration: 'none', transition: 'border-color 0.15s, color 0.15s', letterSpacing: '-0.01em' }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = '#444444'; e.currentTarget.style.color = '#ffffff'; }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = '#282828'; e.currentTarget.style.color = '#cccccc'; }}
+        className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-6 py-3.5 text-sm font-semibold rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-white border border-white/[0.12] hover:border-white/25 transition-all text-decoration-none cursor-pointer"
       >
-        <LayoutGrid style={{ width: '15px', height: '15px' }} /> Browse sectors
+        <LayoutGrid className="w-4 h-4 text-slate-400" />
+        <span>Browse 7,900+ assets</span>
       </Link>
     </div>
 
-    {/* Dashboard preview */}
-    <div style={{ width: '100%', maxWidth: '960px', position: 'relative', marginBottom: '80px', zIndex: 1 }}>
-      {/* Rich Multi-Layered Glow behind the dashboard image */}
-      <div aria-hidden style={{
-        position: 'absolute',
-        top: '-10%',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: '105%', // Wider than the dashboard to spill out
-        height: '110%', // Taller to shine above and below
-        background: 'radial-gradient(ellipse at 50% 40%, rgba(59,130,246,0.45) 0%, rgba(147,51,234,0.25) 30%, rgba(0,229,153,0.08) 60%, transparent 80%)',
-        filter: 'blur(70px)', // Slightly reduced blur to maintain saturation
-        pointerEvents: 'none',
-        zIndex: 0
-      }} />
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        <img src="/dashboard-preview.png" alt="StockIQ Pro dashboard" style={{ width: '100%', height: 'auto', borderRadius: '12px', display: 'block', boxShadow: '0 24px 64px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.06)' }} loading="eager" />
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '35%', background: 'linear-gradient(to bottom, transparent, #000000)', borderRadius: '0 0 12px 12px', pointerEvents: 'none' }} />
+    {/* Dashboard preview showcase */}
+    <div className="w-full max-w-4xl mx-auto relative mb-16 rounded-2xl p-1 bg-gradient-to-b from-white/10 to-transparent border border-white/[0.1] shadow-2xl overflow-hidden group">
+      <div
+        aria-hidden
+        className="absolute -top-12 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-blue-500/20 blur-3xl pointer-events-none rounded-full"
+      />
+      <div className="relative rounded-xl overflow-hidden bg-slate-950">
+        <img
+          src="/dashboard-preview.png"
+          alt="StockIQ Pro dashboard"
+          className="w-full h-auto block rounded-xl transform transition-transform duration-500 group-hover:scale-[1.01]"
+          loading="eager"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#06070a] via-transparent to-transparent pointer-events-none" />
       </div>
     </div>
 
-    {/* Sector teaser cards */}
-    <div style={{ width: '100%', maxWidth: '960px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-        <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.08)' }} />
-        <span style={{ fontSize: '11px', color: '#64748b', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Quick access by sector</span>
-        <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.08)' }} />
+    {/* Quick access by sector */}
+    <div className="w-full max-w-4xl mx-auto">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="flex-1 h-px bg-white/[0.08]" />
+        <span className="text-[11px] text-slate-500 tracking-wider uppercase font-bold">
+          Quick Access by Sector
+        </span>
+        <div className="flex-1 h-px bg-white/[0.08]" />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }} className="teaser-grid">
-        <style>{`
-          @media (min-width: 480px)  { .teaser-grid { grid-template-columns: repeat(4, 1fr) !important; } }
-          @media (min-width: 1024px) { .teaser-grid { grid-template-columns: repeat(8, 1fr) !important; } }
-        `}</style>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
         {[
           { emoji: '🪙', label: 'ETFs',     color: '#eab308' },
           { emoji: '🏦', label: 'Banking',  color: '#00c48c' },
@@ -237,19 +244,29 @@ const WelcomeScreen = () => (
           { emoji: '🚗', label: 'Auto',      color: '#ef4444' },
           { emoji: '🛒', label: 'FMCG',      color: '#10b981' },
           { emoji: '📈', label: 'Finance',   color: '#06b6d4' },
-        ].map(s => (
-          <Link key={s.label} href="/browse" className="browse-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '16px 8px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px', textDecoration: 'none', transition: 'all 0.15s ease', cursor: 'pointer' }}>
-            <span style={{ fontSize: '22px' }}>{s.emoji}</span>
-            <span style={{ fontSize: '11px', fontWeight: 500, color: '#94a3b8', textAlign: 'center' }}>{s.label}</span>
+        ].map((s) => (
+          <Link
+            key={s.label}
+            href={`/browse?sector=${encodeURIComponent(s.label)}`}
+            className="flex flex-col items-center gap-2 p-3.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/20 transition-all duration-200 group text-decoration-none cursor-pointer"
+          >
+            <span className="text-2xl transition-transform duration-200 group-hover:scale-110">
+              {s.emoji}
+            </span>
+            <span className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
+              {s.label}
+            </span>
           </Link>
         ))}
       </div>
-      <div style={{ textAlign: 'center', marginTop: '16px' }}>
-        <Link href="/browse" style={{ fontSize: '13px', color: '#64748b', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px', transition: 'color 0.15s' }}
-          onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-          onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+
+      <div className="text-center mt-5">
+        <Link
+          href="/browse"
+          className="text-xs font-semibold text-slate-400 hover:text-white inline-flex items-center gap-1.5 transition-colors text-decoration-none"
         >
-          View all 7,900+ stocks, ETFs &amp; indices across NSE &amp; BSE <ArrowRight style={{ width: '13px', height: '13px' }} />
+          <span>View all 7,900+ stocks, ETFs &amp; indices across NSE &amp; BSE</span>
+          <ArrowRight className="w-3.5 h-3.5" />
         </Link>
       </div>
     </div>
@@ -303,10 +320,19 @@ const PeerSectorTabs = ({ ticker }) => {
 
 /* ── Loading ──────────────────────────────────────────────────────── */
 const LoadingState = ({ ticker }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '120px 16px', gap: '16px' }}>
-    <div style={{ width: '40px', height: '40px', border: '2px solid #111', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-    <p style={{ fontSize: '14px', color: '#555' }}>Loading <span style={{ color: '#fff', fontWeight: 600 }}>{ticker.replace('.NS', '').replace('.BO', '')}</span>…</p>
-    <style>{`@keyframes spin { to { transform:rotate(360deg); } }`}</style>
+  <div className="flex flex-col items-center justify-center py-28 px-4 gap-4">
+    <div className="relative">
+      <div className="w-12 h-12 rounded-full border-2 border-indigo-500/20 border-t-indigo-400 animate-spin" />
+      <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 absolute inset-0 m-auto animate-pulse" />
+    </div>
+    <div className="text-center">
+      <p className="text-sm font-semibold text-white">
+        Loading <span className="font-mono text-indigo-400">{ticker.replace('.NS', '').replace('.BO', '')}</span>
+      </p>
+      <p className="text-xs text-slate-500 mt-1">
+        Calibrating multi-desk quantitative models &amp; live market feeds...
+      </p>
+    </div>
   </div>
 );
 
@@ -458,17 +484,21 @@ export default function Dashboard() {
     }
   };
 
+  const isIndianNSE = selectedTicker?.endsWith('.NS');
+  const isIndianBSE = selectedTicker?.endsWith('.BO');
+  const marketExchange = isIndianNSE ? 'NSE' : isIndianBSE ? 'BSE' : 'GLOBAL';
+
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'transparent' }}>
+    <div className="min-h-screen flex flex-col bg-transparent text-white">
       <Header onTickerSelect={handleTickerSelect} currentTicker={selectedTicker} />
 
-      <main style={{ flex: 1, width: '100%', maxWidth: '1360px', margin: '0 auto', padding: '0 16px 48px' }}>
+      <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pb-16">
         {!selectedTicker ? (
           <WelcomeScreen />
         ) : isLoading ? (
           <LoadingState ticker={selectedTicker} />
         ) : (
-          <div style={{ paddingTop: '20px' }}>
+          <div className="pt-4 sm:pt-6">
             {/* Status row with click-to-scroll */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-4">
               <StatusBadge icon={Activity}  title="Live Prices"       subtitle="Real-time · 15 min delay" status="active" infoKey="live_prices" targetId="live-price-section" />
@@ -478,18 +508,24 @@ export default function Dashboard() {
             </div>
 
             {/* Quick Action & Active Asset Command Bar */}
-            <div className="flex items-center justify-between flex-wrap gap-2.5 mb-5 p-3 sm:px-4 rounded-xl bg-white/[0.03] border border-white/[0.08] backdrop-blur-md">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <span className="text-xs text-slate-400 font-medium">Active Asset:</span>
-                <span className="text-sm font-bold font-mono text-white bg-white/[0.06] border border-white/[0.12] px-2.5 py-1 rounded-lg">
-                  {selectedTicker}
-                </span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 p-3 sm:px-4 rounded-xl bg-white/[0.03] border border-white/[0.08] backdrop-blur-xl shadow-lg">
+              <div className="flex items-center gap-2.5 flex-wrap min-w-0">
+                <span className="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Asset</span>
+                <div className="flex items-center gap-1.5 bg-white/[0.06] border border-white/[0.12] px-2.5 py-1 rounded-lg">
+                  <span className="text-[10px] font-black uppercase px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    {marketExchange}
+                  </span>
+                  <span className="text-sm font-bold font-mono text-white tracking-tight">
+                    {selectedTicker.replace('.NS', '').replace('.BO', '')}
+                  </span>
+                </div>
                 {companyName && (
-                  <span className="text-xs text-slate-300 font-semibold hidden sm:inline truncate max-w-[280px]">
+                  <span className="text-xs text-slate-300 font-medium truncate max-w-[200px] sm:max-w-[280px]">
                     {companyName}
                   </span>
                 )}
               </div>
+
               <div className="flex items-center gap-2 flex-wrap">
                 <button
                   onClick={handleToggleWatchlist}
@@ -501,7 +537,7 @@ export default function Dashboard() {
                   title={isWatchlisted ? "Remove from personal watchlist" : "Pin to personal watchlist"}
                 >
                   <Star className={`w-3.5 h-3.5 ${isWatchlisted ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />
-                  <span>{isWatchlisted ? 'Pinned to Watchlist' : 'Add to Watchlist'}</span>
+                  <span>{isWatchlisted ? 'Pinned' : 'Watchlist'}</span>
                 </button>
                 <Link
                   href={`/intraday?ticker=${encodeURIComponent(selectedTicker)}`}
@@ -509,7 +545,7 @@ export default function Dashboard() {
                   title="Open in High-Frequency Intraday Desk"
                 >
                   <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>⚡ Intraday Trading Desk</span>
+                  <span>⚡ Intraday</span>
                 </Link>
                 <button
                   onClick={() => {
@@ -520,14 +556,15 @@ export default function Dashboard() {
                   title="Jump to Multi-Desk Investment Committee"
                 >
                   <Scale className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>🏛️ Committee Desk</span>
+                  <span>🏛️ Committee</span>
                 </button>
                 <button
                   onClick={() => setReportModalOpen(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all bg-blue-500/10 border border-blue-500/30 text-blue-300 hover:bg-blue-500/20 shadow-[0_0_12px_rgba(59,130,246,0.1)]"
+                  title="Export Institutional Research Memo"
                 >
                   <FileText className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Export Research Memo</span>
+                  <span>Export Memo</span>
                 </button>
               </div>
             </div>
