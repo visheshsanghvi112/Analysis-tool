@@ -762,24 +762,24 @@ export default function SectorIntelligence({ ticker, onSelectPeer }) {
   const tierConfig = TIER_CONFIG[queriedData?.tier] || TIER_CONFIG['MARKET PERFORMER'];
 
   return (
-    <div style={{ background: '#0a0a0a', border: '1px solid #1c1c1c', borderRadius: '16px', padding: '20px', color: '#fff', fontFamily: 'var(--font-poppins), sans-serif' }}>
+    <div className="glass-card p-4 sm:p-6 text-white" style={{ fontFamily: 'var(--font-poppins), sans-serif' }}>
       
       {/* ── Top Header ──────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '36px', height: '36px', background: '#f59e0b15', border: '1px solid #f59e0b35', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '36px', height: '36px', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Trophy style={{ width: '18px', height: '18px', color: '#f59e0b' }} />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#fff', margin: 0 }}>Sector Intelligence Terminal</h3>
               {data && (
-                <span style={{ fontSize: '10px', background: '#f59e0b20', color: '#f59e0b', borderRadius: '5px', padding: '2px 7px', fontWeight: 700 }}>
+                <span style={{ fontSize: '10px', background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '6px', padding: '2px 8px', fontWeight: 700 }}>
                   {data.sector}
                 </span>
               )}
             </div>
-            {data && <p style={{ fontSize: '11px', color: '#666', margin: '2px 0 0' }}>{rawRanked.length} competitors benchmarked across Momentum, Volatility &amp; Multiples</p>}
+            {data && <p style={{ fontSize: '11px', color: '#94a3b8', margin: '2px 0 0' }}>{rawRanked.length} competitors benchmarked across Momentum, Volatility &amp; Multiples</p>}
           </div>
         </div>
 
@@ -787,12 +787,7 @@ export default function SectorIntelligence({ ticker, onSelectPeer }) {
           {loaded && rawRanked.length > 0 && (
             <button
               onClick={exportSectorCSV}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '5px',
-                background: '#141414', border: '1px solid #2a2a2a',
-                borderRadius: '8px', padding: '7px 12px', color: '#60a5fa',
-                fontSize: '11px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s'
-              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-blue-600/20 text-blue-300 border border-white/[0.08] hover:border-blue-500/30 text-xs font-semibold cursor-pointer transition-all shadow-sm"
               title="Download full sector terminal CSV"
             >
               <Download style={{ width: '12px', height: '12px' }} />
@@ -803,12 +798,7 @@ export default function SectorIntelligence({ ticker, onSelectPeer }) {
           <button
             onClick={load}
             disabled={loading}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              background: '#141414', border: '1px solid #2a2a2a',
-              borderRadius: '8px', padding: '7px 13px', color: '#aaa',
-              fontSize: '11px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
-            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/[0.08] text-xs font-semibold cursor-pointer transition-all disabled:opacity-40"
           >
             <RefreshCw style={{ width: '12px', height: '12px', animation: loading ? 'spin 1s linear infinite' : 'none' }} />
             <span>{loading ? 'Refreshing...' : 'Refresh'}</span>

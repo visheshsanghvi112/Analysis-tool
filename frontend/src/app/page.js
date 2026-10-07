@@ -84,21 +84,31 @@ const LazySection = ({ children, placeholderHeight = 220 }) => {
 };
 
 /* ── Status badge ─────────────────────────────────────────────────── */
-const StatusBadge = ({ icon: Icon, title, subtitle, status, infoKey }) => {
+const StatusBadge = ({ icon: Icon, title, subtitle, status, infoKey, targetId }) => {
   const color = status === 'active' ? '#00c48c' : status === 'loading' ? '#f5a623' : '#444';
   const bg    = status === 'active' ? 'rgba(0,196,140,0.06)' : 'transparent';
   return (
-    <div className="v-card" style={{ padding: '14px 16px', background: bg, borderColor: status === 'active' ? 'rgba(0,196,140,0.2)' : undefined }}>
+    <div
+      onClick={() => {
+        if (targetId) {
+          const el = document.getElementById(targetId);
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }
+      }}
+      className={`v-card ${targetId ? 'cursor-pointer group hover:border-emerald-500/40 transition-all duration-200' : ''}`}
+      style={{ padding: '14px 16px', background: bg, borderColor: status === 'active' ? 'rgba(0,196,140,0.2)' : undefined }}
+      title={targetId ? `Click to jump to ${title}` : undefined}
+    >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
         <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: color + '18', border: `1px solid ${color}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <Icon style={{ width: '16px', height: '16px', color }} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-            <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>{title}</p>
+            <p className="group-hover:text-emerald-300 transition-colors" style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>{title}</p>
             {infoKey && <InfoBadge infoKey={infoKey} />}
           </div>
-          <p style={{ fontSize: '11px', color: '#555', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</p>
+          <p style={{ fontSize: '11px', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</p>
         </div>
         {status === 'active'   && <CheckCircle   style={{ width: '14px', height: '14px', color: '#00c48c', flexShrink: 0 }} />}
         {status === 'loading'  && <Clock         style={{ width: '14px', height: '14px', color: '#f5a623', flexShrink: 0, animation: 'spin 1s linear infinite' }} />}
@@ -209,9 +219,9 @@ const WelcomeScreen = () => (
     {/* Sector teaser cards */}
     <div style={{ width: '100%', maxWidth: '960px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-        <div style={{ flex: 1, height: '1px', background: '#111' }} />
-        <span style={{ fontSize: '11px', color: '#444', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Quick access by sector</span>
-        <div style={{ flex: 1, height: '1px', background: '#111' }} />
+        <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.08)' }} />
+        <span style={{ fontSize: '11px', color: '#64748b', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Quick access by sector</span>
+        <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.08)' }} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }} className="teaser-grid">
         <style>{`
@@ -228,16 +238,16 @@ const WelcomeScreen = () => (
           { emoji: '🛒', label: 'FMCG',      color: '#10b981' },
           { emoji: '📈', label: 'Finance',   color: '#06b6d4' },
         ].map(s => (
-          <Link key={s.label} href="/browse" className="browse-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '16px 8px', background: '#060606', border: '1px solid #141414', borderRadius: '10px', textDecoration: 'none', transition: 'border-color 0.15s, background 0.15s', cursor: 'pointer' }}>
+          <Link key={s.label} href="/browse" className="browse-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '16px 8px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px', textDecoration: 'none', transition: 'all 0.15s ease', cursor: 'pointer' }}>
             <span style={{ fontSize: '22px' }}>{s.emoji}</span>
-            <span style={{ fontSize: '11px', fontWeight: 500, color: '#888', textAlign: 'center' }}>{s.label}</span>
+            <span style={{ fontSize: '11px', fontWeight: 500, color: '#94a3b8', textAlign: 'center' }}>{s.label}</span>
           </Link>
         ))}
       </div>
       <div style={{ textAlign: 'center', marginTop: '16px' }}>
-        <Link href="/browse" style={{ fontSize: '13px', color: '#555', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px', transition: 'color 0.15s' }}
+        <Link href="/browse" style={{ fontSize: '13px', color: '#64748b', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px', transition: 'color 0.15s' }}
           onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-          onMouseLeave={e => e.currentTarget.style.color = '#555'}
+          onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
         >
           View all 7,900+ stocks, ETFs &amp; indices across NSE &amp; BSE <ArrowRight style={{ width: '13px', height: '13px' }} />
         </Link>
@@ -264,7 +274,7 @@ const PeerSectorTabs = ({ ticker }) => {
   return (
     <div>
       {/* Tab row */}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', background: '#0a0a0a', border: '1px solid #1c1c1c', borderRadius: '10px', padding: '6px' }}>
+      <div className="flex gap-1.5 mb-3 p-1.5 rounded-xl bg-white/[0.03] border border-white/[0.08] backdrop-blur-md">
         {PEER_TABS.map(tab => {
           const Icon = tab.icon;
           const isA = activeTab === tab.id;
@@ -272,17 +282,13 @@ const PeerSectorTabs = ({ ticker }) => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              style={{
-                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
-                padding: '9px 14px',
-                background: isA ? '#1a1a1a' : 'transparent',
-                border: `1px solid ${isA ? '#2a2a2a' : 'transparent'}`,
-                borderRadius: '8px',
-                color: isA ? '#fff' : '#555',
-                fontSize: '12px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
-              }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 sm:px-4 rounded-lg text-xs font-bold cursor-pointer transition-all ${
+                isA
+                  ? 'bg-white/[0.08] text-white border border-white/[0.15] shadow-[0_0_15px_rgba(59,130,246,0.15)]'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.02] border border-transparent'
+              }`}
             >
-              <Icon style={{ width: '13px', height: '13px', color: isA ? (tab.id === 'compare' ? '#3b82f6' : '#f59e0b') : '#555' }} />
+              <Icon className={`w-3.5 h-3.5 ${isA ? (tab.id === 'compare' ? 'text-blue-400' : 'text-amber-400') : 'text-slate-500'}`} />
               <span>{tab.label}</span>
             </button>
           );
@@ -453,75 +459,56 @@ export default function Dashboard() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#000' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'transparent' }}>
       <Header onTickerSelect={handleTickerSelect} currentTicker={selectedTicker} />
 
-      <main style={{ flex: 1, width: '100%', maxWidth: '1280px', margin: '0 auto', padding: '0 16px 48px' }}>
+      <main style={{ flex: 1, width: '100%', maxWidth: '1360px', margin: '0 auto', padding: '0 16px 48px' }}>
         {!selectedTicker ? (
           <WelcomeScreen />
         ) : isLoading ? (
           <LoadingState ticker={selectedTicker} />
         ) : (
           <div style={{ paddingTop: '20px' }}>
-            {/* Status row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px' }} className="status-row">
-              <style>{`
-                @media (min-width: 1024px) {
-                  .status-row        { grid-template-columns: repeat(4,1fr) !important; }
-                  .dash-main-grid    { grid-template-columns: 2fr 1fr !important; }
-                }
-              `}</style>
-              <StatusBadge icon={Activity}  title="Live Prices"       subtitle="Real-time · 15 min delay" status="active" infoKey="live_prices" />
-              <StatusBadge icon={Brain}     title="ML Predictions"    subtitle={isETF ? '30-Day ETF Outlook' : '5-Day Ensemble'} status="active" infoKey="ml_predictions" />
-              <StatusBadge icon={Newspaper} title="News Intelligence" subtitle="AI sentiment · Alerts"     status="active" infoKey="news_intelligence" />
-              <StatusBadge icon={PieChart}  title="Risk Analytics"    subtitle="VaR · Options · Portfolio" status="active" infoKey="risk_analytics" />
+            {/* Status row with click-to-scroll */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-4">
+              <StatusBadge icon={Activity}  title="Live Prices"       subtitle="Real-time · 15 min delay" status="active" infoKey="live_prices" targetId="live-price-section" />
+              <StatusBadge icon={Brain}     title="ML Predictions"    subtitle={isETF ? '30-Day ETF Outlook' : '5-Day Ensemble'} status="active" infoKey="ml_predictions" targetId="ml-prediction-section" />
+              <StatusBadge icon={Newspaper} title="News Intelligence" subtitle="15-Day AI Sentiment & Directives" status="active" infoKey="news_intelligence" targetId="news-section" />
+              <StatusBadge icon={PieChart}  title="Risk Analytics"    subtitle="VaR · Options · Portfolio" status="active" infoKey="risk_analytics" targetId="risk-analytics-section" />
             </div>
 
-            {/* Quick Action & Research Memo Bar */}
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              marginBottom: '14px', background: 'rgba(255,255,255,0.02)',
-              border: '1px solid #1a1a22', borderRadius: '10px', padding: '10px 16px',
-              flexWrap: 'wrap', gap: '10px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', color: '#777', fontWeight: 500 }}>Active Asset:</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff', background: '#111', border: '1px solid #282828', padding: '2px 8px', borderRadius: '6px' }}>
+            {/* Quick Action & Active Asset Command Bar */}
+            <div className="flex items-center justify-between flex-wrap gap-2.5 mb-5 p-3 sm:px-4 rounded-xl bg-white/[0.03] border border-white/[0.08] backdrop-blur-md">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <span className="text-xs text-slate-400 font-medium">Active Asset:</span>
+                <span className="text-sm font-bold font-mono text-white bg-white/[0.06] border border-white/[0.12] px-2.5 py-1 rounded-lg">
                   {selectedTicker}
                 </span>
+                {companyName && (
+                  <span className="text-xs text-slate-300 font-semibold hidden sm:inline truncate max-w-[280px]">
+                    {companyName}
+                  </span>
+                )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   onClick={handleToggleWatchlist}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '6px',
-                    padding: '6px 13px',
-                    background: isWatchlisted ? 'rgba(234, 179, 8, 0.15)' : 'rgba(255, 255, 255, 0.04)',
-                    border: `1px solid ${isWatchlisted ? 'rgba(234, 179, 8, 0.4)' : 'rgba(255, 255, 255, 0.1)'}`,
-                    borderRadius: '7px',
-                    color: isWatchlisted ? '#fbbf24' : '#cbd5e1',
-                    fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                    transition: 'all 0.15s'
-                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all border ${
+                    isWatchlisted
+                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.15)]'
+                      : 'bg-white/[0.04] border-white/[0.08] text-slate-300 hover:text-white hover:bg-white/[0.08]'
+                  }`}
                   title={isWatchlisted ? "Remove from personal watchlist" : "Pin to personal watchlist"}
                 >
-                  <Star style={{ width: '13px', height: '13px', fill: isWatchlisted ? '#fbbf24' : 'none', color: isWatchlisted ? '#fbbf24' : '#94a3b8' }} />
+                  <Star className={`w-3.5 h-3.5 ${isWatchlisted ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />
                   <span>{isWatchlisted ? 'Pinned to Watchlist' : 'Add to Watchlist'}</span>
                 </button>
                 <Link
                   href={`/intraday?ticker=${encodeURIComponent(selectedTicker)}`}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '6px',
-                    padding: '6px 13px', background: 'rgba(16, 185, 129, 0.1)',
-                    border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '7px',
-                    color: '#34d399', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                    textDecoration: 'none', transition: 'all 0.15s'
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(16, 185, 129, 0.18)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(16, 185, 129, 0.1)'}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20 text-decoration-none shadow-[0_0_12px_rgba(16,185,129,0.1)]"
                   title="Open in High-Frequency Intraday Desk"
                 >
-                  <Activity style={{ width: '13px', height: '13px' }} />
+                  <Activity className="w-3.5 h-3.5 text-emerald-400" />
                   <span>⚡ Intraday Trading Desk</span>
                 </Link>
                 <button
@@ -529,97 +516,95 @@ export default function Dashboard() {
                     const el = document.getElementById('investment-committee-section');
                     if (el) el.scrollIntoView({ behavior: 'smooth' });
                   }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '6px',
-                    padding: '6px 13px', background: 'rgba(99, 102, 241, 0.1)',
-                    border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: '7px',
-                    color: '#a5b4fc', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                    transition: 'all 0.15s'
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.18)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.1)'}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 shadow-[0_0_12px_rgba(99,102,241,0.1)]"
                   title="Jump to Multi-Desk Investment Committee"
                 >
-                  <Scale style={{ width: '13px', height: '13px' }} />
+                  <Scale className="w-3.5 h-3.5 text-indigo-400" />
                   <span>🏛️ Committee Desk</span>
                 </button>
                 <button
                   onClick={() => setReportModalOpen(true)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '6px',
-                    padding: '6px 13px', background: 'rgba(59, 130, 246, 0.1)',
-                    border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '7px',
-                    color: '#60a5fa', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                    transition: 'all 0.15s'
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.18)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all bg-blue-500/10 border border-blue-500/30 text-blue-300 hover:bg-blue-500/20 shadow-[0_0_12px_rgba(59,130,246,0.1)]"
                 >
-                  <FileText style={{ width: '13px', height: '13px' }} />
+                  <FileText className="w-3.5 h-3.5 text-blue-400" />
                   <span>Export Research Memo</span>
                 </button>
               </div>
             </div>
 
-            {/* Charts grid */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }} className="dash-main-grid">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <LivePrice 
-                    ticker={selectedTicker} 
-                    onDataLoaded={(quote) => {
-                      if (quote?.name || quote?.longName || quote?.shortName) {
-                        setCompanyName(quote.name || quote.longName || quote.shortName);
-                      }
-                      if (quote?.asset_type) {
-                        setConfirmedETF(quote.asset_type === 'ETF' || quote.asset_type === 'MUTUALFUND');
-                      } else if (quote?.longName && /\b(etf|bees)\b/i.test(quote.longName)) {
-                        setConfirmedETF(true);
-                      }
-                    }}
-                  />
-                  <div id="stock-chart-section">
-                    <StockChart ticker={selectedTicker} />
-                  </div>
+            {/* Main Application Workstation */}
+            <div className="flex flex-col gap-6">
+              {/* Level 1: Executive Price Ticker & Ranges (Full Width) */}
+              <div id="live-price-section" className="w-full">
+                <LivePrice 
+                  ticker={selectedTicker} 
+                  onDataLoaded={(quote) => {
+                    if (quote?.name || quote?.longName || quote?.shortName) {
+                      setCompanyName(quote.name || quote.longName || quote.shortName);
+                    }
+                    if (quote?.asset_type) {
+                      setConfirmedETF(quote.asset_type === 'ETF' || quote.asset_type === 'MUTUALFUND');
+                    } else if (quote?.longName && /\b(etf|bees)\b/i.test(quote.longName)) {
+                      setConfirmedETF(true);
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Level 2: Interactive Technical Workstation (Full Width) */}
+              <div id="stock-chart-section" className="w-full">
+                <StockChart ticker={selectedTicker} />
+              </div>
+
+              {/* Level 3: Dual AI Intelligence Command Center (Side-by-side 50/50 Balanced Grid) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start w-full">
+                <div id="ml-prediction-section" className="min-w-0">
+                  <MLPrediction ticker={selectedTicker} />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div id="ml-prediction-section">
-                    <MLPrediction ticker={selectedTicker} />
-                  </div>
-                  <div id="news-section">
-                    <AdvancedNews ticker={selectedTicker} companyName={companyName} />
-                  </div>
+                <div id="news-section" className="min-w-0">
+                  <AdvancedNews ticker={selectedTicker} companyName={companyName} />
                 </div>
               </div>
-              <div id="investment-committee-section">
+
+              {/* Level 4: Institutional Strategy & Governance Desk */}
+              <div id="investment-committee-section" className="w-full">
                 <InvestmentCommitteeDesk ticker={selectedTicker} />
               </div>
               
-              <LazySection placeholderHeight={240}>
-                <PortfolioMetrics ticker={selectedTicker} />
-              </LazySection>
+              {/* Level 5: Risk & Simulation Desks */}
+              <div id="risk-analytics-section" className="w-full">
+                <LazySection placeholderHeight={240}>
+                  <PortfolioMetrics ticker={selectedTicker} />
+                </LazySection>
+              </div>
 
-              <LazySection placeholderHeight={280}>
-                <Backtesting ticker={selectedTicker} />
-              </LazySection>
+              <div id="backtesting-section" className="w-full">
+                <LazySection placeholderHeight={280}>
+                  <Backtesting ticker={selectedTicker} />
+                </LazySection>
+              </div>
 
-              <div id="monte-carlo-section">
+              <div id="monte-carlo-section" className="w-full">
                 <LazySection placeholderHeight={300}>
                   <MonteCarloSimulation ticker={selectedTicker} />
                 </LazySection>
               </div>
 
-              {/* ── Long-Term: ETF deep-dive OR stock analysis ─────────── */}
+              {/* Level 6: Long-Term: ETF deep-dive OR stock analysis */}
               {isETF ? (
-                <LazySection placeholderHeight={350}>
-                  <ETFLongTermPanel ticker={selectedTicker} />
-                </LazySection>
+                <div id="etf-analytics-section" className="w-full">
+                  <LazySection placeholderHeight={350}>
+                    <ETFLongTermPanel ticker={selectedTicker} />
+                  </LazySection>
+                </div>
               ) : (
                 <>
-                  <LazySection placeholderHeight={300}>
-                    <LongTermAnalysis ticker={selectedTicker} />
-                  </LazySection>
-                  <div id="valuation-section">
+                  <div id="long-term-trends-section" className="w-full">
+                    <LazySection placeholderHeight={300}>
+                      <LongTermAnalysis ticker={selectedTicker} />
+                    </LazySection>
+                  </div>
+                  <div id="valuation-section" className="w-full">
                     <LazySection placeholderHeight={300}>
                       <FundamentalsAnalysis ticker={selectedTicker} />
                     </LazySection>
@@ -627,22 +612,27 @@ export default function Dashboard() {
                 </>
               )}
 
-              <LazySection placeholderHeight={200}>
-                <SIPCalculator ticker={selectedTicker} />
-              </LazySection>
-
-              {/* ── Peer & Sector Intelligence Tabs ───────────────────── */}
-              {!isETF && (
-                <LazySection placeholderHeight={300}>
-                  <PeerSectorTabs ticker={selectedTicker} />
+              {/* Level 7: Wealth Accumulation Simulator */}
+              <div id="sip-simulator-section" className="w-full">
+                <LazySection placeholderHeight={200}>
+                  <SIPCalculator ticker={selectedTicker} />
                 </LazySection>
+              </div>
+
+              {/* Level 8: Peer & Sector Intelligence Tabs */}
+              {!isETF && (
+                <div id="peer-sector-section" className="w-full">
+                  <LazySection placeholderHeight={300}>
+                    <PeerSectorTabs ticker={selectedTicker} />
+                  </LazySection>
+                </div>
               )}
             </div>
           </div>
         )}
       </main>
 
-      <footer style={{ borderTop: '1px solid #111', padding: '20px 24px' }}>
+      <footer style={{ borderTop: '1px solid rgba(255,255,255,0.08)', padding: '24px 16px', background: 'rgba(6,7,10,0.85)', backdropFilter: 'blur(16px)' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{ width: '26px', height: '26px', background: '#fff', borderRadius: '5px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

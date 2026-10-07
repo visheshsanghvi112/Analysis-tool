@@ -336,7 +336,7 @@ export default function AdvancedNews({ ticker, companyName }) {
               </div>
 
               {/* Recency Time Filter Tabs */}
-              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-white/[0.05] text-[10px]">
+              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-white/[0.05] text-[10px] overflow-x-auto max-w-full">
                 {[
                   { id: 'ALL', label: `15d Horizon (${articles.length})` },
                   { id: '24h', label: `<24h Breaking (${recencyDist.within_24h || 0})` },
@@ -346,7 +346,7 @@ export default function AdvancedNews({ ticker, companyName }) {
                   <button
                     key={rf.id}
                     onClick={() => setRecencyFilter(rf.id)}
-                    className={`px-2 py-0.5 rounded font-semibold transition cursor-pointer ${
+                    className={`px-2 py-0.5 rounded font-semibold transition cursor-pointer whitespace-nowrap ${
                       recencyFilter === rf.id 
                         ? 'bg-indigo-500/25 text-indigo-300 border border-indigo-500/40' 
                         : 'text-slate-400 hover:text-slate-200'
@@ -359,7 +359,7 @@ export default function AdvancedNews({ ticker, companyName }) {
             </div>
 
             {/* Recency Breakdown Micro Bar */}
-            <div className="grid grid-cols-4 gap-2 pt-2 border-t border-white/[0.04] text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-white/[0.04] text-center">
               <div className="p-1.5 rounded-lg bg-white/[0.02]">
                 <div className="text-[9px] text-slate-400">Within 24h</div>
                 <div className="text-xs font-bold text-cyan-400 font-mono">{recencyDist.within_24h || 0} stories</div>
@@ -422,6 +422,7 @@ export default function AdvancedNews({ ticker, companyName }) {
             
             <div className="text-center p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
               <div className="flex items-center justify-center gap-1 mb-1">
+                <TrendingDown className="h-3 w-3 text-rose-400" />
                 <span className="font-bold text-sm text-rose-400 font-mono">
                   {negativeCount}
                 </span>

@@ -274,11 +274,11 @@ export default function PeerComparison({ ticker, initialPeer = null }) {
   };
 
   return (
-    <div style={{ background: '#0a0a0a', border: '1px solid #1c1c1c', borderRadius: '16px', padding: '20px', color: '#fff', fontFamily: 'var(--font-poppins), sans-serif' }}>
+    <div className="glass-card p-4 sm:p-6 text-white" style={{ fontFamily: 'var(--font-poppins), sans-serif' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '32px', height: '32px', background: '#3b82f615', border: '1px solid #3b82f630', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '32px', height: '32px', background: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <BarChart2 style={{ width: '16px', height: '16px', color: '#3b82f6' }} />
           </div>
           <div>
@@ -286,30 +286,28 @@ export default function PeerComparison({ ticker, initialPeer = null }) {
               <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#fff', margin: 0 }}>Peer-to-Peer Comparison</h3>
               <InfoBadge infoKey="peer_valuation" />
             </div>
-            {sector && <p style={{ fontSize: '11px', color: '#666', margin: 0 }}>{sector} Sector</p>}
+            {sector && <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>{sector} Sector</p>}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ display: 'flex', background: '#141414', padding: '3px', borderRadius: '8px', border: '1px solid #222' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <div className="flex bg-white/[0.04] p-1 rounded-lg border border-white/[0.08]">
             <button
               onClick={() => setViewMode('1v1')}
-              style={{
-                background: viewMode === '1v1' ? '#2563eb' : 'transparent',
-                color: viewMode === '1v1' ? '#fff' : '#888',
-                border: 'none', borderRadius: '5px', padding: '4px 10px',
-                fontSize: '10px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s'
-              }}
+              className={`px-3 py-1 rounded-md text-[11px] font-bold cursor-pointer transition-all ${
+                viewMode === '1v1'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
             >
               1-on-1 Head-to-Head
             </button>
             <button
               onClick={() => { setViewMode('basket'); if (!basketData) loadBasket(); }}
-              style={{
-                background: viewMode === 'basket' ? '#2563eb' : 'transparent',
-                color: viewMode === 'basket' ? '#fff' : '#888',
-                border: 'none', borderRadius: '5px', padding: '4px 10px',
-                fontSize: '10px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s'
-              }}
+              className={`px-3 py-1 rounded-md text-[11px] font-bold cursor-pointer transition-all ${
+                viewMode === 'basket'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
             >
               Multi-Peer Basket
             </button>
@@ -318,15 +316,7 @@ export default function PeerComparison({ ticker, initialPeer = null }) {
           {comparison && viewMode === '1v1' && (
             <button
               onClick={exportComparisonCSV}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '6px',
-                padding: '6px 12px', background: 'rgba(59, 130, 246, 0.1)',
-                border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '6px',
-                color: '#60a5fa', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                transition: 'all 0.15s'
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-blue-600/20 text-blue-300 border border-white/[0.08] hover:border-blue-500/30 text-xs font-semibold cursor-pointer transition-all shadow-sm"
               title="Download CSV report of comparison metrics"
             >
               <Download style={{ width: '12px', height: '12px' }} />

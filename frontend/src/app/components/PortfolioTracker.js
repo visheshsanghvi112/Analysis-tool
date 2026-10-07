@@ -906,7 +906,7 @@ export default function PortfolioTracker() {
 
   return (
     <>
-    <div className="min-h-screen bg-black text-white" style={{ fontFamily: 'var(--font-inter, Inter, sans-serif)' }}>
+    <div className="min-h-screen bg-transparent text-white" style={{ fontFamily: 'var(--font-inter, Inter, sans-serif)' }}>
       <Header />
       {/* Header */}
       <div className="border-b border-white/[0.06] px-6 py-4 flex items-center gap-3">

@@ -82,18 +82,22 @@ function StockCard({ stock, color, query, onSelect }) {
         padding: '16px',
         width: '100%',
         minHeight: '110px',
-        background: hov ? '#1c1c1c' : '#121212',
-        border: `1px solid ${hov ? '#ffffff' : '#282828'}`,
-        borderRadius: '8px',
+        background: hov ? 'rgba(22, 28, 40, 0.95)' : 'rgba(13, 16, 23, 0.72)',
+        border: `1px solid ${hov ? 'rgba(255, 255, 255, 0.22)' : 'rgba(255, 255, 255, 0.08)'}`,
+        borderRadius: '12px',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        boxShadow: hov ? `0 10px 28px -4px rgba(0,0,0,0.6), 0 0 16px ${color}20` : '0 4px 16px rgba(0,0,0,0.3)',
+        transform: hov ? 'translateY(-2px)' : 'none',
         cursor: 'pointer',
         textAlign: 'left',
-        transition: 'all 0.12s ease',
+        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
         position: 'relative',
         overflow: 'hidden',
         WebkitTapHighlightColor: 'transparent',
       }}
     >
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: hov ? color : 'transparent', transition: 'background 0.12s' }} />
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: hov ? color : 'transparent', transition: 'background 0.18s' }} />
       
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%', marginBottom: '10px' }}>
         <div style={{
@@ -510,7 +514,7 @@ export default function BrowsePage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#000000',
+      background: 'transparent',
       color: '#ffffff',
       fontFamily: 'var(--font-poppins), var(--font-inter), sans-serif'
     }}>
@@ -578,15 +582,16 @@ export default function BrowsePage() {
         position: 'sticky',
         top: 0,
         zIndex: 50,
-        background: 'rgba(0,0,0,0.96)',
+        background: 'rgba(6,7,10,0.85)',
         backdropFilter: 'blur(20px)',
-        borderBottom: '1px solid #282828'
+        WebkitBackdropFilter: 'blur(20px)',
+        borderBottom: '1px solid rgba(255,255,255,0.08)'
       }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 16px', display: 'flex', alignItems: 'center', height: '56px', gap: '12px' }}>
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#888888', textDecoration: 'none', fontSize: '13px', flexShrink: 0 }}>
+          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#94a3b8', textDecoration: 'none', fontSize: '13px', flexShrink: 0 }}>
             <ArrowLeft style={{ width: '18px', height: '18px', color: '#ffffff' }} />
           </Link>
-          <div style={{ width: '1px', height: '18px', background: '#282828', flexShrink: 0 }} />
+          <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.1)', flexShrink: 0 }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
             <div style={{ width: '28px', height: '28px', background: '#ffffff', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <TrendingUp style={{ width: '14px', height: '14px', color: '#000000' }} />
@@ -597,7 +602,7 @@ export default function BrowsePage() {
           {/* Smart Search Bar */}
           <div ref={searchContainerRef} style={{ flex: 1, position: 'relative', maxWidth: '480px', marginLeft: 'auto' }}>
             <div style={{ position: 'relative' }}>
-              <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '14px', height: '14px', color: '#aaaaaa' }} />
+              <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '14px', height: '14px', color: '#94a3b8' }} />
               <input
                 type="text"
                 value={query}
@@ -610,13 +615,14 @@ export default function BrowsePage() {
                 placeholder="Smart Search (e.g. HDFC Bank)..."
                 style={{
                   width: '100%',
-                  background: '#121212',
-                  border: '1px solid #3a3a3a',
-                  borderRadius: '8px',
+                  background: 'rgba(18, 21, 30, 0.85)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: '10px',
                   padding: '8px 36px',
                   fontSize: '13px',
                   color: '#ffffff',
-                  outline: 'none'
+                  outline: 'none',
+                  transition: 'border-color 0.15s ease'
                 }}
               />
               {query && (
