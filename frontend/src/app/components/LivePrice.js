@@ -209,7 +209,7 @@ export default function LivePrice({ ticker, onDataLoaded }) {
         list = list.filter(item => item.symbol !== ticker);
         setIsStarred(false);
       } else {
-        const isETF = ticker.includes('BEES') || ticker.includes('ETF') || ticker.includes('GOLD') || ticker.includes('SILVER');
+        const isETF = Boolean(ticker && (ticker.includes('BEES') || ticker.includes('ETF') || ticker.includes('GOLD') || ticker.includes('SILVER')));
         list = [{ symbol: ticker, name: quote?.longName || quote?.shortName || ticker, sector: isETF ? 'ETF' : 'Equity' }, ...list];
         setIsStarred(true);
       }

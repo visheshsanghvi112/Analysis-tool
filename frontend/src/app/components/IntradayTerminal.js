@@ -1017,20 +1017,20 @@ export default function IntradayTerminal() {
                 {/* Benchmark Indices Pills */}
                 <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 scrollbar-none shrink-0">
                   {marketPulse.indices?.map((idx) => {
-                    const isVix = idx.name.includes('VIX');
+                    const isVix = Boolean(idx?.name && String(idx.name).toUpperCase().includes('VIX'));
                     return (
                       <div
-                        key={idx.symbol}
+                        key={idx.symbol || idx.name}
                         className={`px-2.5 py-1.5 rounded-xl text-xs font-mono shrink-0 flex items-center gap-2 border ${
                           isVix
                             ? 'bg-purple-950/30 border-purple-500/30 text-purple-300'
                             : 'bg-[#070a10] border-white/[0.06] text-white'
                         }`}
                       >
-                        <span className="text-slate-400 font-sans font-medium text-[11px]">{idx.name}:</span>
+                        <span className="text-slate-400 font-sans font-medium text-[11px]">{idx.name || idx.symbol || 'Index'}:</span>
                         <span className="font-bold tabular-nums">{idx.price?.toLocaleString()}</span>
-                        <span className={`text-[11px] font-bold tabular-nums ${idx.change_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {idx.change_pct >= 0 ? '+' : ''}{idx.change_pct}%
+                        <span className={`text-[11px] font-bold tabular-nums ${(idx.change_pct || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {(idx.change_pct || 0) >= 0 ? '+' : ''}{idx.change_pct}%
                         </span>
                         {isVix && marketPulse.vix?.regime && (
                           <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase border ${
@@ -1063,12 +1063,12 @@ export default function IntradayTerminal() {
                   </div>
                   {marketPulse.sectors.map((sec) => (
                     <div
-                      key={sec.symbol}
+                      key={sec.symbol || sec.name}
                       className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#070a10] border border-white/[0.06] shrink-0"
                     >
-                      <span className="text-slate-300 font-sans font-medium">{sec.name.replace('NIFTY ', '')}</span>
-                      <span className={`font-bold tabular-nums ${sec.change_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {sec.change_pct >= 0 ? '+' : ''}{sec.change_pct}%
+                      <span className="text-slate-300 font-sans font-medium">{String(sec?.name || sec?.symbol || 'Sector').replace('NIFTY ', '')}</span>
+                      <span className={`font-bold tabular-nums ${(sec.change_pct || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {(sec.change_pct || 0) >= 0 ? '+' : ''}{sec.change_pct}%
                       </span>
                     </div>
                   ))}
@@ -1355,13 +1355,13 @@ export default function IntradayTerminal() {
                       <button
                         onClick={() => togglePinTicker(ticker)}
                         className={`p-0.5 rounded transition ${
-                          pinnedTickers.includes(ticker)
+                          Boolean(pinnedTickers?.includes(ticker))
                             ? 'text-amber-400 hover:text-amber-300'
                             : 'text-slate-600 hover:text-slate-400'
                         }`}
-                        title={pinnedTickers.includes(ticker) ? 'Unpin from desk' : 'Pin to my desk'}
+                        title={Boolean(pinnedTickers?.includes(ticker)) ? 'Unpin from desk' : 'Pin to my desk'}
                       >
-                        <Star className={`w-3.5 h-3.5 ${pinnedTickers.includes(ticker) ? 'fill-amber-400 text-amber-400' : ''}`} />
+                        <Star className={`w-3.5 h-3.5 ${Boolean(pinnedTickers?.includes(ticker)) ? 'fill-amber-400 text-amber-400' : ''}`} />
                       </button>
                       <span className="text-xs font-semibold text-slate-300 truncate" title={data.company_name}>{data.company_name}</span>
                     </div>
@@ -1426,44 +1426,59 @@ export default function IntradayTerminal() {
               </div>
 
               {/* Card 2: Intraday VWAP & Bands */}
-              <div className="bg-[#0b0f17]/90 border border-white/[0.08] rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between shadow-md shadow-black/30">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
-                      Session VWAP
-                      <InfoBadge infoKey="vwap" />
-                    </span>
-                    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border tabular-nums ${
-                      data.vwap_dist_pct >= 0 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                    }`}>
-                      {data.vwap_dist_pct >= 0 ? '+' : ''}{data.vwap_dist_pct}%
-                    </span>
-                  </div>
-                  <div className="mt-1">
-                    <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-cyan-400 tabular-nums">
-                      {currSym}{data.vwap?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Bias:{' '}
-                      <span className={`font-semibold ${data.vwap_bias.includes('BULL') ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {data.vwap_bias}
-                      </span>
-                    </p>
-                  </div>
-                </div>
+              {(() => {
+                const vwapDist = data.signals?.vwap_distance_pct ?? (
+                  data.vwap && data.current_price
+                    ? Number((((data.current_price - data.vwap) / data.vwap) * 100).toFixed(2))
+                    : 0
+                );
+                const vwapBias = data.vwap_bias || (data.current_price >= (data.vwap || 0) ? 'BULLISH (ABOVE)' : 'BEARISH (BELOW)');
+                const isBull = String(vwapBias).toUpperCase().includes('BULL');
+                const lastCandle = candles.length > 0 ? candles[candles.length - 1] : null;
+                const upper2 = data.upper_band_2 || lastCandle?.upper_band_2 || (data.vwap ? Number((data.vwap * 1.01).toFixed(2)) : '—');
+                const lower2 = data.lower_band_2 || lastCandle?.lower_band_2 || (data.vwap ? Number((data.vwap * 0.99).toFixed(2)) : '—');
 
-                <div>
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-white/[0.06] font-mono tabular-nums">
-                    <span>+2σ: <strong className="text-cyan-300">{currSym}{data.upper_band_2}</strong></span>
-                    <span>-2σ: <strong className="text-cyan-300">{currSym}{data.lower_band_2}</strong></span>
+                return (
+                  <div className="bg-[#0b0f17]/90 border border-white/[0.08] rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between shadow-md shadow-black/30">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
+                          Session VWAP
+                          <InfoBadge infoKey="vwap" />
+                        </span>
+                        <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border tabular-nums ${
+                          vwapDist >= 0 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                        }`}>
+                          {vwapDist >= 0 ? '+' : ''}{vwapDist}%
+                        </span>
+                      </div>
+                      <div className="mt-1">
+                        <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-cyan-400 tabular-nums">
+                          {currSym}{data.vwap?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-0.5 font-mono">
+                          Bias:{' '}
+                          <span className={`font-semibold ${isBull ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {vwapBias}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-white/[0.06] font-mono tabular-nums">
+                        <span>+2σ: <strong className="text-cyan-300">{currSym}{upper2}</strong></span>
+                        <span>-2σ: <strong className="text-cyan-300">{currSym}{lower2}</strong></span>
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between text-[8px] text-slate-500 font-mono">
+                        <span>Oversold Floor</span>
+                        <span className="text-cyan-400">±2σ Envelope</span>
+                        <span>Overbought Cap</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-1.5 flex items-center justify-between text-[8px] text-slate-500 font-mono">
-                    <span>Oversold Floor</span>
-                    <span className="text-cyan-400">±2σ Envelope</span>
-                    <span>Overbought Cap</span>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Card 3: Relative Performance vs Benchmark */}
               <div className="bg-[#0b0f17]/90 border border-white/[0.08] rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between shadow-md shadow-black/30">
@@ -1550,13 +1565,13 @@ export default function IntradayTerminal() {
                       <InfoBadge infoKey="intraday_quant_score" />
                     </span>
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase ${
-                      data.signals.overall_bias.includes('BUY')
+                      String(data.signals?.overall_bias || '').toUpperCase().includes('BUY')
                         ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                        : data.signals.overall_bias.includes('SELL')
+                        : String(data.signals?.overall_bias || '').toUpperCase().includes('SELL')
                         ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
                         : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
                     }`}>
-                      {data.signals.overall_bias}
+                      {data.signals?.overall_bias || 'NEUTRAL'}
                     </span>
                   </div>
                   <div className="mt-1">
@@ -2914,9 +2929,9 @@ export default function IntradayTerminal() {
                           Composite Quant Bias
                         </span>
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase ${
-                          data.signals?.overall_bias?.includes('BUY')
+                          String(data.signals?.overall_bias || '').toUpperCase().includes('BUY')
                             ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                            : data.signals?.overall_bias?.includes('SELL')
+                            : String(data.signals?.overall_bias || '').toUpperCase().includes('SELL')
                             ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
                             : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                         }`}>
