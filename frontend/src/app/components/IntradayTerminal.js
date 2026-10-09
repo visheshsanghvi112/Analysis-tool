@@ -7,7 +7,7 @@ import {
   Activity, ArrowUpRight, ArrowDownRight, RefreshCw, Layers,
   Compass, Calculator, ShieldAlert, Sparkles, Sliders, ChevronDown,
   Search, TrendingUp, TrendingDown, Target, Zap, Clock, ShieldCheck,
-  BarChart2, Flame, Eye, ArrowRight, CheckCircle2, XCircle, AlertCircle,
+  BarChart2, Flame, Eye, ArrowRight, CheckCircle2, XCircle, AlertCircle, MinusCircle,
   Copy, Check, Scale, AlertTriangle, Play, HelpCircle,
   Volume2, VolumeX, Edit3, Trash2, Maximize2, Minimize2, Bell, BellOff,
   Star, Keyboard, X, Download
@@ -1632,6 +1632,159 @@ export default function IntradayTerminal() {
             </div>
           )}
 
+          {/* ── CIRCUIT LIMIT CORRIDOR & AUCTION FREEZE MONITOR ── */}
+          {data?.circuit_bands && (
+            <div className="bg-[#0b0f17]/90 border border-white/[0.08] rounded-2xl p-3 sm:p-4 backdrop-blur-md shadow-lg shadow-black/30 space-y-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className={`p-1.5 rounded-lg border ${
+                    data.circuit_bands.circuit_status === 'APPROACHING_UPPER_CIRCUIT'
+                      ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                      : data.circuit_bands.circuit_status === 'APPROACHING_LOWER_CIRCUIT'
+                      ? 'bg-rose-500/15 border-rose-500/30 text-rose-400'
+                      : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                  }`}>
+                    {data.circuit_bands.circuit_status !== 'NORMAL' ? (
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                    ) : (
+                      <ShieldCheck className="w-4 h-4 shrink-0" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xs font-bold text-white tracking-wide uppercase font-mono">
+                        Circuit Limits &amp; Volatility Corridor
+                      </h3>
+                      <InfoBadge
+                        title="Regulatory Circuit Corridor"
+                        what="The mandatory price collar (±10% for Indian securities, ±20% for US) set from previous close. Orders beyond these limits freeze or halt."
+                        why="Crucial for intraday traders to avoid having capital locked in limit-up / limit-down circuit freezes."
+                        interpretation="Approaching (<1%) indicates extreme directional pressure with imminent auction freeze risk."
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-mono">
+                      Band: <strong className="text-slate-200">±{data.circuit_bands.band_pct}%</strong> from Prev Close ({currSym}{data.prev_close || data.open})
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  {data.circuit_bands.circuit_status === 'APPROACHING_UPPER_CIRCUIT' ? (
+                    <span className="px-2.5 py-1 rounded-full text-xs font-bold font-mono bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5" /> ⚠️ UPPER CIRCUIT IMMINENT (&lt;1% away)
+                    </span>
+                  ) : data.circuit_bands.circuit_status === 'APPROACHING_LOWER_CIRCUIT' ? (
+                    <span className="px-2.5 py-1 rounded-full text-xs font-bold font-mono bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5" /> ⚠️ LOWER CIRCUIT IMMINENT (&lt;1% away)
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5" /> Normal Trading Band (±{data.circuit_bands.band_pct}%)
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Visual Corridor Bar & Boundaries */}
+              {(() => {
+                const cb = data.circuit_bands;
+                const lower = cb.lower_band || (data.current_price * 0.9);
+                const upper = cb.upper_band || (data.current_price * 1.1);
+                const bandRange = Math.max(0.01, upper - lower);
+                const currPos = Math.max(0, Math.min(100, ((data.current_price - lower) / bandRange) * 100));
+                const prevClosePos = data.prev_close ? Math.max(0, Math.min(100, ((data.prev_close - lower) / bandRange) * 100)) : 50;
+                const lowPos = data.low ? Math.max(0, Math.min(100, ((data.low - lower) / bandRange) * 100)) : currPos;
+                const highPos = data.high ? Math.max(0, Math.min(100, ((data.high - lower) / bandRange) * 100)) : currPos;
+                const sessionRangeWidth = Math.max(1.5, highPos - lowPos);
+
+                return (
+                  <div className="space-y-1.5 pt-1">
+                    {/* Flank prices and central track */}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                      {/* Left Flank: Lower Circuit */}
+                      <div className="md:col-span-3 p-2.5 rounded-xl bg-[#070a10] border border-rose-500/20 flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase font-mono font-bold block">
+                            Lower Circuit (LC)
+                          </span>
+                          <span className="text-base font-black font-mono text-rose-400 tabular-nums">
+                            {currSym}{lower.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                            -{cb.dist_to_lower_pct}% cushion
+                          </span>
+                          <span className="text-[9px] text-slate-500 block font-mono mt-0.5">Floor Freeze</span>
+                        </div>
+                      </div>
+
+                      {/* Center Track: Full allowable band representation */}
+                      <div className="md:col-span-6 px-1 space-y-1">
+                        <div className="relative w-full h-4 bg-slate-950 rounded-full border border-slate-800 overflow-visible">
+                          {/* Active day session range shaded bar */}
+                          <div
+                            className="absolute top-0 bottom-0 bg-gradient-to-r from-rose-500/25 via-cyan-500/25 to-emerald-500/25 rounded-full border-t border-b border-cyan-400/30"
+                            style={{
+                              left: `${lowPos}%`,
+                              width: `${sessionRangeWidth}%`,
+                            }}
+                            title={`Session Range: ${currSym}${data.low} - ${currSym}${data.high}`}
+                          />
+
+                          {/* Prev Close Anchor Marker */}
+                          <div
+                            className="absolute top-[-2px] bottom-[-2px] w-0.5 bg-slate-400 z-10"
+                            style={{ left: `${prevClosePos}%` }}
+                            title={`Previous Close: ${currSym}${data.prev_close}`}
+                          >
+                            <span className="absolute -top-3.5 -translate-x-1/2 text-[8px] font-mono text-slate-400 font-bold whitespace-nowrap">
+                              PC
+                            </span>
+                          </div>
+
+                          {/* Current Price Pin */}
+                          <div
+                            className="absolute top-[-4px] bottom-[-4px] w-2 -ml-1 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] z-20 transition-all duration-300"
+                            style={{ left: `${currPos}%` }}
+                            title={`Current Price: ${currSym}${data.current_price}`}
+                          />
+                        </div>
+
+                        {/* Track Legend */}
+                        <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono pt-1">
+                          <span>LC ({currSym}{lower.toFixed(0)})</span>
+                          <span className="text-slate-400">
+                            LTP: <strong className="text-cyan-300">{currSym}{data.current_price}</strong> ({currPos.toFixed(0)}% of band)
+                          </span>
+                          <span>UC ({currSym}{upper.toFixed(0)})</span>
+                        </div>
+                      </div>
+
+                      {/* Right Flank: Upper Circuit */}
+                      <div className="md:col-span-3 p-2.5 rounded-xl bg-[#070a10] border border-emerald-500/20 flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase font-mono font-bold block">
+                            Upper Circuit (UC)
+                          </span>
+                          <span className="text-base font-black font-mono text-emerald-400 tabular-nums">
+                            {currSym}{upper.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            +{cb.dist_to_upper_pct}% headroom
+                          </span>
+                          <span className="text-[9px] text-slate-500 block font-mono mt-0.5">Ceiling Freeze</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
           {/* ── MAIN WORKSTATION GRID (Chart & Plan Left, Microstructure Sidebar Right) ── */}
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
 
@@ -1785,6 +1938,15 @@ export default function IntradayTerminal() {
                           onChange={e => { setAlertPrice(e.target.value); setAlertTriggered(false); }}
                           className="w-14 bg-transparent font-mono text-xs text-white placeholder-slate-600 focus:outline-none tabular-nums"
                         />
+                        {alertPrice && (
+                          <button
+                            onClick={() => { setAlertPrice(''); setAlertTriggered(false); }}
+                            className="text-slate-400 hover:text-rose-400 transition p-0.5"
+                            title="Clear price alert"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -2108,6 +2270,84 @@ export default function IntradayTerminal() {
                           </g>
                         );
                       })}
+
+                      {/* Interactive Price Alert Target Overlay */}
+                      {alertPrice && !isNaN(parseFloat(alertPrice)) && (() => {
+                        const ap = parseFloat(alertPrice);
+                        if (ap < priceMin || ap > priceMax) return null;
+                        const y = yScale(ap);
+                        const isTriggered = alertTriggered;
+                        const strokeColor = isTriggered ? '#ef4444' : '#f59e0b';
+                        const bgColor = isTriggered ? '#7f1d1d' : '#78350f';
+                        const textColor = isTriggered ? '#fca5a5' : '#fef3c7';
+                        return (
+                          <g key="chart-alert-overlay" className="transition-all duration-300">
+                            {/* Halo glow when triggered */}
+                            {isTriggered && (
+                              <line
+                                x1={padding.left}
+                                y1={y}
+                                x2={chartWidth - padding.right}
+                                y2={y}
+                                stroke="#ef4444"
+                                strokeWidth="5"
+                                strokeOpacity="0.25"
+                              />
+                            )}
+                            {/* Alert dashed line */}
+                            <line
+                              x1={padding.left}
+                              y1={y}
+                              x2={chartWidth - padding.right}
+                              y2={y}
+                              stroke={strokeColor}
+                              strokeWidth="1.5"
+                              strokeDasharray="5 3"
+                              strokeOpacity={isTriggered ? 1 : 0.85}
+                            />
+                            {/* Left Banner on chart canvas */}
+                            <rect
+                              x={padding.left + 6}
+                              y={y - 14}
+                              width={isTriggered ? 112 : 98}
+                              height={13}
+                              fill={bgColor}
+                              stroke={strokeColor}
+                              strokeWidth="0.8"
+                              rx="2"
+                            />
+                            <text
+                              x={padding.left + 10}
+                              y={y - 4}
+                              fill={textColor}
+                              fontSize="7.5"
+                              fontFamily="monospace"
+                              fontWeight="bold"
+                            >
+                              {isTriggered ? '⚡ ALERT FIRED' : `ALERT ${alertAbove ? '≥' : '≤'} ${currSym}${ap.toFixed(2)}`}
+                            </text>
+                            {/* Right Y-Axis Badge */}
+                            <rect
+                              x={chartWidth - padding.right + 2}
+                              y={y - 8}
+                              width={padding.right - 4}
+                              height={16}
+                              fill={strokeColor}
+                              rx="3"
+                            />
+                            <text
+                              x={chartWidth - padding.right + 5}
+                              y={y + 3}
+                              fill="#000000"
+                              fontSize="8"
+                              fontFamily="monospace"
+                              fontWeight="bold"
+                            >
+                              🔔{alertAbove ? '≥' : '≤'}{ap.toFixed(1)}
+                            </text>
+                          </g>
+                        );
+                      })()}
 
                       {/* Interactive Crosshair */}
                       {hoveredX !== null && hoveredX >= padding.left && hoveredX <= chartWidth - padding.right && (
@@ -2569,10 +2809,11 @@ export default function IntradayTerminal() {
                 <div className="flex items-center gap-1 overflow-x-auto pb-2 border-b border-white/[0.06] scrollbar-none text-xs">
                   {[
                     { id: 'pivots', label: 'Pivots & CPR' },
-                    { id: 'flow', label: 'Order Flow' },
-                    { id: 'options', label: 'Options & PCR' },
-                    { id: 'calc', label: 'Sizing & Fees' },
-                    { id: 'confluence', label: 'Confluence' },
+                    { id: 'signals', label: 'Quant Checklist' },
+                    { id: 'flow', label: 'Order Flow & DOM' },
+                    { id: 'options', label: 'Options & OI' },
+                    { id: 'calc', label: 'Sizing & Risk' },
+                    { id: 'confluence', label: 'MTF Matrix' },
                     { id: 'log', label: `Trades (${tradeLog.length})` },
                   ].map(tab => (
                     <button
@@ -2663,6 +2904,124 @@ export default function IntradayTerminal() {
                   </div>
                 )}
 
+                {/* Tab: Quant Signals Audit */}
+                {sidebarTab === 'signals' && (
+                  <div className="pt-3 space-y-3">
+                    {/* Top Quant Bias Overview Card */}
+                    <div className="p-3 rounded-xl bg-[#070a10] border border-white/[0.08] space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-slate-400 uppercase font-mono font-bold tracking-wider">
+                          Composite Quant Bias
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase ${
+                          data.signals?.overall_bias?.includes('BUY')
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : data.signals?.overall_bias?.includes('SELL')
+                            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                            : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                        }`}>
+                          {data.signals?.overall_bias || 'NEUTRAL'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-baseline justify-between">
+                        <div className="flex items-baseline gap-1">
+                          <span className={`text-2xl font-black font-mono tabular-nums ${
+                            (data.signals?.quant_score || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                          }`}>
+                            {(data.signals?.quant_score || 0) >= 0 ? '+' : ''}{data.signals?.quant_score || 0}
+                          </span>
+                          <span className="text-xs text-slate-500 font-mono">/ 100</span>
+                        </div>
+                        <div className="text-right text-[11px] font-mono">
+                          <span className="text-slate-400">Regime: </span>
+                          <span className="text-cyan-300 font-bold">{data.signals?.risk_regime || 'Equilibrium'}</span>
+                        </div>
+                      </div>
+
+                      {/* Visual Score Bar */}
+                      <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden flex border border-slate-800">
+                        {(() => {
+                          const score = data.signals?.quant_score || 0;
+                          const norm = Math.max(0, Math.min(100, (score + 100) / 2));
+                          return (
+                            <div
+                              className={`h-full transition-all duration-500 ${
+                                score >= 20 ? 'bg-emerald-400' : score <= -20 ? 'bg-rose-500' : 'bg-amber-400'
+                              }`}
+                              style={{ width: `${norm}%` }}
+                            />
+                          );
+                        })()}
+                      </div>
+
+                      {/* Extension state note */}
+                      {data.signals?.extension_desc && (
+                        <p className="text-[11px] text-slate-300 leading-snug bg-slate-950/60 p-2 rounded-lg border border-slate-800/60 font-mono">
+                          💡 {data.signals.extension_desc}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Factor-by-Factor Validations Checklist */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between px-1 text-[10px] text-slate-400 uppercase font-mono font-bold">
+                        <span>Institutional Checklist</span>
+                        <span>{data.signals?.checklist?.filter(c => c.status === 'BULLISH').length || 0} Bull · {data.signals?.checklist?.filter(c => c.status === 'BEARISH').length || 0} Bear</span>
+                      </div>
+
+                      {data.signals?.checklist && data.signals.checklist.length > 0 ? (
+                        data.signals.checklist.map((item, idx) => (
+                          <div
+                            key={idx}
+                            className={`p-2.5 rounded-xl border transition-all text-xs font-mono ${
+                              item.status === 'BULLISH'
+                                ? 'bg-emerald-950/20 border-emerald-500/25'
+                                : item.status === 'BEARISH'
+                                ? 'bg-rose-950/20 border-rose-500/25'
+                                : 'bg-[#070a10] border-white/[0.08]'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-1.5 font-bold">
+                                {item.status === 'BULLISH' ? (
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                ) : item.status === 'BEARISH' ? (
+                                  <XCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                                ) : (
+                                  <MinusCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                )}
+                                <span className={
+                                  item.status === 'BULLISH' ? 'text-emerald-300' :
+                                  item.status === 'BEARISH' ? 'text-rose-300' : 'text-slate-300'
+                                }>
+                                  {item.factor}
+                                </span>
+                              </div>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase border ${
+                                item.status === 'BULLISH'
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                  : item.status === 'BEARISH'
+                                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                  : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                              }`}>
+                                {item.status}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 leading-snug pl-5 font-sans">
+                              {item.desc}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-4 text-center text-xs text-slate-500 bg-[#070a10] rounded-xl border border-white/[0.06]">
+                          Signals checklist evaluating session rules...
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Tab 2: Order Flow & VPVR */}
                 {sidebarTab === 'flow' && (
                   <div className="pt-3 space-y-3">
@@ -2694,6 +3053,108 @@ export default function IntradayTerminal() {
                         </strong></span>
                         <span>Vol: <strong className="text-white">{data?.volume?.toLocaleString()}</strong></span>
                       </div>
+                    </div>
+
+                    {/* Level 2 Market Depth (DOM) */}
+                    <div className="p-3 bg-[#070a10] rounded-xl border border-white/[0.08] space-y-2">
+                      <div className="flex items-center justify-between text-[10px] font-mono">
+                        <span className="text-slate-400 uppercase font-bold tracking-wider">
+                          Level 2 Market Depth (DOM)
+                        </span>
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/25">
+                          MODELED L2 BOOK
+                        </span>
+                      </div>
+
+                      {(() => {
+                        const price = data.current_price || 100;
+                        const tick = Math.max(0.05, Math.round(price * 0.00025 * 20) / 20);
+                        const buyPct = (data?.order_flow?.buy_pressure_pct ?? 50) / 100;
+                        const sellPct = (data?.order_flow?.sell_pressure_pct ?? 50) / 100;
+                        const baseVol = Math.max(100, Math.round((data?.volume || 50000) / 180));
+
+                        const bids = [
+                          { orders: Math.max(1, Math.round(buyPct * 16)), qty: Math.round(baseVol * buyPct * 1.5), price: price - tick },
+                          { orders: Math.max(1, Math.round(buyPct * 28)), qty: Math.round(baseVol * buyPct * 2.4), price: price - tick * 2 },
+                          { orders: Math.max(1, Math.round(buyPct * 42)), qty: Math.round(baseVol * buyPct * 3.1), price: price - tick * 3 },
+                          { orders: Math.max(1, Math.round(buyPct * 22)), qty: Math.round(baseVol * buyPct * 1.9), price: price - tick * 4 },
+                          { orders: Math.max(1, Math.round(buyPct * 10)), qty: Math.round(baseVol * buyPct * 1.1), price: price - tick * 5 },
+                        ];
+                        const asks = [
+                          { price: price + tick, qty: Math.round(baseVol * sellPct * 1.4), orders: Math.max(1, Math.round(sellPct * 14)) },
+                          { price: price + tick * 2, qty: Math.round(baseVol * sellPct * 2.2), orders: Math.max(1, Math.round(sellPct * 25)) },
+                          { price: price + tick * 3, qty: Math.round(baseVol * sellPct * 2.9), orders: Math.max(1, Math.round(sellPct * 38)) },
+                          { price: price + tick * 4, qty: Math.round(baseVol * sellPct * 1.8), orders: Math.max(1, Math.round(sellPct * 20)) },
+                          { price: price + tick * 5, qty: Math.round(baseVol * sellPct * 1.0), orders: Math.max(1, Math.round(sellPct * 9)) },
+                        ];
+
+                        const maxQty = Math.max(...bids.map(b => b.qty), ...asks.map(a => a.qty), 1);
+                        const totalBidQty = bids.reduce((s, b) => s + b.qty, 0);
+                        const totalAskQty = asks.reduce((s, a) => s + a.qty, 0);
+                        const totalBookQty = totalBidQty + totalAskQty || 1;
+                        const spread = (asks[0].price - bids[0].price).toFixed(2);
+                        const spreadPct = ((spread / price) * 100).toFixed(3);
+
+                        return (
+                          <div className="space-y-1 font-mono text-[10px] tabular-nums">
+                            {/* Column headers */}
+                            <div className="grid grid-cols-6 text-[8.5px] text-slate-500 uppercase pb-1 border-b border-white/[0.06] font-bold">
+                              <span className="text-left">Orders</span>
+                              <span className="text-right">Qty</span>
+                              <span className="text-right text-emerald-400">Bid</span>
+                              <span className="text-left text-rose-400 pl-2">Ask</span>
+                              <span className="text-right">Qty</span>
+                              <span className="text-right">Orders</span>
+                            </div>
+
+                            {/* 5 depth rows */}
+                            {bids.map((b, idx) => {
+                              const a = asks[idx];
+                              const bDepth = Math.min(100, Math.round((b.qty / maxQty) * 100));
+                              const aDepth = Math.min(100, Math.round((a.qty / maxQty) * 100));
+                              return (
+                                <div key={idx} className="grid grid-cols-6 items-center py-0.5 relative text-[9.5px]">
+                                  {/* Bid depth background bar */}
+                                  <div
+                                    className="absolute left-0 top-0 bottom-0 bg-emerald-500/10 pointer-events-none rounded-l"
+                                    style={{ width: `${bDepth / 2}%` }}
+                                  />
+                                  {/* Ask depth background bar */}
+                                  <div
+                                    className="absolute right-0 top-0 bottom-0 bg-rose-500/10 pointer-events-none rounded-r"
+                                    style={{ width: `${aDepth / 2}%` }}
+                                  />
+
+                                  {/* Bid info */}
+                                  <span className="text-slate-500 text-left relative z-10">{b.orders}</span>
+                                  <span className="text-slate-300 text-right relative z-10">{b.qty.toLocaleString()}</span>
+                                  <span className="text-emerald-400 font-bold text-right relative z-10">{b.price.toFixed(2)}</span>
+
+                                  {/* Ask info */}
+                                  <span className="text-rose-400 font-bold text-left pl-2 relative z-10">{a.price.toFixed(2)}</span>
+                                  <span className="text-slate-300 text-right relative z-10">{a.qty.toLocaleString()}</span>
+                                  <span className="text-slate-500 text-right relative z-10">{a.orders}</span>
+                                </div>
+                              );
+                            })}
+
+                            {/* Footer totals */}
+                            <div className="pt-1.5 border-t border-white/[0.06] flex items-center justify-between text-[10px]">
+                              <div className="flex items-center gap-1">
+                                <span className="text-emerald-400 font-bold">{totalBidQty.toLocaleString()}</span>
+                                <span className="text-slate-500 text-[9px]">({Math.round((totalBidQty / totalBookQty) * 100)}%)</span>
+                              </div>
+                              <div className="text-slate-400 text-[9px]">
+                                Spread: <strong className="text-amber-400">{currSym}{spread}</strong> ({spreadPct}%)
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-rose-400 font-bold">{totalAskQty.toLocaleString()}</span>
+                                <span className="text-slate-500 text-[9px]">({Math.round((totalAskQty / totalBookQty) * 100)}%)</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* VPVR Distribution */}
@@ -2784,13 +3245,83 @@ export default function IntradayTerminal() {
                         </div>
 
                         {pcrData.max_pain_strike && (
-                          <div className="p-2 rounded-xl bg-[#070a10] border border-white/[0.08] flex justify-between items-center text-xs">
-                            <span className="text-slate-400 font-medium">Max Pain Strike:</span>
-                            <span className="font-bold font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/25">
-                              {currSym}{pcrData.max_pain_strike}
-                            </span>
+                          <div className="p-2.5 rounded-xl bg-[#070a10] border border-white/[0.08] space-y-1">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-400 font-medium">Max Pain Strike:</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/25">
+                                  {currSym}{pcrData.max_pain_strike}
+                                </span>
+                                {data?.current_price && (
+                                  <span className={`text-[10px] font-mono font-bold ${
+                                    pcrData.max_pain_strike >= data.current_price ? 'text-emerald-400' : 'text-rose-400'
+                                  }`}>
+                                    {pcrData.max_pain_strike >= data.current_price ? '+' : ''}
+                                    {((pcrData.max_pain_strike - data.current_price) / data.current_price * 100).toFixed(1)}%
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-[10px] text-slate-500 font-mono">
+                              Dealers experience minimum option payout at {currSym}{pcrData.max_pain_strike}. Expiry gravity anchor.
+                            </p>
                           </div>
                         )}
+
+                        {/* Top Call Strikes (Resistance Walls) */}
+                        {pcrData.top_call_strikes && pcrData.top_call_strikes.length > 0 && (
+                          <div className="p-2.5 rounded-xl bg-[#070a10] border border-white/[0.08] space-y-1.5">
+                            <div className="flex items-center justify-between text-[10px] font-mono">
+                              <span className="text-cyan-400 uppercase font-bold tracking-wider">Top Call Walls (Resistance)</span>
+                              <span className="text-slate-500">Call OI</span>
+                            </div>
+                            {(() => {
+                              const maxCall = Math.max(...pcrData.top_call_strikes.map(s => s.oi), 1);
+                              return pcrData.top_call_strikes.slice(0, 4).map((item, idx) => (
+                                <div key={idx} className="space-y-0.5">
+                                  <div className="flex items-center justify-between text-[10px] font-mono tabular-nums">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-bold text-white">{currSym}{item.strike}</span>
+                                      {idx === 0 && <span className="text-[8px] bg-cyan-500/20 text-cyan-300 px-1 rounded font-bold">L1 WALL</span>}
+                                    </div>
+                                    <span className="text-cyan-400 font-bold">{(item.oi / 1000).toFixed(1)}K</span>
+                                  </div>
+                                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                                    <div className="bg-gradient-to-r from-cyan-600 to-cyan-400 h-full rounded-full transition-all duration-300" style={{ width: `${(item.oi / maxCall) * 100}%` }} />
+                                  </div>
+                                </div>
+                              ));
+                            })()}
+                          </div>
+                        )}
+
+                        {/* Top Put Strikes (Support Walls) */}
+                        {pcrData.top_put_strikes && pcrData.top_put_strikes.length > 0 && (
+                          <div className="p-2.5 rounded-xl bg-[#070a10] border border-white/[0.08] space-y-1.5">
+                            <div className="flex items-center justify-between text-[10px] font-mono">
+                              <span className="text-rose-400 uppercase font-bold tracking-wider">Top Put Walls (Support)</span>
+                              <span className="text-slate-500">Put OI</span>
+                            </div>
+                            {(() => {
+                              const maxPut = Math.max(...pcrData.top_put_strikes.map(s => s.oi), 1);
+                              return pcrData.top_put_strikes.slice(0, 4).map((item, idx) => (
+                                <div key={idx} className="space-y-0.5">
+                                  <div className="flex items-center justify-between text-[10px] font-mono tabular-nums">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-bold text-white">{currSym}{item.strike}</span>
+                                      {idx === 0 && <span className="text-[8px] bg-rose-500/20 text-rose-300 px-1 rounded font-bold">L1 FLOOR</span>}
+                                    </div>
+                                    <span className="text-rose-400 font-bold">{(item.oi / 1000).toFixed(1)}K</span>
+                                  </div>
+                                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                                    <div className="bg-gradient-to-r from-rose-600 to-rose-400 h-full rounded-full transition-all duration-300" style={{ width: `${(item.oi / maxPut) * 100}%` }} />
+                                  </div>
+                                </div>
+                              ));
+                            })()}
+                          </div>
+                        )}
+
                         <p className="text-[11px] text-slate-400 leading-snug">💡 {pcrData.sentiment_label}</p>
                       </div>
                     ) : (
@@ -2804,6 +3335,70 @@ export default function IntradayTerminal() {
                 {/* Tab 4: Position Sizing & Real Friction */}
                 {sidebarTab === 'calc' && (
                   <div className="pt-3 space-y-3">
+                    {/* Capital Quick Presets */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                        <span>Account Capital:</span>
+                        <span className="text-white font-bold">{currSym}{Number(calcCapital || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="grid grid-cols-4 sm:grid-cols-5 gap-1">
+                        {(currSym === '₹' ? [
+                          { label: '₹50K', val: 50000 },
+                          { label: '₹1L', val: 100000 },
+                          { label: '₹2.5L', val: 250000 },
+                          { label: '₹5L', val: 500000 },
+                          { label: '₹10L', val: 1000000 },
+                        ] : [
+                          { label: '$10K', val: 10000 },
+                          { label: '$25K', val: 25000 },
+                          { label: '$50K', val: 50000 },
+                          { label: '$100K', val: 100000 },
+                        ]).map(preset => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            onClick={() => setCalcCapital(preset.val.toString())}
+                            className={`py-1 px-1 text-[10px] font-mono font-bold rounded-lg border transition ${
+                              Number(calcCapital) === preset.val
+                                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                : 'bg-[#070a10] text-slate-400 border-white/[0.06] hover:text-white hover:border-slate-700'
+                            }`}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Risk % Quick Tiers */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                        <span>Max Risk Per Trade:</span>
+                        <span className="text-amber-400 font-bold">{calcRiskPct}% ({currSym}{Math.round((Number(calcCapital) || 0) * (calcRiskPct / 100)).toLocaleString()})</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1">
+                        {[
+                          { label: '0.5% Cons.', val: 0.5 },
+                          { label: '1.0% Std.', val: 1.0 },
+                          { label: '1.5% Active', val: 1.5 },
+                          { label: '2.0% Agg.', val: 2.0 },
+                        ].map(tier => (
+                          <button
+                            key={tier.val}
+                            type="button"
+                            onClick={() => setCalcRiskPct(tier.val)}
+                            className={`py-1 px-1 text-[10px] font-mono font-bold rounded-lg border transition ${
+                              calcRiskPct === tier.val
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                : 'bg-[#070a10] text-slate-400 border-white/[0.06] hover:text-white hover:border-slate-700'
+                            }`}
+                          >
+                            {tier.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <label className="text-slate-400 block mb-1 font-medium text-[11px]">Capital ({currSym})</label>
@@ -2823,11 +3418,23 @@ export default function IntradayTerminal() {
                         >
                           <option value={0.5}>0.5%</option>
                           <option value={1.0}>1.0%</option>
+                          <option value={1.5}>1.5%</option>
                           <option value={2.0}>2.0%</option>
                         </select>
                       </div>
                       <div>
-                        <label className="text-slate-400 block mb-1 font-medium text-[11px]">Entry ({currSym})</label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-slate-400 font-medium text-[11px]">Entry ({currSym})</label>
+                          {data?.current_price && (
+                            <button
+                              type="button"
+                              onClick={() => setCalcEntry(data.current_price.toString())}
+                              className="text-[9px] text-cyan-400 hover:text-cyan-300 font-mono font-bold"
+                            >
+                              Fill LTP
+                            </button>
+                          )}
+                        </div>
                         <input
                           type="number" step="0.05"
                           value={calcEntry}
@@ -2836,7 +3443,26 @@ export default function IntradayTerminal() {
                         />
                       </div>
                       <div>
-                        <label className="text-slate-400 block mb-1 font-medium text-[11px]">Stop ({currSym})</label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-slate-400 font-medium text-[11px]">Stop ({currSym})</label>
+                          {data?.supertrend ? (
+                            <button
+                              type="button"
+                              onClick={() => setCalcStop(data.supertrend.toFixed(2))}
+                              className="text-[9px] text-rose-400 hover:text-rose-300 font-mono font-bold"
+                            >
+                              Fill ST
+                            </button>
+                          ) : data?.low ? (
+                            <button
+                              type="button"
+                              onClick={() => setCalcStop(data.low.toString())}
+                              className="text-[9px] text-rose-400 hover:text-rose-300 font-mono font-bold"
+                            >
+                              Fill Low
+                            </button>
+                          ) : null}
+                        </div>
                         <input
                           type="number" step="0.05"
                           value={calcStop}
