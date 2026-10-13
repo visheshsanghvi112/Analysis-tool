@@ -720,6 +720,23 @@ def get_fundamentals_data(ticker: str) -> dict:
             })
         income_annual = list(reversed(income_annual))  # oldest first
 
+        # Fallback if annual income statement history is empty but company financialData exists
+        fd = r.get("financialData", {})
+        ks = r.get("defaultKeyStatistics", {})
+        if not income_annual:
+            tot_rev = raw(fd, "totalRevenue")
+            net_inc = raw(fd, "netIncomeToCommon") or raw(ks, "netIncomeToCommon")
+            if tot_rev or net_inc:
+                curr_yr = datetime.now().year
+                income_annual.append({
+                    "year": f"TTM ({curr_yr})",
+                    "revenue": tot_rev,
+                    "net_income": net_inc,
+                    "gross_profit": raw(fd, "grossProfits"),
+                    "ebit": raw(fd, "ebitda") or raw(fd, "operatingCashflow"),
+                    "eps": raw(ks, "trailingEps"),
+                })
+
         # ── 2. Quarterly earnings (last 8 quarters) ──────────────────────────
         quarterly_stmts = r.get("incomeStatementHistoryQuarterly", {}).get("incomeStatementHistory", [])
         income_quarterly = []
@@ -733,6 +750,16 @@ def get_fundamentals_data(ticker: str) -> dict:
                 "eps": raw(stmt, "dilutedEps"),
             })
         income_quarterly = list(reversed(income_quarterly))  # oldest first
+
+        # Fallback if quarterly is empty but annual/TTM exists
+        if not income_quarterly and income_annual:
+            for item in income_annual:
+                income_quarterly.append({
+                    "quarter": str(item.get("year")),
+                    "revenue": item.get("revenue"),
+                    "net_income": item.get("net_income"),
+                    "eps": item.get("eps"),
+                })
 
         # ── 3. Dividend data ─────────────────────────────────────────────────
         sd = r.get("summaryDetail", {})
@@ -841,6 +868,17 @@ def get_fundamentals_data(ticker: str) -> dict:
         if net_debt is not None and ebitda and ebitda > 0:
             net_debt_to_ebitda = round(net_debt / ebitda, 2)
 
+        asset_profile = r.get("assetProfile", {})
+        price_mod = r.get("price", {})
+        sector_str = str(asset_profile.get("sector") or "")
+        industry_str = str(asset_profile.get("industry") or "")
+        comp_name = str(price_mod.get("shortName") or price_mod.get("longName") or ticker)
+        fin_terms = ["finance", "financial", "bank", "insurance", "lending", "nbfc", "credit"]
+        is_financial = (
+            any(term in sector_str.lower() or term in industry_str.lower() or term in comp_name.lower() for term in fin_terms)
+            or any(kw in ticker.upper() for kw in ["BANK", "FINANCE", "FINSERV", "BAJFINANCE", "MUTHOOT", "IRFC", "PFC", "REC", "HDFC"])
+        )
+
         ratios = {
             "pe_ratio": raw(sd, "trailingPE") or raw(ks, "trailingPE"),
             "forward_pe": raw(sd, "forwardPE") or raw(ks, "forwardPE"),
@@ -861,6 +899,7 @@ def get_fundamentals_data(ticker: str) -> dict:
             "gross_margins": raw(fd, "grossMargins"),
             "profit_margins": raw(fd, "profitMargins"),
             "operating_margins": raw(fd, "operatingMargins"),
+            "is_financial": is_financial,
         }
 
         # ── 8. 3-Year Compounded Growth (Screener.in style) ───────────────────
@@ -904,8 +943,10 @@ def get_fundamentals_data(ticker: str) -> dict:
         # Pros Evaluation
         if net_debt is not None and net_debt <= 0:
             pros.append("Company is virtually debt-free with net cash reserves.")
-        elif de is not None and de <= 0.6:
+        elif not is_financial and de is not None and de <= 0.6:
             pros.append(f"Prudent balance sheet with low financial leverage (D/E: {de:.2f}x).")
+        elif is_financial:
+            pros.append("Regulated financial institution adhering to statutory capital adequacy reserves.")
 
         if peg is not None and 0 < peg < 1.0:
             pros.append(f"PEG ratio of {peg:.2f} indicates earnings growth is trading at an attractive multiple.")
@@ -938,7 +979,7 @@ def get_fundamentals_data(ticker: str) -> dict:
         if peg is not None and peg >= 2.2:
             cons.append(f"Growth is priced at a premium with a PEG ratio of {peg:.2f}.")
 
-        if de is not None and de > 1.2:
+        if not is_financial and de is not None and de > 1.2:
             cons.append(f"Elevated debt-to-equity ratio of {de:.2f}x increases vulnerability to rising interest rates.")
 
         if promoter is not None and promoter < 30.0:

@@ -438,14 +438,17 @@ function EarningsPanel({ annual, quarterly, ratios, price_cagr, sales_cagr_3y, p
             {(() => {
               const deRaw = ratios?.debt_to_equity;
               const deVal = deRaw != null ? (deRaw > 2.0 ? deRaw / 100.0 : deRaw) : null;
-              const isSafe = deVal != null && deVal <= 1.0;
+              const isFinancial = Boolean(ratios?.is_financial);
+              const isSafe = isFinancial || (deVal != null && deVal <= 1.0);
               return (
                 <>
                   <p className={`text-sm font-black font-mono ${isSafe ? 'text-emerald-400' : 'text-amber-400'}`}>
                     {deVal != null ? `${deVal.toFixed(2)}x` : 'N/A'}
                   </p>
                   <p className="text-[9px] text-slate-500 truncate">
-                    {deVal != null ? (deVal <= 0.5 ? '✓ Low Debt' : deVal <= 1.0 ? 'Moderate' : '⚠️ High Leverage') : 'Solvency'}
+                    {isFinancial
+                      ? '✓ Regulated Institution'
+                      : (deVal != null ? (deVal <= 0.5 ? '✓ Low Debt' : deVal <= 1.0 ? 'Moderate' : '⚠️ High Leverage') : 'Solvency')}
                   </p>
                 </>
               );

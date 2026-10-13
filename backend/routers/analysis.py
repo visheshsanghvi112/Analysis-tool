@@ -42,17 +42,59 @@ def _compute_quick_metrics(ticker: str) -> dict | None:
     """
     try:
         df = get_history(ticker, period='1y')
-        if df is None or df.empty or len(df) < 30:
-            return None
+        if df is None or df.empty:
+            df = get_history(ticker, period='max')
+
+        # Fallback to info/quote if no historical candles exist
+        try:
+            inf = get_info(ticker) or {}
+        except Exception:
+            inf = {}
+        quote = get_quote(ticker) or {}
+
+        if df is None or df.empty or len(df) == 0:
+            current_price = _safe_float(quote.get('price') or inf.get('currentPrice') or inf.get('regularMarketPrice'))
+            if not current_price or current_price <= 0:
+                return None
+            company_name = inf.get('shortName') or inf.get('longName') or ticker.replace('.NS', '').replace('.BO', '')
+            return {
+                'ticker': ticker,
+                'company_name': company_name,
+                'current_price': current_price,
+                'ret_1m': None,
+                'ret_3m': None,
+                'ret_6m': None,
+                'ret_1y': None,
+                'annual_vol': 20.0,
+                'sharpe': 0.0,
+                'sortino': 0.0,
+                'calmar': None,
+                'var_95': -2.0,
+                'cvar_95': -2.5,
+                'max_drawdown': 0.0,
+                'rsi': 50.0,
+                'pct_from_high': 0.0,
+                'pe_ratio': _safe_float(inf.get('trailingPE') or inf.get('forwardPE'), default=None, ndigits=2),
+                'pb_ratio': _safe_float(inf.get('priceToBook'), default=None, ndigits=2),
+                'ev_ebitda': _safe_float(inf.get('enterpriseToEbitda'), default=None, ndigits=2),
+                'roe': _safe_float(inf.get('returnOnEquity') * 100.0 if inf.get('returnOnEquity') is not None else None, default=None, ndigits=2),
+                'profit_margin': _safe_float(inf.get('profitMargins') * 100.0 if inf.get('profitMargins') is not None else None, default=None, ndigits=2),
+                'dividend_yield': _safe_float(inf.get('dividendYield') * 100.0 if inf.get('dividendYield') is not None else None, default=None, ndigits=2),
+                'market_cap': inf.get('marketCap'),
+                'ml_signal': None,
+            }
 
         close = df['Close']
         returns = close.pct_change().dropna()
-
         current_price = float(close.iloc[-1])
 
         def safe_ret(n):
             if len(close) > n and float(close.iloc[-n]) > 0:
                 val = (float(close.iloc[-1]) / float(close.iloc[-n]) - 1.0) * 100.0
+                return _safe_float(val, default=None, ndigits=2)
+            elif len(close) >= 2 and n == 22:
+                # For incubating stocks (<22 sessions), provide return since listing
+                val = (float(close.iloc[-1]) / float(close.iloc[0]) - 1.0) * 100.0
                 return _safe_float(val, default=None, ndigits=2)
             return None
 
@@ -61,32 +103,32 @@ def _compute_quick_metrics(ticker: str) -> dict | None:
         ret_6m  = safe_ret(132)
         ret_1y  = safe_ret(len(close) - 1) if len(close) > 5 else None
 
-        annual_vol = _safe_float(float(returns.std() * np.sqrt(252) * 100), default=0.0, ndigits=2)
+        annual_vol = _safe_float(float(returns.std() * np.sqrt(252) * 100), default=20.0, ndigits=2) if len(returns) >= 2 else 20.0
 
         # Sharpe (India risk-free ~6.5%)
         rf_daily = 0.065 / 252
         excess = returns - rf_daily
-        sharpe = _safe_float(float(excess.mean() / excess.std() * np.sqrt(252)), default=0.0, ndigits=3) if excess.std() > 0 else 0.0
+        sharpe = _safe_float(float(excess.mean() / excess.std() * np.sqrt(252)), default=0.0, ndigits=3) if (len(returns) >= 3 and excess.std() > 0) else 0.0
 
-        # RSI (14)
+        # RSI (14) with min_periods=1
         delta = close.diff()
         gain  = delta.clip(lower=0).ewm(com=13, adjust=False, min_periods=1).mean()
         loss  = (-delta).clip(lower=0).ewm(com=13, adjust=False, min_periods=1).mean()
         rsi_series = 100 - 100 / (1 + gain / loss.replace(0, 1e-9))
-        rsi   = _safe_float(float(rsi_series.iloc[-1]), default=50.0, ndigits=1)
+        rsi   = _safe_float(float(rsi_series.iloc[-1]), default=50.0, ndigits=1) if len(rsi_series) > 0 else 50.0
 
         high52 = float(close.max())
-        pct_from_high = _safe_float((current_price - high52) / high52 * 100, default=0.0, ndigits=2)
+        pct_from_high = _safe_float((current_price - high52) / high52 * 100, default=0.0, ndigits=2) if high52 > 0 else 0.0
 
-        # Max Drawdown (1Y)
+        # Max Drawdown
         cum_ret = (1 + returns).cumprod()
         rolling_max = cum_ret.expanding().max()
         dd_series = (cum_ret - rolling_max) / rolling_max
-        max_drawdown = _safe_float(float(dd_series.min() * 100), default=0.0, ndigits=2)
+        max_drawdown = _safe_float(float(dd_series.min() * 100), default=0.0, ndigits=2) if len(dd_series) > 0 else 0.0
 
         # Sortino Ratio (excess return / downside deviation)
         downside_returns = returns[returns < rf_daily]
-        downside_std = float(downside_returns.std()) if len(downside_returns) > 5 else 0.0
+        downside_std = float(downside_returns.std()) if len(downside_returns) > 3 else 0.0
         sortino = _safe_float(float(excess.mean() / (downside_std + 1e-9) * np.sqrt(252)), default=0.0, ndigits=3) if downside_std > 0 else 0.0
 
         # Calmar Ratio (1Y return / absolute max drawdown)
@@ -94,16 +136,15 @@ def _compute_quick_metrics(ticker: str) -> dict | None:
         calmar = _safe_float(ret_1y / abs_dd, default=None, ndigits=2) if (ret_1y is not None and abs_dd > 0.5) else None
 
         # Tail Risk: VaR 95% & CVaR 95% (Expected Shortfall)
-        var_95  = _safe_float(float(np.percentile(returns, 5) * 100), default=0.0, ndigits=2)
-        tail_95 = returns[returns <= np.percentile(returns, 5)]
-        cvar_95 = _safe_float(float(tail_95.mean() * 100), default=0.0, ndigits=2) if len(tail_95) > 0 else var_95
+        if len(returns) >= 5:
+            var_95  = _safe_float(float(np.percentile(returns, 5) * 100), default=-2.0, ndigits=2)
+            tail_95 = returns[returns <= np.percentile(returns, 5)]
+            cvar_95 = _safe_float(float(tail_95.mean() * 100), default=var_95, ndigits=2) if len(tail_95) > 0 else var_95
+        else:
+            var_95 = -2.0
+            cvar_95 = -2.5
 
         # Fundamental Valuation Multiples
-        try:
-            inf = get_info(ticker) or {}
-        except Exception:
-            inf = {}
-
         pe_ratio      = _safe_float(inf.get('trailingPE') or inf.get('forwardPE'), default=None, ndigits=2)
         pb_ratio      = _safe_float(inf.get('priceToBook'), default=None, ndigits=2)
         ev_ebitda     = _safe_float(inf.get('enterpriseToEbitda'), default=None, ndigits=2)
@@ -492,6 +533,7 @@ def calculate_dcf(
             "dupont": dupont,
             "health_score": score,
             "health_checklist": health_checklist,
+            "is_financial": is_financial,
             "sector": info.get("sector") or SECTOR_MAP.get(raw_symbol),
             "industry": info.get("industry"),
             "business_summary": info.get("longBusinessSummary"),
@@ -1120,7 +1162,11 @@ def run_backtest(
 
         df = get_history(ticker_clean, period=period)
         if df is None or df.empty or len(df) < 60:
-            raise HTTPException(status_code=400, detail="Insufficient historical data (need >= 60 trading days)")
+            count = len(df) if (df is not None and not df.empty) else 0
+            raise HTTPException(
+                status_code=400,
+                detail=f"Asset in incubation window ({count} sessions recorded on exchange). Quantitative signal backtesting requires at least 60 trading days to compute technical crossover signals."
+            )
 
         close  = df["Close"].copy()
         high   = df["High"].copy()

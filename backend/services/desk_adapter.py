@@ -66,7 +66,7 @@ def _calculate_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
         (high - prev_close).abs(),
         (low - prev_close).abs(),
     ], axis=1).max(axis=1)
-    return tr.rolling(period).mean()
+    return tr.rolling(period, min_periods=1).mean()
 
 
 def _parse_quote_timestamp(quote: Dict[str, Any]) -> tuple[Optional[str], Optional[float], str]:
@@ -173,17 +173,25 @@ def build_canonical_market_state(
 
         # B) Daily candles for higher-timeframe CRO risk context (vol regime, max drawdown, momentum)
         df_daily = get_history(ticker_clean, period="1y", interval="1d")
-        if df_daily is not None and not df_daily.empty and len(df_daily) >= 20:
+        if df_daily is None or df_daily.empty or len(df_daily) < 2:
+            df_daily = get_history(ticker_clean, period="max", interval="1d")
+
+        if df_daily is not None and not df_daily.empty and len(df_daily) >= 2:
             if isinstance(df_daily.columns, pd.MultiIndex):
                 df_daily.columns = [c[0] for c in df_daily.columns]
             close = df_daily["Close"]
-            ema20_val = _safe_float(close.ewm(span=20, adjust=False).mean().iloc[-1])
+            n_bars = len(close)
+            ema20_val = _safe_float(close.ewm(span=min(20, n_bars), adjust=False).mean().iloc[-1])
             atr_series = _calculate_atr(df_daily)
             daily_atr = _safe_float(atr_series.iloc[-1])
+            if (daily_atr is None or daily_atr <= 0) and current_price and current_price > 0:
+                daily_atr = _safe_float(current_price * 0.015)
 
             momentum_30d = None
             if len(close) >= 22 and close.iloc[-22] > 0:
                 momentum_30d = _safe_float((close.iloc[-1] / close.iloc[-22] - 1.0) * 100.0)
+            elif len(close) >= 2 and close.iloc[0] > 0:
+                momentum_30d = _safe_float((close.iloc[-1] / close.iloc[0] - 1.0) * 100.0)
 
             ref_p = current_price if current_price else _safe_float(close.iloc[-1])
             price_vs_ema20_atr = None
@@ -191,29 +199,33 @@ def build_canonical_market_state(
                 price_vs_ema20_atr = _safe_float((ref_p - ema20_val) / daily_atr)
 
             returns = close.pct_change().dropna()
-            rolling_vol = returns.rolling(20).std() * np.sqrt(252) * 100.0
-            current_vol = _safe_float(rolling_vol.iloc[-1])
+            rolling_vol = returns.rolling(min(20, max(2, len(returns))), min_periods=2).std() * np.sqrt(252) * 100.0
+            current_vol = _safe_float(rolling_vol.iloc[-1]) if len(rolling_vol) > 0 else 20.0
             valid_vols = rolling_vol.dropna()
             vol_percentile = None
-            if current_vol is not None and len(valid_vols) > 30:
+            if current_vol is not None and len(valid_vols) > 0:
                 count_le = (valid_vols <= current_vol).sum()
                 vol_percentile = _safe_float((count_le / len(valid_vols)) * 100.0)
 
             cum_ret = (1.0 + returns).cumprod()
             rolling_max = cum_ret.expanding().max()
             dd_series = (cum_ret - rolling_max) / rolling_max
-            max_drawdown = _safe_float(dd_series.min() * 100.0)
+            max_drawdown = _safe_float(dd_series.min() * 100.0) if len(dd_series) > 0 else 0.0
 
             daily_state = {
                 "momentum_30d_pct": momentum_30d,
                 "price_vs_ema20_atr": price_vs_ema20_atr,
                 "volatility_percentile": vol_percentile,
                 "max_drawdown_pct": max_drawdown,
+                "daily_atr": daily_atr,
             }
     else:
         # P0: Daily candles for swing and long_term
         df_daily = get_history(ticker_clean, period="1y", interval="1d")
-        if df_daily is not None and not df_daily.empty and len(df_daily) >= 20:
+        if df_daily is None or df_daily.empty or len(df_daily) < 2:
+            df_daily = get_history(ticker_clean, period="max", interval="1d")
+
+        if df_daily is not None and not df_daily.empty and len(df_daily) >= 2:
             if isinstance(df_daily.columns, pd.MultiIndex):
                 df_daily.columns = [c[0] for c in df_daily.columns]
             bar_as_of, bar_age_seconds = _parse_bar_timestamp(df_daily)
@@ -223,46 +235,52 @@ def build_canonical_market_state(
             if current_price is None or current_price <= 0:
                 current_price = _safe_float(close.iloc[-1])
 
-            ema9_val = _safe_float(close.ewm(span=9, adjust=False).mean().iloc[-1])
-            ema20_val = _safe_float(close.ewm(span=20, adjust=False).mean().iloc[-1])
-            ema21_val = _safe_float(close.ewm(span=21, adjust=False).mean().iloc[-1])
+            n_bars = len(close)
+            ema9_val = _safe_float(close.ewm(span=min(9, n_bars), adjust=False).mean().iloc[-1])
+            ema20_val = _safe_float(close.ewm(span=min(20, n_bars), adjust=False).mean().iloc[-1])
+            ema21_val = _safe_float(close.ewm(span=min(21, n_bars), adjust=False).mean().iloc[-1])
             ema200_val = _safe_float(
                 close.ewm(span=200, adjust=False).mean().iloc[-1]
-                if len(close) >= 150
-                else close.ewm(span=len(close), adjust=False).mean().iloc[-1]
+                if n_bars >= 150
+                else close.ewm(span=n_bars, adjust=False).mean().iloc[-1]
             )
 
             rsi_series = _calculate_rsi(close)
-            rsi14_val = _safe_float(rsi_series.iloc[-1])
+            rsi14_val = _safe_float(rsi_series.iloc[-1]) if len(rsi_series) > 0 else 50.0
 
             momentum_30d = None
             if len(close) >= 22 and close.iloc[-22] > 0:
                 momentum_30d = _safe_float((close.iloc[-1] / close.iloc[-22] - 1.0) * 100.0)
+            elif len(close) >= 2 and close.iloc[0] > 0:
+                momentum_30d = _safe_float((close.iloc[-1] / close.iloc[0] - 1.0) * 100.0)
 
-            vol_ma20 = volume.rolling(20).mean().iloc[-1]
-            rvol_val = _safe_float(volume.iloc[-1] / vol_ma20 if vol_ma20 > 0 else 1.0)
+            vol_ma20 = volume.rolling(min(20, n_bars), min_periods=1).mean().iloc[-1] if len(volume) > 0 else 1.0
+            rvol_val = _safe_float(volume.iloc[-1] / vol_ma20 if vol_ma20 > 0 else 1.0) if len(volume) > 0 else 1.0
 
             atr_series = _calculate_atr(df_daily)
             atr_val = _safe_float(atr_series.iloc[-1])
-            atr_pct_val = _safe_float((atr_val / current_price * 100.0) if (atr_val and current_price and current_price > 0) else None)
+            if (atr_val is None or atr_val <= 0) and current_price and current_price > 0:
+                atr_val = _safe_float(current_price * 0.015)
+
+            atr_pct_val = _safe_float((atr_val / current_price * 100.0) if (atr_val and current_price and current_price > 0) else 1.5)
 
             price_vs_ema20_atr = None
             if current_price and ema20_val and atr_val and atr_val > 0:
                 price_vs_ema20_atr = _safe_float((current_price - ema20_val) / atr_val)
 
             returns = close.pct_change().dropna()
-            rolling_vol = returns.rolling(20).std() * np.sqrt(252) * 100.0
-            current_vol = _safe_float(rolling_vol.iloc[-1])
+            rolling_vol = returns.rolling(min(20, max(2, len(returns))), min_periods=2).std() * np.sqrt(252) * 100.0
+            current_vol = _safe_float(rolling_vol.iloc[-1]) if len(rolling_vol) > 0 else 20.0
             valid_vols = rolling_vol.dropna()
             vol_percentile = None
-            if current_vol is not None and len(valid_vols) > 30:
+            if current_vol is not None and len(valid_vols) > 0:
                 count_le = (valid_vols <= current_vol).sum()
                 vol_percentile = _safe_float((count_le / len(valid_vols)) * 100.0)
 
             cum_ret = (1.0 + returns).cumprod()
             rolling_max = cum_ret.expanding().max()
             dd_series = (cum_ret - rolling_max) / rolling_max
-            max_drawdown = _safe_float(dd_series.min() * 100.0)
+            max_drawdown = _safe_float(dd_series.min() * 100.0) if len(dd_series) > 0 else 0.0
 
             daily_state = {
                 "ema9": ema9_val,

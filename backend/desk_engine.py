@@ -820,7 +820,14 @@ def calculate_trade_geometry(ctx: Any, risk_gate: RiskGateResult) -> Dict[str, A
     elif not isinstance(ctx, dict):
         ctx = dict(ctx)
     entry = _num(ctx.get("entry_price", ctx.get("price")))
-    atr = _num(ctx.get("atr"))
+    atr = _num(ctx.get("atr", ctx.get("daily_atr", ctx.get("atr_14"))))
+    atr_pct = _num(ctx.get("atr_pct"))
+    if (atr is None or atr <= 0) and entry is not None and entry > 0:
+        if atr_pct is not None and atr_pct > 0:
+            atr = entry * (atr_pct / 100.0)
+        else:
+            atr = entry * 0.015
+
     account = _num(ctx.get("account_capital"))
     risk_pct = _num(ctx.get("account_risk_pct"))
     p_win = _num(ctx.get("historical_win_rate"))
@@ -830,7 +837,7 @@ def calculate_trade_geometry(ctx: Any, risk_gate: RiskGateResult) -> Dict[str, A
     if entry is None or atr is None or atr <= 0:
         return {
             "available": False,
-            "reason": "entry_price/price and ATR are required for deterministic trade geometry.",
+            "reason": "entry_price/price is required for deterministic trade geometry.",
         }
 
     atr_multiple = _num(ctx.get("stop_atr_multiple")) or 2.0
@@ -1029,11 +1036,21 @@ def evaluate_committee(ctx: Dict[str, Any]) -> Dict[str, Any]:
     # when a snapshot is explicitly marked intraday.
     horizon = str(normalized.get("horizon", "intraday")).lower()
     if horizon == "intraday":
-        weights = {"fundamental": 0.15, "technical": 0.60, "derivatives": 0.25}
+        base_weights = {"fundamental": 0.15, "technical": 0.60, "derivatives": 0.25}
     elif horizon in {"swing", "short_term"}:
-        weights = {"fundamental": 0.30, "technical": 0.50, "derivatives": 0.20}
+        base_weights = {"fundamental": 0.30, "technical": 0.50, "derivatives": 0.20}
     else:
-        weights = {"fundamental": 0.55, "technical": 0.25, "derivatives": 0.20}
+        base_weights = {"fundamental": 0.55, "technical": 0.25, "derivatives": 0.20}
+
+    # If derivatives desk has zero confidence (e.g. non-F&O equity),
+    # redistribute its weight proportionally across fundamental and technical desks
+    weights = dict(base_weights)
+    if derivatives.confidence == 0.0 and (fundamentals.confidence > 0 or technicals.confidence > 0):
+        avail_weight = base_weights["fundamental"] + base_weights["technical"]
+        if avail_weight > 0:
+            weights["fundamental"] = base_weights["fundamental"] / avail_weight
+            weights["technical"] = base_weights["technical"] / avail_weight
+            weights["derivatives"] = 0.0
 
     committee_score = (
         fundamentals.score * weights["fundamental"]

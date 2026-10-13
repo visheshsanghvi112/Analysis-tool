@@ -134,14 +134,25 @@ def get_portfolio_metrics(ticker: str = Query(..., description="Stock ticker sym
             bench_series = pd.Series(bench_returns.values, index=bench_idx)
 
             common_dates = stock_series.index.intersection(bench_series.index)
-            if len(common_dates) > 50:
+            if len(common_dates) >= 5:
                 stock_aligned = stock_series.loc[common_dates]
                 bench_aligned = bench_series.loc[common_dates]
                 
                 covariance     = stock_aligned.cov(bench_aligned)
                 bench_variance = bench_aligned.var()
-                beta = covariance / bench_variance if bench_variance != 0 else None
-                correlation = stock_aligned.corr(bench_aligned)
+                if bench_variance > 1e-6 and not np.isnan(covariance) and not np.isnan(bench_variance):
+                    raw_beta = float(np.clip(covariance / bench_variance, -5.0, 5.0))
+                else:
+                    raw_beta = 1.0
+
+                raw_corr = stock_aligned.corr(bench_aligned)
+                if np.isnan(raw_corr):
+                    raw_corr = None
+
+                # Vasicek Bayesian shrinkage for beta when sample < 50
+                w_sample = min(1.0, len(common_dates) / 50.0)
+                beta = _safe_float(w_sample * raw_beta + (1.0 - w_sample) * 1.0, default=1.0, ndigits=2)
+                correlation = _safe_float(raw_corr, default=None, ndigits=2)
             else:
                 beta = None
                 correlation = None
@@ -920,42 +931,72 @@ def get_monte_carlo(
 
         history_period = "5y" if N >= 252 else "1y"
         df = get_history(ticker_clean, period=history_period)
-        if df is None or df.empty or len(df) < 30:
+        if df is None or df.empty or len(df) < 5:
             if history_period == "5y":
                 df = get_history(ticker_clean, period="2y")
-                if df is None or df.empty or len(df) < 30:
+                if df is None or df.empty or len(df) < 5:
                     df = get_history(ticker_clean, period="1y")
-            if df is None or df.empty or len(df) < 30:
-                raise HTTPException(status_code=400, detail="Insufficient historical price data")
+            if df is None or df.empty or len(df) < 5:
+                df = get_history(ticker_clean, period="max")
 
-        close_prices = df["Close"].dropna()
-        last_price = float(close_prices.iloc[-1])
-        last_date = close_prices.index[-1]
+        try:
+            quote = get_quote(ticker_clean) or {}
+            info = get_info(ticker_clean) or {}
+        except Exception:
+            quote, info = {}, {}
 
-        log_returns = np.log(close_prices / close_prices.shift(1)).dropna()
-        if len(log_returns) < 10:
-            raise HTTPException(status_code=400, detail="Insufficient returns data for volatility calculation")
+        is_incubation = False
+        if df is None or df.empty or len(df) == 0:
+            last_price = _safe_float(quote.get("price") or info.get("currentPrice") or info.get("regularMarketPrice"))
+            if not last_price or last_price <= 0:
+                raise HTTPException(status_code=404, detail=f"No price data available for {ticker_clean}")
+            last_date = datetime.now()
+            close_prices = pd.Series([last_price], index=[last_date])
+            log_returns = pd.Series([0.0])
+            is_incubation = True
+        else:
+            close_prices = df["Close"].dropna()
+            if len(close_prices) == 0:
+                last_price = _safe_float(quote.get("price") or info.get("currentPrice") or 100.0)
+                last_date = datetime.now()
+                close_prices = pd.Series([last_price], index=[last_date])
+                log_returns = pd.Series([0.0])
+                is_incubation = True
+            else:
+                last_price = float(close_prices.iloc[-1])
+                last_date = close_prices.index[-1]
+                log_returns = np.log(close_prices / close_prices.shift(1)).dropna()
+                is_incubation = len(close_prices) < 30
 
-        mu_daily_raw = float(log_returns.mean())
-        sigma_daily = float(log_returns.std())
+        # Market Equilibrium Prior (12% for Indian equities, 10% for US)
+        is_us = not (ticker_clean.endswith(".NS") or ticker_clean.endswith(".BO"))
+        market_prior_annual = 0.10 if is_us else 0.12
+        prior_daily = np.log(1.0 + market_prior_annual) / 252.0
+        prior_vol_annual = 0.16 if is_us else 0.18
+        prior_vol_daily = prior_vol_annual / np.sqrt(252.0)
+
+        if len(log_returns) >= 5:
+            mu_daily_raw = float(log_returns.mean())
+            sigma_sample = float(log_returns.std())
+            if sigma_sample <= 0 or np.isnan(sigma_sample):
+                sigma_sample = prior_vol_daily
+            # Bayesian Volatility Regularization
+            w_vol = float(np.clip(len(log_returns) / 60.0, 0.20, 1.0))
+            sigma_daily = w_vol * sigma_sample + (1.0 - w_vol) * prior_vol_daily
+        else:
+            mu_daily_raw = prior_daily
+            sigma_daily = prior_vol_daily
 
         if sigma_daily <= 0:
             sigma_daily = 0.001
 
-        # Annualized raw metrics
+        # Annualized metrics
         raw_ann_drift = mu_daily_raw * 252.0
         ann_volatility = sigma_daily * np.sqrt(252.0)
 
         # ── Bayesian Drift Shrinkage ───────────────────────────────────────────
-        # Combats estimation risk: 1Y/5Y sample means have high standard errors.
-        # We shrink the sample mean towards a long-term equity equilibrium prior
-        # (12% annualized return). Shorter horizons retain more momentum; longer
-        # horizons shrink more heavily towards equilibrium to prevent runaway compounding.
-        market_prior_annual = 0.12
-        prior_daily = np.log(1.0 + market_prior_annual) / 252.0
-
-        # Shrinkage factor alpha in [0.15, 0.75] depending on horizon length
-        alpha = float(np.clip(N / 1260.0, 0.15, 0.75))
+        sample_conf = min(1.0, len(log_returns) / 60.0) if len(log_returns) > 0 else 0.1
+        alpha = float(np.clip((N / 1260.0) + (1.0 - sample_conf) * 0.4, 0.15, 0.85))
         mu_daily_shrunk = (1.0 - alpha) * mu_daily_raw + alpha * prior_daily
         ann_drift_shrunk = mu_daily_shrunk * 252.0
 
@@ -966,7 +1007,7 @@ def get_monte_carlo(
 
         np.random.seed(42)  # For reproducible institutional comparisons
 
-        if mode_clean == "bootstrap":
+        if mode_clean == "bootstrap" and len(log_returns) >= 15:
             # ── Non-Parametric Historical Bootstrap ─────────────────────────────
             # Resamples with replacement from the empirical log-returns distribution,
             # naturally preserving real-world fat tails, skewness, and jump shocks.
@@ -1119,6 +1160,7 @@ def get_monte_carlo(
             "currency_symbol": curr_sym,
             "horizon_days": N,
             "simulations": M,
+            "is_incubation": is_incubation,
             "historical": hist_data,
             "simulated": sim_data,
             "sample_paths": sample_paths,

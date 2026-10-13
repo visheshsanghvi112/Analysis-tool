@@ -436,14 +436,17 @@ class IntelligentNewsReader:
             })
 
         # 7. Brokerage Rating & Target Price
-        target_match = re.search(r'(?:target price|target of)\s*(?:rs\.?|₹)?\s*([\d,]+)', lower)
-        if target_match and any(w in lower for w in ['buy', 'outperform', 'overweight', 'raised target']):
-            catalysts.append({
-                'type': 'Brokerage Upgrade',
-                'impact': 'Medium',
-                'polarity': 0.65,
-                'highlight': f"Institutional Price Target Set at ₹{target_match.group(1)}"
-            })
+        target_match = re.search(r'(?:target price|target of|price target)\s*(?:of|is|at)?\s*(?:rs\.?|₹)?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)', lower)
+        if target_match:
+            clean_tgt = target_match.group(1).strip(",. ")
+            digits_only = re.sub(r'[^\d.]', '', clean_tgt)
+            if digits_only and float(digits_only) > 0 and any(w in lower for w in ['buy', 'outperform', 'overweight', 'raised target', 'upgrade', 'target']):
+                catalysts.append({
+                    'type': 'Brokerage Upgrade',
+                    'impact': 'Medium',
+                    'polarity': 0.65,
+                    'highlight': f"Institutional Price Target Set at ₹{clean_tgt}"
+                })
 
         return catalysts[:4]
 
