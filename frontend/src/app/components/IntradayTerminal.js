@@ -3789,7 +3789,9 @@ export default function IntradayTerminal() {
                      ...(blockDeals.bulk_deals || []).map(d => ({...d, type: 'BULK'}))].slice(0, 10).map((deal, idx) => (
                       <div
                         key={idx}
-                        onClick={() => deal.symbol && changeTicker(deal.symbol + '.NS')}
+                        onClick={() => {
+                          if (deal?.symbol) changeTicker(`${deal.symbol}.NS`);
+                        }}
                         className="flex items-center justify-between p-2 rounded-xl bg-[#070a10] border border-white/[0.06] hover:border-slate-700 cursor-pointer transition text-xs"
                       >
                         <div>

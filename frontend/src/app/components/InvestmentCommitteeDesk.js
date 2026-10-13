@@ -5,7 +5,7 @@ import {
   ShieldAlert, ShieldCheck, Scale, TrendingUp, TrendingDown,
   AlertTriangle, CheckCircle2, Crosshair, Sliders, RefreshCw,
   Layers, Zap, Info, Lock, ArrowUpRight, ArrowDownRight,
-  ChevronDown, ChevronUp, Sparkles, DollarSign, Percent, Newspaper
+  ChevronDown, ChevronUp, Sparkles, DollarSign, Percent, Newspaper, Clock
 } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 

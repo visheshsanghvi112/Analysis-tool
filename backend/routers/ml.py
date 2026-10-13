@@ -63,7 +63,16 @@ def get_ml_prediction_endpoint(
         )
 
         if error:
-            raise HTTPException(status_code=400, detail=error)
+            if isinstance(error, dict) and error.get("status") == "INCUBATION_PERIOD":
+                return {
+                    "ticker": ticker_clean,
+                    "prediction": None,
+                    "incubation": error,
+                    "error": None,
+                }
+            if isinstance(error, dict):
+                raise HTTPException(status_code=400, detail=error)
+            raise HTTPException(status_code=400, detail=str(error))
 
         if prediction:
             is_indian = ticker_clean.endswith(".NS") or ticker_clean.endswith(".BO")

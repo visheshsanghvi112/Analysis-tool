@@ -10,7 +10,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from utils.limiter import limiter
-from services.ticker_manager import ensure_ticker_list
+from services.ticker_manager import ensure_ticker_list, start_periodic_ticker_sync
 
 # Import all routers from our routers package
 from routers import tickers, ml, news, portfolio, analysis, intraday, desk
@@ -20,6 +20,7 @@ logger = logging.getLogger("stockiq")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     threading.Thread(target=ensure_ticker_list, daemon=True).start()
+    start_periodic_ticker_sync(interval_hours=48)
     yield
 
 app = FastAPI(

@@ -5,6 +5,9 @@ import json
 import os
 import re
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+
 def main():
     print("=" * 60)
     print("StockIQ Pro — Master Ticker & ETF Universe Generator")
@@ -59,6 +62,14 @@ def main():
     }
 
     KNOWN_SECTOR_MAP = {
+        # Stock Exchanges & Market Infrastructure / Finance
+        'NSE': 'Finance', 'BSE': 'Finance', 'CDSL': 'Finance', 'MCX': 'Finance',
+        'CAMS': 'Finance', 'KFINTECH': 'Finance', 'BAJAJHFL': 'Finance', 'IREDA': 'Finance',
+        'JIOFIN': 'Finance', 'HUDCO': 'Finance', 'PFC': 'Finance', 'RECLTD': 'Finance',
+        'IRFC': 'Finance', 'MUTHOOTFIN': 'Finance', 'MANAPPURAM': 'Finance',
+        'CHOLAFIN': 'Finance', 'SHRIRAMFIN': 'Finance', 'LICHSGFIN': 'Finance',
+        'BAJFINANCE': 'Finance', 'BAJAJFINSV': 'Finance', 'HDFCLIFE': 'Finance', 'SBILIFE': 'Finance',
+        'ICICIGI': 'Finance', 'ICICIPRULI': 'Finance', 'HDFCAMC': 'Finance', 'NIPPONLIFE': 'Finance',
         # Banking
         'HDFCBANK': 'Banking', 'ICICIBANK': 'Banking', 'SBIN': 'Banking', 'KOTAKBANK': 'Banking',
         'AXISBANK': 'Banking', 'INDUSINDBK': 'Banking', 'FEDERALBNK': 'Banking', 'BANDHANBNK': 'Banking',
@@ -71,16 +82,19 @@ def main():
         'TCS': 'IT', 'INFY': 'IT', 'WIPRO': 'IT', 'HCLTECH': 'IT', 'TECHM': 'IT', 'LTIM': 'IT',
         'MPHASIS': 'IT', 'COFORGE': 'IT', 'PERSISTENT': 'IT', 'TATAELXSI': 'IT', 'KPITTECH': 'IT',
         'CYIENT': 'IT', 'SONATSOFTW': 'IT', 'ZENSARTECH': 'IT', 'MASTEK': 'IT', 'BIRLASOFT': 'IT',
+        'TATATECH': 'IT', 'ESDS': 'IT', 'ARMEE': 'IT',
         # Energy
         'RELIANCE': 'Energy', 'ONGC': 'Energy', 'BPCL': 'Energy', 'IOC': 'Energy', 'NTPC': 'Energy',
         'ADANIGREEN': 'Energy', 'POWERGRID': 'Energy', 'TATAPOWER': 'Energy', 'GAIL': 'Energy',
         'PETRONET': 'Energy', 'HINDPETRO': 'Energy', 'MGL': 'Energy', 'IGL': 'Energy', 'GUJGASLTD': 'Energy',
         'CESC': 'Energy', 'TORNTPOWER': 'Energy', 'JSWENERGY': 'Energy', 'SJVN': 'Energy', 'NHPC': 'Energy',
         'OIL': 'Energy', 'MRPL': 'Energy', 'CHENNPETRO': 'Energy', 'ADANIPOWER': 'Energy',
+        'WAAREEENER': 'Energy', 'PREMIERENE': 'Energy', 'NTPCGREEN': 'Energy', 'GSPLTRANS': 'Energy',
         # Auto
         'MARUTI': 'Auto', 'TATAMOTORS': 'Auto', 'M&M': 'Auto', 'BAJAJ-AUTO': 'Auto', 'HEROMOTOCO': 'Auto',
         'EICHERMOT': 'Auto', 'ASHOKLEY': 'Auto', 'TVSMOTOR': 'Auto', 'BOSCHLTD': 'Auto', 'BHARATFORG': 'Auto',
         'MOTHERSON': 'Auto', 'APOLLOTYRE': 'Auto', 'MRF': 'Auto', 'CEATLTD': 'Auto', 'EXIDEIND': 'Auto',
+        'HYUNDAI': 'Auto', 'OLAELEC': 'Auto', 'HEROMOTORS': 'Auto',
         # Pharma
         'SUNPHARMA': 'Pharma', 'DRREDDY': 'Pharma', 'CIPLA': 'Pharma', 'DIVISLAB': 'Pharma',
         'BIOCON': 'Pharma', 'AUROPHARMA': 'Pharma', 'LUPIN': 'Pharma', 'TORNTPHARM': 'Pharma',
@@ -93,11 +107,18 @@ def main():
         # Metals
         'JSWSTEEL': 'Metals', 'TATASTEEL': 'Metals', 'HINDALCO': 'Metals', 'COALINDIA': 'Metals',
         'VEDL': 'Metals', 'NMDC': 'Metals', 'SAIL': 'Metals', 'NATIONALUM': 'Metals', 'JSL': 'Metals',
+        'AONESTEELS': 'Metals',
+        # Infra / Realty / Construction
+        'LT': 'Infra', 'ULTRACEMCO': 'Infra', 'ADANIPORTS': 'Infra', 'GRASIM': 'Infra',
+        'AFCONS': 'Infra', 'GLASSWALL': 'Infra', 'EMBASSY': 'Infra', 'BIRET': 'Infra',
+        'MINDSPACE': 'Infra', 'NXST': 'Infra', 'BAGMANE': 'Infra', 'KRT': 'Infra',
+        'PGINVIT': 'Energy', 'IRBINVIT': 'Infra', 'INDIGRID': 'Energy', 'ANANTAM': 'Infra',
         # Consumer Tech
         'ZOMATO': 'Consumer Tech', 'ETERNAL': 'Consumer Tech', 'NYKAA': 'Consumer Tech', 'PAYTM': 'Consumer Tech',
         'POLICYBZR': 'Consumer Tech', 'DELHIVERY': 'Consumer Tech', 'CARTRADE': 'Consumer Tech',
         'INDIAMART': 'Consumer Tech', 'IRCTC': 'Consumer Tech', 'EASEMYTRIP': 'Consumer Tech', 'MAPMYINDIA': 'Consumer Tech',
-        'DMART': 'Consumer Tech', 'TRENT': 'Consumer Tech', 'NAUKRI': 'Consumer Tech',
+        'DMART': 'Consumer Tech', 'TRENT': 'Consumer Tech', 'NAUKRI': 'Consumer Tech', 'SWIGGY': 'Consumer Tech',
+        'ACEVECTOR': 'Consumer Tech',
     }
 
     def resolve_sector(sym, name, industry=''):
@@ -119,16 +140,38 @@ def main():
         if any(k in n for k in ['automobile', 'auto ', 'motors', 'tyre', 'automotive', 'axle']): return 'Auto'
         if any(k in n for k in ['food', 'beverag', 'sugar', 'brewer', 'distiller', 'dairy', 'fmcg', 'tea', 'coffee']): return 'FMCG'
         if any(k in n for k in ['power', 'energy', 'oil & gas', 'oil gas', 'petro', 'solar', 'renewable', 'fuel']): return 'Energy'
-        if any(k in n for k in ['construct', 'cement', 'infra', 'engineering', 'realty', 'real estate', 'housing dev']): return 'Infra'
+        if any(k in n for k in ['reit', 'invit', 'real estate', 'trust', 'construct', 'cement', 'infra', 'engineering', 'realty', 'housing dev']): return 'Infra'
         if any(k in n for k in ['metal', 'steel', 'iron', 'aluminium', 'copper', 'mining', 'minerals', 'ore', 'zinc']): return 'Metals'
         if any(k in n for k in ['telecom', 'cellular', 'telecommunication', 'broadband']): return 'Telecom'
-        if any(k in n for k in ['finance', 'financial', 'insurance', 'housing fin', 'capital', 'investment', 'nbfc', 'securities', 'credit']): return 'Finance'
+        if any(k in n for k in ['exchange', 'stock exchange', 'finance', 'financial', 'insurance', 'housing fin', 'capital', 'investment', 'nbfc', 'securities', 'credit']): return 'Finance'
         if any(k in n for k in ['online', 'digital', 'tech', 'retail', 'platform', 'e-commerce']): return 'Consumer Tech'
         return 'Others'
+
+    # Load baseline database to preserve all known scrips
+    baseline_path = os.path.join(REPO_ROOT, "backend", "data", "tickers.json")
+    baseline_items = []
+    if os.path.exists(baseline_path):
+        try:
+            with open(baseline_path, "r", encoding="utf-8") as bf:
+                baseline_items = json.load(bf)
+            print(f"Loaded {len(baseline_items)} baseline instruments from local cache.")
+        except Exception as be:
+            print(f"Notice: Could not load baseline cache: {be}")
 
     master_list = []
     seen_symbols = set()
     isin_to_symbol = {}
+
+    def add_instrument(item):
+        sym = item.get("symbol", "").strip()
+        if not sym or sym in seen_symbols:
+            return False
+        master_list.append(item)
+        seen_symbols.add(sym)
+        isin = item.get("isin", "").strip()
+        if isin:
+            isin_to_symbol[isin] = sym
+        return True
 
     # =========================================================================
     # 2. Benchmark Indices (NSE, BSE, US / Global)
@@ -154,9 +197,7 @@ def main():
         {"symbol": "^DJI",        "name": "Dow Jones Industrial Average", "sector": "Indices", "type": "Index"},
     ]
     for idx in indices:
-        if idx["symbol"] not in seen_symbols:
-            master_list.append(idx)
-            seen_symbols.add(idx["symbol"])
+        add_instrument(idx)
     print(f"  Added {len(indices)} benchmark indices.")
 
     # =========================================================================
@@ -182,9 +223,7 @@ def main():
         {"symbol": "QQQ",   "name": "Invesco QQQ Trust (NASDAQ 100)", "sector": "Global", "type": "Global ETF"},
     ]
     for g in global_assets:
-        if g["symbol"] not in seen_symbols:
-            master_list.append(g)
-            seen_symbols.add(g["symbol"])
+        add_instrument(g)
     print(f"  Added {len(global_assets)} global assets.")
 
     # =========================================================================
@@ -206,7 +245,6 @@ def main():
                 underlying = row.get('Underlying', '').strip()
                 isin = row.get('ISINNumber', '').strip()
                 
-                # Format a user-friendly ETF name
                 clean_name = sec_name
                 if underlying and underlying.lower() not in sec_name.lower():
                     clean_name = f"{sec_name} ({underlying})"
@@ -219,11 +257,8 @@ def main():
                 }
                 if isin:
                     item["isin"] = isin
-                    isin_to_symbol[isin] = symbol
-                
-                if symbol not in seen_symbols:
-                    master_list.append(item)
-                    seen_symbols.add(symbol)
+
+                if add_instrument(item):
                     etf_count += 1
             print(f"  Successfully added {etf_count} NSE ETFs.")
         else:
@@ -234,7 +269,7 @@ def main():
     # =========================================================================
     # 5. NSE Equities (Mainboard + Series EQ, BE, BZ)
     # =========================================================================
-    print("Step 5: Downloading All NSE Equities...")
+    print("Step 5: Downloading All NSE Equities (Mainboard)...")
     try:
         nse_eq_res = requests.get('https://archives.nseindia.com/content/equities/EQUITY_L.csv', headers=headers, timeout=15)
         if nse_eq_res.ok:
@@ -248,7 +283,6 @@ def main():
                 symbol = f"{sym_raw}.NS"
                 name = row.get('NAME OF COMPANY', '').strip()
                 isin = row.get('ISIN NUMBER', '').strip()
-                series = row.get('SERIES', '').strip()
 
                 # Handle popular corporate renames for search discoverability
                 if sym_raw == 'ETERNAL':
@@ -272,11 +306,8 @@ def main():
                 }
                 if isin:
                     item["isin"] = isin
-                    isin_to_symbol[isin] = symbol
 
-                if symbol not in seen_symbols:
-                    master_list.append(item)
-                    seen_symbols.add(symbol)
+                if add_instrument(item):
                     eq_count += 1
             print(f"  Successfully added {eq_count} NSE Equities.")
         else:
@@ -285,9 +316,66 @@ def main():
         print(f"  Error fetching NSE Equities: {e}")
 
     # =========================================================================
+    # 5B. NSE Securities, SME Platform (SM, ST), REITs (RR) & InvITs (IV)
+    # =========================================================================
+    print("Step 5B: Downloading All NSE Securities, SME Platform & Real Estate/Infra Trusts...")
+    try:
+        nse_sec_res = requests.get('https://archives.nseindia.com/content/equities/sec_list.csv', headers=headers, timeout=15)
+        if nse_sec_res.ok:
+            reader = csv.DictReader(io.StringIO(nse_sec_res.text))
+            sec_count = 0
+            for row in reader:
+                sym_raw = row.get('Symbol', '').strip()
+                if not sym_raw:
+                    continue
+                symbol = f"{sym_raw}.NS"
+                series = row.get('Series', '').strip().upper()
+                sec_name = row.get('Security Name', '').strip()
+
+                t_type = "Equity"
+                sec = resolve_sector(sym_raw, sec_name)
+                if series == 'RR':
+                    t_type = "REIT"
+                    sec = "Infra"
+                elif series == 'IV':
+                    t_type = "InvIT"
+                    sec = "Infra"
+                elif series in ['SM', 'ST']:
+                    t_type = "SME Equity"
+
+                item = {
+                    "symbol": symbol,
+                    "name": sec_name,
+                    "sector": sec,
+                    "type": t_type,
+                }
+                if add_instrument(item):
+                    sec_count += 1
+            print(f"  Successfully added {sec_count} additional NSE instruments (SMEs, REITs, InvITs).")
+        else:
+            print(f"  Warning: NSE sec_list fetch returned status {nse_sec_res.status_code}")
+    except Exception as e:
+        print(f"  Error fetching NSE sec_list: {e}")
+
+    # =========================================================================
     # 6. BSE Equities & Exclusively Listed BSE Companies
     # =========================================================================
-    print("Step 6: Downloading Active BSE Equities...")
+    print("Step 6: Ingesting BSE Equities & National Stock Exchange of India (NSE.BO)...")
+    bse_added = 0
+
+    # Guarantee National Stock Exchange of India Limited (NSE.BO)
+    nse_ltd = {
+        "symbol": "NSE.BO",
+        "name": "National Stock Exchange of India Limited",
+        "sector": "Finance",
+        "type": "Equity (BSE)",
+        "bse_code": "544937",
+        "isin": "INE721I01024"
+    }
+    if add_instrument(nse_ltd):
+        bse_added += 1
+
+    # Attempt live BSE API fetch
     try:
         bse_res = requests.get(
             'https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w?Group=&Scripcode=&Industry=&Segment=Equity&Status=Active',
@@ -296,7 +384,6 @@ def main():
         )
         if bse_res.ok:
             bse_scrips = bse_res.json()
-            bse_added = 0
             for row in bse_scrips:
                 scrip_id = row.get('scrip_id', '').strip()
                 scrip_cd = row.get('SCRIP_CD', '').strip()
@@ -307,54 +394,46 @@ def main():
                 if not scrip_id and not scrip_cd:
                     continue
 
-                # Primary symbol on BSE
                 primary_bse_sym = f"{scrip_id}.BO" if scrip_id else f"{scrip_cd}.BO"
 
-                # Check if this company is already in NSE list by ISIN
-                if isin and isin in isin_to_symbol:
-                    # Company is dual-listed on NSE and BSE.
-                    # We can also register the .BO ticker if distinct
-                    if primary_bse_sym not in seen_symbols:
-                        nse_peer = isin_to_symbol[isin]
-                        item = {
-                            "symbol": primary_bse_sym,
-                            "name": f"{issuer_name} (BSE)",
-                            "sector": resolve_sector(scrip_id, issuer_name),
-                            "type": "Equity (BSE)",
-                            "bse_code": scrip_cd
-                        }
-                        if isin:
-                            item["isin"] = isin
-                        master_list.append(item)
-                        seen_symbols.add(primary_bse_sym)
-                        bse_added += 1
-                else:
-                    # Company is EXCLUSIVELY listed on BSE!
-                    if primary_bse_sym not in seen_symbols:
-                        item = {
-                            "symbol": primary_bse_sym,
-                            "name": issuer_name,
-                            "sector": resolve_sector(scrip_id, issuer_name),
-                            "type": "Equity (BSE)",
-                            "bse_code": scrip_cd
-                        }
-                        if isin:
-                            item["isin"] = isin
-                            isin_to_symbol[isin] = primary_bse_sym
-                        master_list.append(item)
-                        seen_symbols.add(primary_bse_sym)
-                        bse_added += 1
-            print(f"  Successfully added {bse_added} BSE Equities.")
+                is_dual = isin and isin in isin_to_symbol
+                display_name = f"{issuer_name} (BSE)" if is_dual else issuer_name
+                item = {
+                    "symbol": primary_bse_sym,
+                    "name": display_name,
+                    "sector": resolve_sector(scrip_id, issuer_name),
+                    "type": "Equity (BSE)",
+                    "bse_code": scrip_cd
+                }
+                if isin:
+                    item["isin"] = isin
+
+                if add_instrument(item):
+                    bse_added += 1
+            print(f"  Live BSE API synced {bse_added} BSE equities.")
         else:
-            print(f"  Warning: BSE API returned status {bse_res.status_code}")
+            print(f"  BSE API returned status {bse_res.status_code}. Using verified baseline BSE instruments.")
     except Exception as e:
-        print(f"  Error fetching BSE Equities: {e}")
+        print(f"  Live BSE API unavailable ({e}). Merging baseline BSE instruments.")
+
+    # Always ensure ALL baseline instruments (NSE, BSE, ETFs, etc.) are preserved
+    # This guarantees that if any exchange API experienced a transient timeout,
+    # previously verified instruments are never lost.
+    baseline_restored = 0
+    for item in baseline_items:
+        if add_instrument(item):
+            baseline_restored += 1
+    if baseline_restored > 0:
+        print(f"  Safely preserved {baseline_restored} additional baseline instruments.")
+    print(f"  Total BSE active equities cataloged: {sum(1 for x in master_list if x['symbol'].endswith('.BO'))}")
 
     # =========================================================================
     # 7. Add Former / Historic Aliases for Instant Search Discoverability
     # =========================================================================
     print("Step 7: Adding Historical / Rename Aliases...")
     aliases = [
+        {"symbol": "NSE.BO",     "name": "National Stock Exchange of India (NSE India)", "sector": "Finance", "type": "Equity Alias"},
+        {"symbol": "BSE.NS",     "name": "Bombay Stock Exchange (BSE Limited)", "sector": "Finance", "type": "Equity Alias"},
         {"symbol": "ETERNAL.NS", "name": "Zomato Limited (Now Eternal Limited)", "sector": "Consumer Tech", "type": "Equity Alias"},
         {"symbol": "LTIM.NS",    "name": "Mindtree Limited (Merged into LTIMindtree)", "sector": "IT", "type": "Equity Alias"},
         {"symbol": "HDFCBANK.NS","name": "HDFC Ltd (Housing Development Finance Corp - Merged into HDFC Bank)", "sector": "Banking", "type": "Equity Alias"},
@@ -365,7 +444,6 @@ def main():
     ]
     alias_count = 0
     for a in aliases:
-        # Check if already added or add as search entry
         master_list.append(a)
         alias_count += 1
     print(f"  Added {alias_count} search alias entries.")
@@ -401,24 +479,38 @@ def main():
         print(f"  - {sec:15}: {cnt}")
     print("=" * 60)
 
-    # 8. Write to Targets:
-    # A. backend/data/tickers.json & backend/tickers.json
-    # B. frontend/public/tickers.json
+    # Catalog integrity safeguard: never truncate if downloads dropped dramatically
+    if len(baseline_items) > 0 and total_count < int(len(baseline_items) * 0.9):
+        raise RuntimeError(
+            f"Catalog integrity safeguard: compiled count ({total_count}) is fewer than 90% of baseline ({len(baseline_items)}). "
+            f"Aborting write to protect database from partial network corruption."
+        )
 
+    # 8. Atomic Write to Targets anchored to REPO_ROOT
     targets = [
-        "backend/data/tickers.json",
-        "backend/tickers.json",
-        "frontend/public/tickers.json"
+        os.path.join(REPO_ROOT, "backend", "data", "tickers.json"),
+        os.path.join(REPO_ROOT, "backend", "tickers.json"),
+        os.path.join(REPO_ROOT, "frontend", "public", "tickers.json")
     ]
 
     for target in targets:
         os.makedirs(os.path.dirname(target), exist_ok=True)
-        with open(target, "w", encoding="utf-8") as f:
+        tmp_target = f"{target}.tmp"
+        with open(tmp_target, "w", encoding="utf-8") as f:
             json.dump(master_list, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_target, target)
         size_kb = os.path.getsize(target) / 1024
-        print(f"Wrote {total_count} records to {target} ({size_kb:.1f} KB)")
+        print(f"Atomically wrote {total_count} records to {target} ({size_kb:.1f} KB)")
 
     print("SUCCESS: All stocks, ETFs, indices, and global equities generated successfully!")
+    return {
+        "total_count": total_count,
+        "baseline_count": len(baseline_items),
+        "new_added": max(0, total_count - len(baseline_items)),
+        "targets": targets
+    }
 
 if __name__ == "__main__":
     main()

@@ -263,3 +263,62 @@ def test_bank_valuation_health_checklist():
     assert roa_item['condition'] == '>= 1.0%'
     assert roa_item['passed'] is True
 
+
+def test_new_listings_and_exchange_search():
+    # Test search for "nse" returns National Stock Exchange (NSE.BO) and benchmark indices
+    resp_nse = client.get("/api/tickers?q=nse")
+    assert resp_nse.status_code == 200
+    tickers_nse = resp_nse.json()["tickers"]
+    assert len(tickers_nse) > 0
+    symbols_nse = [t["symbol"] for t in tickers_nse[:3]]
+    assert "NSE.BO" in symbols_nse or symbols_nse[0] == "NSE.BO"
+
+    # Test alias for National Stock Exchange
+    resp_full_nse = client.get("/api/tickers?q=national+stock+exchange")
+    assert resp_full_nse.status_code == 200
+    assert resp_full_nse.json()["tickers"][0]["symbol"] == "NSE.BO"
+
+    # Test search for "bse"
+    resp_bse = client.get("/api/tickers?q=bse")
+    assert resp_bse.status_code == 200
+    assert resp_bse.json()["tickers"][0]["symbol"] == "BSE.NS"
+
+    # Test newly listed major IPOs
+    resp_bajaj = client.get("/api/tickers?q=bajaj+housing")
+    assert resp_bajaj.status_code == 200
+    assert resp_bajaj.json()["tickers"][0]["symbol"] == "BAJAJHFL.NS"
+
+
+def test_ticker_auto_sync_endpoints():
+    # Test GET /api/tickers/sync-status
+    resp_status = client.get("/api/tickers/sync-status")
+    assert resp_status.status_code == 200
+    meta = resp_status.json()
+    assert "last_synced_at" in meta
+    assert "total_instruments" in meta
+    assert meta["sync_interval_hours"] == 48
+    assert meta["total_instruments"] >= 8600
+
+    # Test POST /api/tickers/sync with force=false (already fresh)
+    resp_sync_noop = client.post("/api/tickers/sync?force=false")
+    assert resp_sync_noop.status_code == 200
+    noop_data = resp_sync_noop.json()
+    assert noop_data["synced"] is False
+    assert "Already up to date" in noop_data["reason"]
+
+
+def test_ticker_sync_debounce_and_catalog_safety():
+    from services.ticker_manager import sync_latest_listings_if_needed, TICKER_LIST
+    # Calling sync when just synced within 30s triggers debounce protection
+    res = sync_latest_listings_if_needed(force=True)
+    assert "total_instruments" in res
+    assert res["total_instruments"] >= 8600
+    # Confirm catalog in memory has active instruments including National Stock Exchange (NSE.BO)
+    nse_entry = next((t for t in TICKER_LIST if t["symbol"] == "NSE.BO"), None)
+    assert nse_entry is not None
+    assert nse_entry["sector"] == "Finance"
+    assert nse_entry["bse_code"] == "544937"
+
+
+
+

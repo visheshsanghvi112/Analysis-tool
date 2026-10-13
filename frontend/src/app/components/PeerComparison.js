@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { TrendingUp, TrendingDown, Minus, Trophy, Search, X, ChevronRight, Zap, Shield, Activity, BarChart2, AlertCircle, RefreshCw, Download } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 
@@ -67,12 +67,27 @@ export default function PeerComparison({ ticker, initialPeer = null }) {
   const [basketLoading, setBasketLoading] = useState(false);
   const searchRef = useRef(null);
 
+  const loadComparison = useCallback((peer) => {
+    if (!peer || peer === ticker) return;
+    setSelectedPeer(peer);
+    setComparison(null);
+    setError(null);
+    setLoading(true);
+    setDropdownOpen(false);
+
+    fetch(`${API}/api/peer-compare?ticker=${encodeURIComponent(ticker)}&peer=${encodeURIComponent(peer)}`)
+      .then(r => { if (!r.ok) throw new Error('Failed'); return r.json(); })
+      .then(d => setComparison(d))
+      .catch(() => setError('Could not fetch comparison data. Please try another peer.'))
+      .finally(() => setLoading(false));
+  }, [ticker]);
+
   // Trigger comparison when initialPeer is passed from Sector Intelligence
   useEffect(() => {
     if (initialPeer && initialPeer !== ticker) {
       loadComparison(initialPeer);
     }
-  }, [initialPeer]);
+  }, [initialPeer, ticker, loadComparison]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -150,20 +165,7 @@ export default function PeerComparison({ ticker, initialPeer = null }) {
       .finally(() => setBasketLoading(false));
   };
 
-  const loadComparison = (peer) => {
-    if (!peer || peer === ticker) return;
-    setSelectedPeer(peer);
-    setComparison(null);
-    setError(null);
-    setLoading(true);
-    setDropdownOpen(false);
 
-    fetch(`${API}/api/peer-compare?ticker=${encodeURIComponent(ticker)}&peer=${encodeURIComponent(peer)}`)
-      .then(r => { if (!r.ok) throw new Error('Failed'); return r.json(); })
-      .then(d => setComparison(d))
-      .catch(() => setError('Could not fetch comparison data. Please try another peer.'))
-      .finally(() => setLoading(false));
-  };
 
   const handleCustom = async (e) => {
     e.preventDefault();

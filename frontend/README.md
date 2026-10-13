@@ -25,7 +25,7 @@
 
 The **StockIQ Pro** frontend is an institutional-grade, dark-themed, glassmorphic financial terminal client designed to bring Wall Street and Dalal Street quantitative desk capabilities directly to individual investors and quantitative researchers.
 
-It interfaces dynamically with the **FastAPI backend microservice**, delivering real-time pricing, multi-model machine learning forecasts, deep full-article news intelligence (powered by Scrapling), Modern Portfolio Theory optimization, high-frequency intraday technical charting, and long-term ETF analytics across **7,954 instruments** (NSE, BSE, ETFs, sectoral indices, and global ADRs).
+It interfaces dynamically with the **FastAPI backend microservice**, delivering real-time pricing, multi-model machine learning forecasts, deep full-article news intelligence (powered by Scrapling), Modern Portfolio Theory optimization, high-frequency intraday technical charting, and long-term ETF analytics across **8,623 instruments** (NSE, BSE, ETFs, sectoral indices, and global ADRs).
 
 ```
                       STOCKIQ PRO FRONTEND ARCHITECTURE
@@ -33,7 +33,7 @@ It interfaces dynamically with the **FastAPI backend microservice**, delivering 
  │                           Next.js 16 Client Tier                            │
  │                                                                             │
  │  ┌───────────────────────────────────────────────────────────────────────┐  │
- │  │        Header & Spotlight Palette (⌘K) — 7,954 Master Universe        │  │
+ │  │        Header & Spotlight Palette (⌘K) — 8,623 Master Universe        │  │
  │  └───────────────────────────────────┬───────────────────────────────────┘  │
  │                                      ▼                                      │
  │  ┌───────────────────────────────────────────────────────────────────────┐  │
@@ -76,7 +76,7 @@ StockIQ Pro uses the Next.js App Router (`src/app/`) to deliver 6 dedicated, mod
 | **`/`** | **Analysis Workstation** | Master terminal with asset-adaptive architecture. Automatically toggles between deep corporate forensic valuation (DCF, DuPont, Graham, Altman Z, Beneish M) for equities, and the institutional ETF Long-Term Suite (AUM, expense ratio, tracking error, top 10 holdings, sector breakdown, 3Y rolling returns, 6-point checklist, SIP score) for ETFs. Features 6-model ML forecasts, Street Consensus comparisons, GARCH volatility, Monte Carlo simulations, options Greeks, and executive PDF memos. |
 | **`/intraday`** | **Intraday Terminal** | High-frequency technical analysis workspace with real-time multi-timeframe candles (1m, 2m, 5m, 15m, 30m, 60m), Supertrend directional signals ($\pm 1$), Multi-timeframe VWAP with volatility bands ($\pm 1\sigma, \pm 2\sigma$), EMA Ribbons (9, 21, 50, 200), RSI-14, MACD (12, 26, 9), ATR-14, and one-click CSV time-series export. |
 | **`/portfolio`** | **Portfolio & Capital Advisor** | Modern Portfolio Theory (Markowitz Efficient Frontier), Tangency Portfolio (Maximum Sharpe), Global Minimum Variance (GMV) allocation, Value-at-Risk (VaR 95%, 99%), Conditional VaR (Expected Shortfall), dynamic portfolio rebalancing, the **Smart Capital Advisor** for automated loss recovery and strategic averaging down, and the **SIP & Wealth Planner**. |
-| **`/browse`** | **Market Universe Browser** | Search, filter, and explore the complete 7,954 instrument database across NSE equities, BSE scrips, ETFs, sectoral indices, and global ADRs with market cap, sector tags, and live price feeds. |
+| **`/browse`** | **Market Universe Browser** | Search, filter, and explore the complete 8,623 instrument database across NSE equities, BSE scrips, ETFs, sectoral indices, and global ADRs with market cap, sector tags, and live price feeds. |
 | **`/features`** | **Architecture & Capabilities** | Interactive technical showcase demonstrating the underlying mathematical models, Scrapling stealth web scraping, ensemble ML algorithms, and sub-millisecond system performance benchmarks. |
 | **`/terms`** | **Terms & Disclaimers** | Complete platform terms of service, open-source licensing, and SEBI regulatory risk disclaimers. |
 
@@ -289,10 +289,10 @@ frontend/
 │   │   │   ├── SIPCalculator.js          # Wealth planner & step-up SIP curves
 │   │   │   ├── SmartCapitalAdvisor.js    # Automated averaging down for recoveries
 │   │   │   ├── StockChart.js             # Interactive candlestick chart with EMAs
-│   │   │   ├── StockSearchModal.js       # Spotlight ⌘K search across 7,954 assets
+│   │   │   ├── StockSearchModal.js       # Spotlight ⌘K search across 8,623 assets
 │   │   │   └── WatchlistDrawer.js        # Persistent multi-stock watchlist drawer
 │   │   ├── browse/
-│   │   │   └── page.js                   # Market universe browser (7,954 assets)
+│   │   │   └── page.js                   # Market universe browser (8,623 assets)
 │   │   ├── features/
 │   │   │   └── page.js                   # System architecture & capabilities showcase
 │   │   ├── intraday/
@@ -317,7 +317,7 @@ frontend/
 
 | Shortcut | Action | Description |
 | :--- | :--- | :--- |
-| <kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd> | **Open Spotlight Search** | Universal asset palette across 7,954 instruments |
+| <kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd> | **Open Spotlight Search** | Universal asset palette across 8,623 instruments |
 | <kbd>/</kbd> | **Quick Search** | Activates the search palette from anywhere on the page |
 | <kbd>Esc</kbd> | **Dismiss Modal / Drawer** | Closes Spotlight, Watchlist, News Reader, or Memo Modal |
 | <kbd>↑</kbd> / <kbd>↓</kbd> | **Navigate Results** | Moves selection cursor through search results |

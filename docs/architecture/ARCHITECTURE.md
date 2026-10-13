@@ -2,7 +2,7 @@
 
 > **Author**: Vishesh Sanghvi  
 > **Platform Version**: 2.4.0-Production  
-> **Scale**: 7,954 NSE/BSE Equities, ETFs, Indices & Global ADRs  
+> **Scale**: 8,623 NSE/BSE Equities, ETFs, Indices & Global ADRs  
 > **Stack**: FastAPI (Python 3.11) • Next.js 16 (Turbopack) • Scrapling Stealth Engine • Scikit-Learn / XGBoost / LightGBM
 
 ---
@@ -10,7 +10,7 @@
 ## Table of Contents
 1. [Executive Summary & Core Mission](#1-executive-summary--core-mission)
 2. [End-to-End System Architecture](#2-end-to-end-system-architecture)
-3. [The 7,954 Instrument Universe & Smart Search Engine](#3-the-7954-instrument-universe--smart-search-engine)
+3. [The 8,623 Instrument Universe & Smart Search Engine](#3-the-8623-instrument-universe--smart-search-engine)
 4. [Machine Learning & Quantitative Analytics Engine](#4-machine-learning--quantitative-analytics-engine)
 5. [Intelligent News Reader & Deep Scraping (Powered by Scrapling)](#5-intelligent-news-reader--deep-scraping-powered-by-scrapling)
 6. [Fundamental Valuation & ETF Institutional Suite](#6-fundamental-valuation--etf-institutional-suite)
@@ -57,7 +57,7 @@ graph TD
         end
         
         subgraph Services [Domain Services Tier]
-            R_Tickers --> S_TickerMgr[TickerManager - 7,954 Master Database]
+            R_Tickers --> S_TickerMgr[TickerManager - 8,623 Master Database]
             R_Analysis --> S_Engine[AnalysisEngine - DCF, DuPont, Greeks]
             R_ETF --> S_ETF[AnalysisEngine - Tracking Error, Holdings, Rolling Returns]
             R_ML --> S_MLModels[MLEnsemble - XGBoost, LightGBM, HMM, GARCH]
@@ -81,11 +81,12 @@ graph TD
 
 ---
 
-## 3. The 7,954 Instrument Universe & Smart Search Engine
+## 3. The 8,623 Instrument Universe & Smart Search Engine
 
-The platform maintains an exhaustive, continuously verified catalog of **7,954 tradable assets** loaded directly into RAM at startup from [`backend/data/tickers.json`](file:///Users/vishesh/Downloads/Analysis-tool/backend/data/tickers.json):
-*   **NSE Active Equities**: 2,366+ primary listings (`.NS`).
-*   **BSE Exclusive Equities**: 5,200+ secondary and small-cap listings with 6-digit scrip codes (`.BO`).
+The platform maintains an exhaustive, continuously verified catalog of **8,623 tradable assets** loaded directly into RAM at startup from [`backend/data/tickers.json`](file:///Users/vishesh/Downloads/Analysis-tool/backend/data/tickers.json):
+*   **NSE Active Equities & IPOs**: 2,620+ primary mainboard listings (`.NS`), including newest market entrants (`HEROMOTORS.NS`, `ACEVECTOR.NS`, `SWIGGY.NS`, `WAAREEENER.NS`, `HYUNDAI.NS`, etc.).
+*   **NSE SME Platform (Emerge) & REITs/InvITs**: 612+ SME growth stocks (`SM`/`ST` series) and prominent Real Estate & Infrastructure trusts (`EMBASSY.NS`, `BIRET.NS`, `MINDSPACE.NS`, `NXST.NS`, `PGINVIT.NS`).
+*   **BSE Equities & Market Infrastructure**: 4,998+ listings (`.BO`), featuring the newly listed **National Stock Exchange of India Limited** (`NSE.BO`, Scrip Code: `544937`) and **BSE Limited** (`BSE.NS`).
 *   **Gold, Silver & Liquid ETFs**: `GOLDBEES.NS`, `SILVERBEES.NS`, `NIFTYBEES.NS`, `MON100.NS`, etc.
 *   **Major Global & Sectoral Indices**: `^NSEI` (Nifty 50), `^BSESN` (Sensex), `^CNXIT`, `^NSEBANK`, `^GSPC` (S&P 500), `^IXIC` (Nasdaq).
 
@@ -213,6 +214,13 @@ The ML pipeline detects whether the asset is an equity or an ETF and configures 
 | **Signal Taxonomy** | `STRONG BUY`, `BUY`, `HOLD`, `SELL`, `STRONG SELL` | `ACCUMULATE` (steady SIP accumulation), `HOLD` (fair valuation), `AVOID` (elevated drawdown/regime risk) |
 | **News Sentiment Fusion** | Scrapling deep-scraped article sentiment & catalyst scores | Zeroed / neutral (ETFs track index baskets; single-company headlines are irrelevant noise) |
 
+### Exchange Inception & Adaptive Training Window Intelligence:
+Handles newly listed IPOs, recent listings, and assets with history shorter than requested lookback windows (e.g. user requests 3Y, 5Y, or 10Y on a stock listed only 1 year ago or few weeks ago):
+*   **Inception Telemetry (`get_ticker_inception_metadata`)**: Resolves the exact exchange commencement date (`firstTradeDate`), computes calendar age (`calendar_age_human`), total trading sessions recorded, and listing status (`is_newly_listed`).
+*   **Auto-Adaptation Policy**: When a requested period exceeds available history by $>30\%$, the training pipeline automatically clamps `effective_period = 'max'` without crashing, dynamically scales feature cleaning thresholds (`min_clean`), and passes `history_metadata` to the client.
+*   **Incubation Window Protocol ($<50$ trading sessions)**: Assets younger than 50 sessions cannot reliably compute technical oscillators or perform walk-forward validation without extreme lookahead bias. The system intercepts the request gracefully, returning a structured `INCUBATION_PERIOD` payload with session readiness progress and directing users to Day-1 alternatives (Live Intraday Desk, News Catalysts, DuPont Forensics).
+*   **Diagnostic Error Handling**: Catches invalid custom date ordering (`start_date >= end_date`) and empty chart responses, presenting structured diagnostic titles, plain-English reasons, and 1-click fallback buttons in the UI.
+
 ### Street Analyst Consensus vs 6-Model AI Ensemble:
 For equity instruments, StockIQ Pro benchmarks the 6-model machine learning ensemble against sell-side Wall Street / Dalal Street consensus:
 *   **Sell-Side Consensus Aggregation**: Extracts live institutional price targets (`targetMeanPrice`, `targetHighPrice`, `targetLowPrice`, `numberOfAnalystOpinions`, and `recommendationKey`) via Yahoo Finance.
@@ -326,10 +334,76 @@ The portfolio intelligence module ([`backend/capital_allocator.py`](file:///User
       $$S_t = S_0 \exp\left( \left(\mu - \frac{1}{2}\sigma^2\right)t + \sigma W_t \right)$$
     - Computes **Value-at-Risk (VaR 95%, 99%)** and **Conditional VaR (CVaR / Expected Shortfall)** to measure maximum drawdown expectations.
     - Projects interactive quantile corridors ($P_{2.5}, P_{25}, P_{50}, P_{75}, P_{97.5}$) exportable to CSV.
-3.  **Smart Capital Advisor (Strategic Averaging Down)**:
-    - Detects underwater portfolio positions and calculates dynamic recovery priority scores based on technical oversold conditions, fundamental margin of safety, and market capitalization.
-    - Generates a granular capital deployment plan detailing allocated amounts, allocation weights, target purchase shares, and revised break-even prices.
-4.  **SIP & Compound Wealth Planner**:
+3.  **Capital Defense & Loss Remediation Engine (`/api/portfolio-remediation` & `PortfolioLossRecoveryDesk.js`)**:
+    - **"The Great Filter" Quality Diagnostic**: Audits ROE (>12%), Debt-to-Equity (<1.0x), and operating margins to segregate *Quality on Sale (Compounders)* from *Structural Value Traps*. Activates a hard firewall prohibiting averaging down on deteriorating balance sheets.
+    - **Breakeven Horizon Clock**: Computes the opportunity cost of holding dead capital:
+      $$\text{Years to Breakeven} = \frac{\ln(P_{\text{buy}} / P_{\text{live}})}{\ln(1 + \text{EPS CAGR})}$$
+      Compares against rotating remaining capital into benchmark leaders compounding at 13.5% CAGR, displaying the exact years saved.
+    - **Tax-Loss Harvesting Shield**: Calculates immediate cash deductions (India STCL 20%, LTCL 12.5%, Global 20%) and pairs losing positions with correlated sector ETF proxies (e.g. `BANKBEES.NS`, `ITBEES.NS`, `NIFTYBEES.NS`) to claim fiscal savings without losing market beta exposure.
+    - **3-Tranche Volatility-Guided DCA Plan**: Sized into Base Anchor (35%), Confirmation (40%), and Breakout (25%) tranches with dynamic invalidation stop levels.
+
+4.  **Alpha Harvest & Profit Maximization Engine (`/api/portfolio-alpha-harvest` & `PortfolioProfitDesk.js`)**:
+    - **"House Money" (Zero-Risk Free-Ride) Protocol**: Calculates the exact share liquidation needed to pull 100% of the invested principal off the table:
+      $$\text{Shares to Sell} = \left\lceil \frac{\text{Total Invested Capital}}{P_{\text{live}}} \right\rceil$$
+      Leaves the remaining shares held at **strictly 0.00% downside risk to capital**, providing infinite psychological runway.
+    - **4-Tier Laddered Profit Escalator**:
+      - Tier 1: Initial De-risk (+25% gain) → Trim 20% to lock gains.
+      - Tier 2: Valuation Stretch (+50% gain) → Trim 30% against sector multiple expansion.
+      - Tier 3: Super-Cycle Climax (+85% gain) → Trim 25% on volume exhaustion.
+      - Tier 4: Moonbag / Compounding Core (Remaining 25%) → Held indefinitely with volatility trailing stops.
+    - **Chandelier & ATR Volatility Trailing Stop Sentinel**:
+      $$\text{Trailing Stop} = \max_{t \in [1, 60]} High_t - (2.5 \times ATR_{14})$$
+      Guarantees protected profits and alerts users upon approaching or breaking stop lines.
+    - **Winner Pyramiding Engine (Anti-Martingale Scaling)**: Computes safe addition sizing for breakout leaders, strictly validating that the new weighted average cost remains safely below the Chandelier trailing stop.
+
+5.  **Macro Stress Lab & Concentration Fragility Engine (`/api/portfolio-stress-test` & `PortfolioStressLab.js`)**:
+    - **Herfindahl-Hirschman Concentration Index (HHI)**:
+      $$HHI = \sum_{i=1}^N (w_i \times 100)^2$$
+      Audits portfolio fragility ($<1500$ Diversified, $1500-2500$ Moderate, $>2500$ Fragile) and enforces single-sector 30% limit caps.
+    - **5 Historical Macro Crisis Simulators**: Simulates weighted portfolio impact under:
+      1. *2020 COVID Panic Shock (-38%)*
+      2. *2008 Global Financial Crisis (-52%)*
+      3. *2022 Central Bank Rate-Hike Shock (-20%)*
+      4. *Crude Oil Surge to $110/bbl (-14%)*
+      5. *Rupee Devaluation Shock (-8%)*
+      Identifies the "Weakest Link" vulnerabilities and computes the Portfolio Resilience Score (0 to 100).
+    - **Dynamic Cash Sizing & Market Valuation Deployer**: Tracks benchmark distance from 200 EMA and market P/E to guide dry powder preservation (10-15% in fair value, 25-30% in overheated markets, 0-5% in capitulation pullbacks).
+
+6.  **Multi-Portfolio Goal Management (`stockiq_multi_portfolios_v2` & `PortfolioTracker.js`)**:
+    - Supports multiple named portfolios (e.g. *Main Wealth*, *Alpha Growth*, *Dividend Income*, *Retirement SIP*).
+    - Seamless 1-click portfolio switching, custom portfolio creation, renaming, and deletion with persistent browser synchronization.
+    - Automatic migration handling for legacy single-portfolio storage records.
+
+7.  **Day P&L & Real-Time Performance Analytics**:
+    - Disaggregates daily performance from total investment holding gains.
+    - Computes real-time **Today's P&L** ($\Delta \text{Day Rupee Profit}$ and $\Delta \text{Day \%}$) at the portfolio aggregate level and per individual position based on live exchange quotes and previous close baselines.
+
+8.  **Portfolio Fundamental X-Ray & Benchmark Alpha Overlay (`/api/portfolio-analyze` & `PortfolioXRayAnalytics.js`)**:
+    - **Valuation X-Ray**: Calculates capital-weighted aggregate **P/E Ratio**, **P/B Ratio**, **ROE**, and **Dividend Yield**.
+    - **Nifty 50 Benchmark Overlay**: Directly contrasts portfolio valuation multiples against live Nifty 50 index benchmarks to instantly audit if the portfolio carries a valuation discount or quality premium.
+    - **Jensen's Alpha & Multi-Horizon Relative Return**: Measures annualized excess return ($\alpha = R_p - [R_f + \beta(R_m - R_f)]$) alongside 1-Month, 3-Month, 6-Month, and 1-Year performance comparisons against the index.
+
+9.  **Passive Dividend Cash Flow Stream & Yield on Cost (YOC)**:
+    - **Annualized Projected Income**: Forecasts annual and monthly passive cash dividends generated from active equity holdings:
+      $$\text{Annual Cashflow} = \sum_{i=1}^N \text{Qty}_i \times \text{LTP}_i \times \text{DivYield}_i$$
+    - **Yield on Cost (YOC) vs. Market Yield**: Contrasts current dividend yields against original capital investment costs:
+      $$\text{Yield on Cost (YOC)} = \frac{\sum \text{Annual Dividend Income}_i}{\text{Total Invested Capital}} \times 100$$
+      Demonstrates exponential dividend compounding power on multi-year compounders.
+
+10. **Target Asset Allocation & 1-Click Drift Rebalancer**:
+    - Interactive target allocation weight setter across holdings.
+    - Visual drift status indicators (**Overweight**, **Underweight**, **Balanced**) with calculated rupee gap adjustments.
+    - **1-Click Auto-Scale Rebalancing**: Automatically recalculates and scales exact share quantities to realign active capital with target weights at current live prices.
+
+11. **Smart Universal Broker Statement CSV Importer**:
+    - Auto-detects distinct export schemas across major Indian brokers:
+      - **Zerodha Console** (`Instrument`, `Qty.`, `Avg. cost`)
+      - **Groww** (`Stock name`, `Symbol`, `Shares`, `Average price`)
+      - **AngelOne** (`Symbol`, `Quantity`, `Buy Average Price`)
+      - **Upstox / ICICI Direct / Kotak** (`Scrip Name`, `Trading Symbol`, `Units`, `Buy Price`)
+    - Automatically cleans broker specific series tags (`-EQ`, `-BE`, `-SM`, `NSE:`, `BSE:`), strips currency symbols and commas, and maps tickers to valid NSE/BSE exchange symbols.
+
+12. **SIP & Compound Wealth Planner**:
     - Models Systematic Investment Plans with annual step-up contribution multipliers:
       $$FV = P \times \left[ \frac{(1 + r/12)^{12n} - 1}{r/12} \right] \times (1 + r/12)$$
     - Dynamically computes inflation-adjusted purchasing power schedules and long-term milestones.
@@ -369,7 +443,7 @@ The frontend is built with **Next.js 16 (Turbopack)**, **React 19**, and **Vanil
 *   **`/`**: Master quantitative workstation (fundamentals, 6-model ML forecasts, Monte Carlo, DCF, DuPont, news intelligence).
 *   **`/intraday`**: High-frequency intraday technical charting and indicator terminal.
 *   **`/portfolio`**: Portfolio optimizer, Markowitz efficient frontier, and Smart Capital Advisor.
-*   **`/browse`**: Market-wide 7,954 universe asset explorer with sector categorization.
+*   **`/browse`**: Market-wide 8,623 universe asset explorer with sector categorization.
 *   **`/features`**: System capabilities, architecture flowcharts, and technical performance matrix.
 *   **`/terms`**: Platform terms of use, licensing, and SEBI regulatory risk disclosures.
 
@@ -392,7 +466,7 @@ To eliminate rate-limiting and minimize external API calls, a thread-safe, in-me
 | **`/api/valuation`** (Full Fundamentals) | 1 hour (3600s) | ~1.84 s | **0.42 ms** | **~4,380x** |
 | **`/api/live`** (Real-Time Price) | 60 seconds | ~0.86 s | **0.18 ms** | **~4,770x** |
 | **`/api/advanced-news`** (Scrapling Deep Read) | 10 minutes (600s) | ~1.95 s | **0.28 ms** | **~6,950x** |
-| **`/api/tickers`** (7,954 Master Universe) | 24 hours (86400s) | ~0.12 s | **0.05 ms** | **~2,400x** |
+| **`/api/tickers`** (8,623 Master Universe) | 24 hours (86400s) | ~0.12 s | **0.05 ms** | **~2,400x** |
 | **`/api/market-screener`** (Sector Movers) | 60 seconds | ~1.20 s | **0.35 ms** | **~3,400x** |
 
 ### Automated Test Suite:

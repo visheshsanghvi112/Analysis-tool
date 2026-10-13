@@ -106,6 +106,94 @@ def get_history(ticker: str, period: str = None, interval: str = "1d", start_dat
         return pd.DataFrame()
 
 
+@cache_ttl(seconds=3600)
+def get_ticker_inception_metadata(ticker: str) -> dict:
+    """
+    Returns asset listing inception metadata and total historical trading span.
+    Extracts firstTradeDate from Yahoo Finance chart metadata and computes:
+    - first_trade_date: YYYY-MM-DD
+    - first_trade_date_formatted: e.g. '13 Nov 2024'
+    - first_trade_timestamp: epoch
+    - calendar_age_days: integer
+    - calendar_age_human: e.g. '11 months', '1.4 years', '18 years'
+    - total_trading_sessions_recorded: integer
+    - is_newly_listed: bool (true if listed <= 2 years ago)
+    """
+    ticker_clean = ticker.strip().upper()
+    data = _get(
+        _CHART_URL.format(ticker=ticker_clean),
+        params={"interval": "1d", "range": "max"},
+    )
+    if not data or "chart" not in data or not data["chart"].get("result"):
+        return {
+            "ticker": ticker_clean,
+            "first_trade_date": None,
+            "first_trade_date_formatted": "Unknown",
+            "calendar_age_days": 0,
+            "calendar_age_human": "Unknown",
+            "total_trading_sessions_recorded": 0,
+            "is_newly_listed": False,
+        }
+
+    try:
+        r = data["chart"]["result"][0]
+        meta = r.get("meta", {})
+        first_trade_ts = meta.get("firstTradeDate")
+        timestamps = r.get("timestamp", [])
+
+        if not first_trade_ts and timestamps:
+            first_trade_ts = timestamps[0]
+
+        if not first_trade_ts:
+            return {
+                "ticker": ticker_clean,
+                "first_trade_date": None,
+                "first_trade_date_formatted": "Unknown",
+                "calendar_age_days": 0,
+                "calendar_age_human": "Unknown",
+                "total_trading_sessions_recorded": len(timestamps) if timestamps else 0,
+                "is_newly_listed": False,
+            }
+
+        now_utc = datetime.now(timezone.utc)
+        dt_first = datetime.fromtimestamp(first_trade_ts, timezone.utc)
+        age_delta = now_utc - dt_first
+        age_days = max(1, age_delta.days)
+
+        if age_days < 30:
+            age_human = f"{age_days} days"
+        elif age_days < 365:
+            months = round(age_days / 30.44, 1)
+            age_human = f"{months} months"
+        else:
+            years = round(age_days / 365.25, 1)
+            age_human = f"{years} years"
+
+        total_sessions = len(timestamps) if timestamps else 0
+
+        return {
+            "ticker": ticker_clean,
+            "first_trade_date": dt_first.strftime("%Y-%m-%d"),
+            "first_trade_date_formatted": dt_first.strftime("%d %b %Y"),
+            "first_trade_timestamp": first_trade_ts,
+            "calendar_age_days": age_days,
+            "calendar_age_human": age_human,
+            "total_trading_sessions_recorded": total_sessions,
+            "is_newly_listed": age_days <= 730,  # <= 2 years
+            "currency": meta.get("currency", "INR" if (ticker_clean.endswith(".NS") or ticker_clean.endswith(".BO")) else "USD"),
+        }
+    except Exception as exc:
+        return {
+            "ticker": ticker_clean,
+            "first_trade_date": None,
+            "first_trade_date_formatted": "Unknown",
+            "calendar_age_days": 0,
+            "calendar_age_human": "Unknown",
+            "total_trading_sessions_recorded": 0,
+            "is_newly_listed": False,
+        }
+
+
 @cache_ttl(seconds=60)
 def get_quote(ticker: str) -> dict:
     """

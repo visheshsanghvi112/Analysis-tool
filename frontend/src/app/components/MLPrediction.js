@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Brain, TrendingUp, TrendingDown, Target, Zap, AlertCircle, RefreshCw, BarChart2, Info, Download } from 'lucide-react';
+import { Brain, TrendingUp, TrendingDown, Target, Zap, AlertCircle, RefreshCw, BarChart2, Info, Download, Sparkles, Clock, Calendar } from 'lucide-react';
 import InfoBadge from './InfoBadge';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8000' : 'https://stock-analysis-backend-seven.vercel.app');
@@ -272,6 +272,7 @@ function StreetConsensusCard({ consensus, aiPredictedPrice, currentPrice, currSy
 
 export default function MLPrediction({ ticker }) {
   const [prediction, setPrediction] = useState(null);
+  const [incubation, setIncubation] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -318,7 +319,24 @@ export default function MLPrediction({ ticker }) {
       const res = await fetch(url);
       const json = await res.json();
       
-      if (!res.ok) throw new Error(json.detail || 'Failed to get prediction');
+      if (!res.ok) {
+        const errorDetail = json.detail;
+        if (typeof errorDetail === 'object' && errorDetail !== null) {
+          setError(errorDetail);
+        } else {
+          setError({ message: errorDetail || 'Failed to get prediction' });
+        }
+        setPrediction(null);
+        setIncubation(null);
+        return;
+      }
+
+      if (json.incubation) {
+        setIncubation(json.incubation);
+        setPrediction(null);
+        setError(null);
+        return;
+      }
       
       // Update cache key
       const cacheKey = period === 'custom' 
@@ -335,11 +353,19 @@ export default function MLPrediction({ ticker }) {
 
       if (!isBackground || isCurrentActive) {
         setPrediction(json.prediction);
+        setIncubation(null);
+        setError(null);
       }
     } catch (err) {
       if (!isBackground) {
-        setError(err.message);
+        try {
+          const parsed = JSON.parse(err.message);
+          setError(parsed);
+        } catch {
+          setError({ message: err.message });
+        }
         setPrediction(null);
+        setIncubation(null);
       }
     } finally {
       if (!isBackground) {
@@ -352,6 +378,8 @@ export default function MLPrediction({ ticker }) {
   useEffect(() => {
     if (!ticker) return;
     setPredictionCache({});
+    setIncubation(null);
+    setError(null);
   }, [ticker]);
 
   // 2. Period changes: check cache or trigger fetch
@@ -365,6 +393,7 @@ export default function MLPrediction({ ticker }) {
       
     if (predictionCache[cacheKey]) {
       setPrediction(predictionCache[cacheKey]);
+      setIncubation(null);
       setError(null);
     } else {
       fetchPrediction(selectedPeriod, startDate, endDate, false);
@@ -377,6 +406,8 @@ export default function MLPrediction({ ticker }) {
 
   const handleRefresh = async () => {
     setPredictionCache({});
+    setIncubation(null);
+    setError(null);
     await fetchPrediction(selectedPeriod, startDate, endDate, false);
   };
 
@@ -546,9 +577,16 @@ export default function MLPrediction({ ticker }) {
 
       {/* Training Period Selector */}
       <div className="mb-5">
-        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-          {isETF ? 'Training Data Window' : 'Training Data Horizon'}
-        </p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            {isETF ? 'Training Data Window' : 'Training Data Horizon'}
+          </p>
+          {prediction?.history_metadata?.calendar_age_human && (
+            <span className="text-[10px] text-slate-400 font-medium">
+              Exchange Inception: <span className="text-purple-300 font-bold">{prediction.history_metadata.first_trade_date_formatted || 'N/A'}</span> ({prediction.history_metadata.calendar_age_human})
+            </span>
+          )}
+        </div>
         <div className="flex p-0.5 bg-white/[0.03] rounded-lg border border-white/[0.06] gap-1">
           {periodOptions.map((p) => (
             <button
@@ -604,13 +642,119 @@ export default function MLPrediction({ ticker }) {
           <Brain className="h-6 w-6 animate-pulse text-purple-400" />
           <span className="text-xs text-slate-400">Retraining model with {formatPeriodLabel(selectedPeriod)} data...</span>
         </div>
+      ) : incubation ? (
+        <div className="rounded-xl sm:rounded-2xl p-5 sm:p-6 bg-gradient-to-br from-indigo-950/40 via-purple-950/20 to-black/60 border border-purple-500/30 space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0">
+                <Clock className="h-5 w-5 text-purple-400 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm sm:text-base font-bold text-white">
+                    {incubation.title || 'Newly Listed Asset in Incubation Window'}
+                  </h4>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase tracking-wider">
+                    Incubating
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Commenced trading on <span className="font-bold text-white">{incubation.first_trade_date_formatted}</span> ({incubation.calendar_age_human} on exchange)
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Readiness Progress Bar */}
+          <div className="space-y-1.5 p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400 font-medium">Supervised AI Model Readiness</span>
+              <span className="font-bold text-purple-300">
+                {incubation.total_trading_sessions_recorded} / {incubation.required_trading_sessions} Sessions ({incubation.readiness_pct}%)
+              </span>
+            </div>
+            <div className="relative h-2 w-full bg-white/[0.08] rounded-full overflow-hidden">
+              <div
+                className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(100, Math.max(5, incubation.readiness_pct))}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed mt-2">
+              {incubation.explanation}
+            </p>
+          </div>
+
+          {/* Available Modules Right Now */}
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              Immediate Active Intelligence for this Asset:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {(incubation.available_modules || []).map(m => (
+                <div key={m.name} className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+                  <p className="text-xs font-bold text-white mb-0.5">{m.name}</p>
+                  <p className="text-[10px] text-slate-400">{m.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       ) : error ? (
-        <div className="flex items-center gap-3 p-4 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-400 text-sm">
-          <AlertCircle className="h-5 w-5 shrink-0" />
-          <span>{error}</span>
+        <div className="p-4 sm:p-5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-300 space-y-2.5">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-rose-400 shrink-0" />
+            <h4 className="text-xs sm:text-sm font-bold text-white">
+              {error.title || 'Analysis Notice'}
+            </h4>
+          </div>
+          <p className="text-xs text-rose-200/90 leading-relaxed">
+            {error.message || (typeof error === 'string' ? error : JSON.stringify(error))}
+          </p>
+          {error.suggestion && (
+            <p className="text-[11px] text-slate-300 font-medium bg-black/30 p-2 rounded-lg border border-white/[0.05]">
+              💡 <span className="text-indigo-300 font-semibold">Recommended Action:</span> {error.suggestion}
+            </p>
+          )}
+          <button
+            onClick={() => handlePeriodChange('max')}
+            className="mt-1 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs font-semibold text-white border border-white/[0.1] transition cursor-pointer"
+          >
+            Train on Maximum Available History Instead
+          </button>
         </div>
       ) : prediction ? (
         <>
+          {/* Exchange Inception & Adaptation Banner */}
+          {prediction.history_metadata && (
+            <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-transparent border border-purple-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="h-7 w-7 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0">
+                  <Sparkles className="h-3.5 w-3.5 text-purple-300" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-white">
+                      Exchange Inception: {prediction.history_metadata.first_trade_date_formatted || 'N/A'}
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-200 border border-purple-500/30 font-semibold">
+                      {prediction.history_metadata.calendar_age_human} History • {prediction.history_metadata.total_trading_days} Sessions
+                    </span>
+                  </div>
+                  {prediction.history_metadata.is_adapted && (
+                    <p className="text-[10px] text-purple-200/80 mt-0.5">
+                      {prediction.history_metadata.adaptation_note}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {prediction.history_metadata.is_adapted && (
+                <span className="text-[9px] uppercase tracking-wider font-extrabold px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                  Auto-Adapted to Max
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Main Prediction */}
           <div className={`rounded-xl sm:rounded-2xl p-4 sm:p-5 border mb-4 ${getSignalStyle(prediction.signal).bg} ${getSignalStyle(prediction.signal).border}`}>
             <div className="flex items-center justify-between mb-3">

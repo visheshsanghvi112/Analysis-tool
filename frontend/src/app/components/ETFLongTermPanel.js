@@ -396,12 +396,12 @@ function HoldingsAndSectorsCard({ holdings, sectors }) {
 
 // Realized Historical SIP vs Lump Sum Simulator
 function HistoricalSIPCard({ data, curr }) {
-  if (!data || Object.keys(data).length === 0) return null;
-
-  const availableHorizons = Object.keys(data);
+  const availableHorizons = data ? Object.keys(data) : [];
   const [selectedHorizon, setSelectedHorizon] = useState(
-    availableHorizons.includes('3Y') ? '3Y' : availableHorizons[0]
+    availableHorizons.includes('3Y') ? '3Y' : (availableHorizons[0] || '3Y')
   );
+
+  if (!data || Object.keys(data).length === 0) return null;
 
   const curData = data[selectedHorizon];
   if (!curData) return null;

@@ -25,7 +25,7 @@ from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
-from yf_client import get_history, get_quote
+from yf_client import get_history, get_quote, get_ticker_inception_metadata
 
 # ── Optional heavy deps — fail gracefully ──────────────────
 try:
@@ -678,6 +678,7 @@ class StockPredictor:
         self.train_meta   = {}
         self.shap_features = {}
         self.asset_type   = 'EQUITY'  # 'ETF' or 'EQUITY'
+        self.history_metadata = {}
 
     # ── Build diverse model pool ────────────────────────────
     def _build_pool(self) -> dict:
@@ -711,19 +712,105 @@ class StockPredictor:
     def train(self, ticker, period='2y', start_date=None, end_date=None, asset_type='EQUITY'):
         try:
             self.asset_type = asset_type
+            self.ticker = ticker
+            self.period = period
+            self.start_date = start_date
+            self.end_date = end_date
             is_etf = (asset_type == 'ETF')
 
-            # ETFs need longer history to capture full market cycles
+            # Retrieve asset listing inception metadata
+            inception_meta = get_ticker_inception_metadata(ticker)
+
+            # Validate custom dates if provided
+            if start_date and end_date:
+                try:
+                    s_dt = datetime.strptime(start_date, "%Y-%m-%d")
+                    e_dt = datetime.strptime(end_date, "%Y-%m-%d")
+                    if s_dt >= e_dt:
+                        return False, {
+                            "error_type": "INVALID_DATE_RANGE",
+                            "title": "Invalid Custom Date Range",
+                            "message": f"Start date ({start_date}) must be earlier than end date ({end_date}).",
+                            "suggestion": "Please select a start date that precedes the end date.",
+                        }
+                except ValueError as ve:
+                    return False, {
+                        "error_type": "INVALID_DATE_FORMAT",
+                        "title": "Invalid Date Format",
+                        "message": str(ve),
+                        "suggestion": "Please provide dates in YYYY-MM-DD format.",
+                    }
+
+            # ETFs need longer history to capture full market cycles if available
             default_period = '5y' if is_etf else period
             actual_period  = default_period if period == '2y' and is_etf else period
 
             df = get_history(ticker, period=actual_period,
                              start_date=start_date, end_date=end_date)
 
-            # ETFs need >= 252 trading days (1 full year) to learn trend cycles
-            min_days = 252 if is_etf else 120
-            if df is None or df.empty or len(df) < min_days:
-                return False, f"Insufficient historical data (need >={min_days} trading days for {'ETF' if is_etf else 'stock'})"
+            total_days = len(df) if (df is not None and not df.empty) else 0
+
+            # ── Check for Incubation Window (< 50 trading sessions) ──
+            if total_days < 50:
+                first_date_fmt = inception_meta.get("first_trade_date_formatted")
+                if not first_date_fmt or first_date_fmt == "Unknown":
+                    first_date_fmt = df.index[0].strftime("%d %b %Y") if total_days > 0 else "Recently"
+
+                first_date_str = inception_meta.get("first_trade_date") or (str(df.index[0].date()) if total_days > 0 else None)
+                cal_age = inception_meta.get("calendar_age_human", "A few weeks")
+
+                return False, {
+                    "status": "INCUBATION_PERIOD",
+                    "error_code": "ASSET_INCUBATION_WINDOW",
+                    "ticker": ticker,
+                    "title": "Newly Listed Asset in Incubation Window",
+                    "first_trade_date": first_date_str,
+                    "first_trade_date_formatted": first_date_fmt,
+                    "calendar_age_human": cal_age,
+                    "total_trading_sessions_recorded": total_days,
+                    "required_trading_sessions": 50,
+                    "readiness_pct": round((total_days / 50.0) * 100, 1),
+                    "explanation": f"This asset was listed on {first_date_fmt} and currently has only {total_days} trading sessions recorded on the exchange. Supervised machine learning ensembles require at least 50 trading sessions to compute technical oscillators (RSI, 20d volatility, MACD) and perform walk-forward validation without extreme lookahead bias.",
+                    "available_modules": [
+                        {"name": "Live Intraday Desk", "desc": "Tick-by-tick real-time candles & Supertrend"},
+                        {"name": "News Catalyst Reader", "desc": "Live regulatory filings & earnings alerts"},
+                        {"name": "DuPont & Forensics", "desc": "Balance sheet leverage & solvency ratios"},
+                    ],
+                }
+
+            # ── Auto-Period Adaptation for Young Assets ──
+            # Approximate trading days per horizon
+            period_expected_days = {
+                '1y': 252,
+                '2y': 504,
+                '3y': 756,
+                '5y': 1260,
+                '10y': 2520,
+                'max': total_days,
+            }
+            exp_days = period_expected_days.get(period.lower(), 504)
+            is_adapted = (total_days < int(exp_days * 0.70)) and period.lower() != 'custom'
+            effective_period_str = f"max ({round(total_days / 252, 1)}Y available)" if is_adapted else period.upper()
+
+            first_date_str = inception_meta.get("first_trade_date") or str(df.index[0].date())
+            first_date_fmt = inception_meta.get("first_trade_date_formatted") or df.index[0].strftime("%d %b %Y")
+            cal_age = inception_meta.get("calendar_age_human") or f"{round(total_days / 252, 1)} years"
+
+            adaptation_note = None
+            if is_adapted:
+                adaptation_note = f"Auto-adapted: Asset was listed on {first_date_fmt} (~{cal_age} on exchange). Trained on all {total_days} available trading sessions since inception rather than the requested {period.upper()} horizon."
+
+            self.history_metadata = {
+                "first_trade_date": first_date_str,
+                "first_trade_date_formatted": first_date_fmt,
+                "calendar_age_human": cal_age,
+                "total_trading_days": total_days,
+                "requested_period": period,
+                "effective_period": effective_period_str,
+                "is_adapted": is_adapted,
+                "is_newly_listed": inception_meta.get("is_newly_listed", False) or total_days < 500,
+                "adaptation_note": adaptation_note,
+            }
 
             # ── Select feature pipeline based on asset type ──
             feature_fn   = _create_etf_features if is_etf else _create_features
@@ -734,14 +821,24 @@ class StockPredictor:
             self.feature_cols = avail
 
             # 1. Temporal Leakage Prevention: dropna() without bfill()
-            min_clean = 150 if is_etf else 80
+            # Adaptive min_clean: allows young assets (50-120 days) to train cleanly
+            min_clean = min(80 if not is_etf else 150, max(25, total_days - 35))
             df_clean = df_feat[avail + ['Close']].dropna()
             if len(df_clean) < min_clean:
-                return False, "Too many NaN values after feature engineering"
+                return False, {
+                    "error_type": "FEATURE_EXTRACTION_INSUFFICIENT",
+                    "title": "Insufficient Clean Trading Samples",
+                    "message": f"Could not construct enough clean indicator rows ({len(df_clean)} available, minimum {min_clean} needed).",
+                    "suggestion": "Try selecting 'Max' period to utilize all available price history.",
+                }
 
-            # ETF: 30-day forward return; Stock: 5-day
-            horizon = 30 if is_etf else 5
+            # ETF: 30-day forward return (or 10-day if young); Stock: 5-day
+            horizon = 30 if (is_etf and len(df_clean) >= 140) else (10 if is_etf else 5)
             n       = len(df_clean) - horizon
+            if n <= 10:
+                horizon = 3 if not is_etf else 5
+                n       = len(df_clean) - horizon
+
             X_raw   = df_clean[avail].values[:n]
             y       = np.array([
                 (df_clean['Close'].iloc[i + horizon] - df_clean['Close'].iloc[i])
@@ -761,7 +858,7 @@ class StockPredictor:
 
             # 3. Genuine Out-Of-Fold (OOF) Stacking on X_tr
             pool = self._build_pool()
-            n_splits = min(5, max(2, len(X_tr) // 20))
+            n_splits = min(5, max(2, len(X_tr) // 12))
             kf = KFold(n_splits=n_splits, shuffle=False)
             oof_preds = {name: np.zeros(len(X_tr)) for name in pool.keys()}
 
@@ -883,8 +980,8 @@ class StockPredictor:
             avail      = [c for c in self.feature_cols if c in df_feat.columns]
             df_clean   = df_feat[avail].dropna()
 
-            min_recent = 30 if is_etf else 15
-            if len(df_clean) < min_recent:
+            min_recent = min(30 if is_etf else 15, max(5, len(df_clean)))
+            if len(df_clean) < min_recent or len(df_clean) < 5:
                 return None, "Insufficient recent data"
 
             X_latest = self.scaler.transform(df_clean.tail(1).values)
@@ -1125,6 +1222,7 @@ class StockPredictor:
                 'models_used':            list(self.models.keys()),
                 'timestamp':              datetime.now().isoformat(),
                 'models':                 model_telemetry,
+                'history_metadata':       getattr(self, 'history_metadata', None),
                 # ── Multi-Tier Status Governance ──
                 'data_status': {
                     'live_quote':         'OK' if (live_price is not None and live_price > 0) else 'UNAVAILABLE',

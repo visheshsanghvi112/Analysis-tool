@@ -51,12 +51,27 @@ SEARCH_ALIASES = {
     'irctc': 'IRCTC.NS', 'irfc': 'IRFC.NS', 'pfc': 'PFC.NS', 'rec': 'RECLTD.NS',
     'jsw steel': 'JSWSTEEL.NS', 'hindalco': 'HINDALCO.NS', 'vedanta': 'VEDL.NS',
     'adani ent': 'ADANIENT.NS', 'adani ports': 'ADANIPORTS.NS', 'adani power': 'ADANIPOWER.NS',
+    # Stock Exchanges & Market Infrastructure
+    'nse': 'NSE.BO', 'national stock exchange': 'NSE.BO', 'national stock exchange of india': 'NSE.BO',
+    'nse india': 'NSE.BO', 'nse stock': 'NSE.BO', 'nse limited': 'NSE.BO', 'nse ltd': 'NSE.BO',
+    'bse': 'BSE.NS', 'bombay stock exchange': 'BSE.NS', 'bse limited': 'BSE.NS', 'bse ltd': 'BSE.NS',
+    'cdsl': 'CDSL.NS', 'mcx': 'MCX.NS', 'cams': 'CAMS.NS', 'kfin': 'KFINTECH.NS', 'kfintech': 'KFINTECH.NS',
     # New-Age Tech & IPOs
     'zomato': 'ETERNAL.NS', 'eternal': 'ETERNAL.NS',
     'paytm': 'PAYTM.NS', 'swiggy': 'SWIGGY.NS', 'ola': 'OLAELEC.NS', 'ola electric': 'OLAELEC.NS',
     'nykaa': 'NYKAA.NS', 'policybazaar': 'POLICYBZR.NS', 'delhivery': 'DELHIVERY.NS',
     'hyundai': 'HYUNDAI.NS', 'waaree': 'WAAREEENER.NS', 'waaree energies': 'WAAREEENER.NS',
     'premier energies': 'PREMIERENE.NS', 'afcons': 'AFCONS.NS', 'ntpc green': 'NTPCGREEN.NS',
+    'bajaj housing finance': 'BAJAJHFL.NS', 'bajaj housing': 'BAJAJHFL.NS', 'bajajhfl': 'BAJAJHFL.NS',
+    'jio finance': 'JIOFIN.NS', 'jio financial': 'JIOFIN.NS', 'jio financial services': 'JIOFIN.NS', 'jiofin': 'JIOFIN.NS',
+    'tata tech': 'TATATECH.NS', 'tata technologies': 'TATATECH.NS', 'tatatech': 'TATATECH.NS',
+    'ireda': 'IREDA.NS', 'hero motors': 'HEROMOTORS.NS',
+    # REITs & InvITs
+    'embassy': 'EMBASSY.NS', 'embassy reit': 'EMBASSY.NS',
+    'mindspace': 'MINDSPACE.NS', 'mindspace reit': 'MINDSPACE.NS',
+    'nexus': 'NXST.NS', 'nexus reit': 'NXST.NS', 'nexus select': 'NXST.NS',
+    'brookfield': 'BIRET.NS', 'brookfield reit': 'BIRET.NS', 'biret': 'BIRET.NS',
+    'powergrid invit': 'PGINVIT.NS', 'pginvit': 'PGINVIT.NS',
     # Core Benchmark Indices
     'nifty': '^NSEI', 'nifty 50': '^NSEI', 'nifty50': '^NSEI',
     'sensex': '^BSESN', 'bse sensex': '^BSESN',
@@ -90,7 +105,9 @@ BLUECHIP_PROMINENCE = {
     'NTPC.NS': 81, 'POWERGRID.NS': 80, 'ONGC.NS': 79, 'COALINDIA.NS': 78, 'TITAN.NS': 77,
     'NIFTYBEES.NS': 95, 'BANKBEES.NS': 94, 'GOLDBEES.NS': 93, 'SILVERBEES.NS': 92, 'ITBEES.NS': 91,
     'MON100.NS': 90, 'CPSEETF.NS': 89, 'MAFANG.NS': 88, '^NSEI': 100, '^BSESN': 100, '^NSEBANK': 99,
-    'SWIGGY.NS': 85, 'ETERNAL.NS': 88, 'WAAREEENER.NS': 86, 'HYUNDAI.NS': 85, 'OLAELEC.NS': 84
+    'SWIGGY.NS': 85, 'ETERNAL.NS': 88, 'WAAREEENER.NS': 86, 'HYUNDAI.NS': 85, 'OLAELEC.NS': 84,
+    'NSE.BO': 98, 'BSE.NS': 96, 'JIOFIN.NS': 92, 'BAJAJHFL.NS': 90, 'TATATECH.NS': 89, 'IREDA.NS': 89,
+    'EMBASSY.NS': 86, 'BIRET.NS': 84, 'MINDSPACE.NS': 84, 'NXST.NS': 85
 }
 
 @router.get("/tickers")
@@ -100,7 +117,7 @@ def search_tickers(
     limit: int = Query(30, description="Max results", le=2000)
 ):
     """
-    Intelligent search across all 7,954 instruments with:
+    Intelligent search across all 8,600+ instruments with:
     - Exact symbol match & BSE scrip code lookup
     - Curated financial aliases & acronyms
     - Multi-token name & symbol matching
@@ -395,3 +412,22 @@ async def fundamentals(request: Request, ticker: str = Query(..., description="N
             detail=f"Could not fetch fundamental data for {ticker_clean}. The ticker may be invalid or data unavailable."
         )
     return data
+
+
+@router.get("/tickers/sync-status")
+def get_ticker_sync_status():
+    """
+    Returns automated stock sync metadata (last synced timestamp, status, instrument count, and cadence).
+    """
+    from services.ticker_manager import get_sync_metadata
+    return get_sync_metadata()
+
+
+@router.post("/tickers/sync")
+def trigger_ticker_sync(force: bool = Query(True, description="Force sync immediately")):
+    """
+    Triggers an on-demand check and ingestion of newly listed stocks from NSE and BSE.
+    """
+    from services.ticker_manager import sync_latest_listings_if_needed
+    return sync_latest_listings_if_needed(force=force, min_interval_hours=48)
+

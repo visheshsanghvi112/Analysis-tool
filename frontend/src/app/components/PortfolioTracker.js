@@ -10,14 +10,25 @@ import {
   Plus, Trash2, RefreshCw, TrendingUp, TrendingDown,
   AlertCircle, Briefcase, ShieldAlert, Search, X,
   Lightbulb, Zap, Target, ArrowDownRight, Sparkles, Wallet,
-  Upload,
+  Upload, Flame, Sliders, Layers, Lock, ShieldCheck, Activity, FolderPlus, Edit2,
 } from 'lucide-react';
 import SmartCapitalAdvisor from './SmartCapitalAdvisor';
+import PortfolioLossRecoveryDesk from './PortfolioLossRecoveryDesk';
+import PortfolioProfitDesk from './PortfolioProfitDesk';
+import PortfolioStressLab from './PortfolioStressLab';
+import PortfolioXRayAnalytics from './PortfolioXRayAnalytics';
 import Header from './Header';
 import InfoBadge from './InfoBadge';
 import { API_BASE_URL } from '../config';
 
-const PORTFOLIO_KEY = 'stockiq_portfolio_v1';
+const MULTI_PORTFOLIO_KEY = 'stockiq_multi_portfolios_v2';
+const LEGACY_PORTFOLIO_KEY = 'stockiq_portfolio_v1';
+
+const DEFAULT_PORTFOLIOS = [
+  { id: 'main', name: 'Main Wealth', rows: [] },
+  { id: 'growth', name: 'Alpha Growth', rows: [] },
+  { id: 'dividend', name: 'Dividend Income', rows: [] },
+];
 
 const CHART_COLORS = [
   '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#06b6d4',
@@ -580,13 +591,15 @@ function PortfolioOptimizer({ optResult, loading, error, onRebalance }) {
 const emptyRow = () => ({ id: Math.random().toString(), ticker: '', qty: '', buy_price: '' });
 
 export default function PortfolioTracker() {
-  const [rows, setRows]           = useState([emptyRow()]);
-  const [result, setResult]       = useState(null);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState(null);
-  const [advice, setAdvice]       = useState(null);
-  const [advLoading, setAdvLoading] = useState(false);
-  const [showAdvisor, setShowAdvisor] = useState(false);
+  const [portfolios, setPortfolios]       = useState(DEFAULT_PORTFOLIOS);
+  const [activePortfolioId, setActivePortfolioId] = useState('main');
+  const [rows, setRows]                   = useState([emptyRow()]);
+  const [result, setResult]               = useState(null);
+  const [loading, setLoading]             = useState(false);
+  const [error, setError]                 = useState(null);
+  const [advice, setAdvice]               = useState(null);
+  const [advLoading, setAdvLoading]       = useState(false);
+  const [showAdvisor, setShowAdvisor]     = useState(false);
   const [expandedTicker, setExpandedTicker] = useState(null);
 
   // Interactive Simulator States
@@ -600,17 +613,106 @@ export default function PortfolioTracker() {
   const [optLoading, setOptLoading] = useState(false);
   const [optError, setOptError] = useState(null);
 
-  // Persist to localStorage
+  // Institutional Desks Tab State
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'xray' | 'loss_desk' | 'profit_desk' | 'stress_lab' | 'optimizer'
+  const [intelDesk, setIntelDesk] = useState(null);
+  const [intelLoading, setIntelLoading] = useState(false);
+  const [intelError, setIntelError] = useState(null);
+
+  // Persist to localStorage with multi-portfolio support
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem(PORTFOLIO_KEY));
-      if (saved?.length) setRows(saved);
+      const savedMulti = JSON.parse(localStorage.getItem(MULTI_PORTFOLIO_KEY));
+      if (savedMulti?.portfolios?.length) {
+        setPortfolios(savedMulti.portfolios);
+        const actId = savedMulti.activeId || savedMulti.portfolios[0].id;
+        setActivePortfolioId(actId);
+        const actP = savedMulti.portfolios.find(p => p.id === actId);
+        if (actP?.rows?.length) {
+          setRows(actP.rows);
+        }
+        return;
+      }
+      // Migration from single portfolio key
+      const legacy = JSON.parse(localStorage.getItem(LEGACY_PORTFOLIO_KEY));
+      if (legacy?.length) {
+        const migrated = [
+          { id: 'main', name: 'Main Wealth', rows: legacy },
+          { id: 'growth', name: 'Alpha Growth', rows: [] },
+          { id: 'dividend', name: 'Dividend Income', rows: [] },
+        ];
+        setPortfolios(migrated);
+        setActivePortfolioId('main');
+        setRows(legacy);
+      }
     } catch {}
   }, []);
 
+  // Sync rows back to active portfolio and localStorage
   useEffect(() => {
-    try { localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(rows)); } catch {}
-  }, [rows]);
+    setPortfolios(prev => {
+      const updated = prev.map(p => p.id === activePortfolioId ? { ...p, rows } : p);
+      try {
+        localStorage.setItem(MULTI_PORTFOLIO_KEY, JSON.stringify({
+          activeId: activePortfolioId,
+          portfolios: updated,
+        }));
+      } catch {}
+      return updated;
+    });
+  }, [rows, activePortfolioId]);
+
+  const switchPortfolio = (targetId) => {
+    if (targetId === activePortfolioId) return;
+    const target = portfolios.find(p => p.id === targetId);
+    setActivePortfolioId(targetId);
+    setRows(target?.rows?.length ? target.rows : [emptyRow()]);
+    setResult(null);
+    setIntelDesk(null);
+    setActiveTab('overview');
+    setAdvice(null);
+    setSimTicker('');
+    setSimResult(null);
+    setOptResult(null);
+    setOptError(null);
+  };
+
+  const createNewPortfolio = () => {
+    const name = window.prompt('Enter new portfolio name:', `Portfolio ${portfolios.length + 1}`);
+    if (!name || !name.trim()) return;
+    const newId = `port_${Date.now()}`;
+    const newP = { id: newId, name: name.trim(), rows: [emptyRow()] };
+    const nextList = [...portfolios, newP];
+    setPortfolios(nextList);
+    setActivePortfolioId(newId);
+    setRows([emptyRow()]);
+    setResult(null);
+    setIntelDesk(null);
+    setActiveTab('overview');
+  };
+
+  const renameActivePortfolio = () => {
+    const cur = portfolios.find(p => p.id === activePortfolioId);
+    const newName = window.prompt('Rename portfolio:', cur?.name || 'My Portfolio');
+    if (!newName || !newName.trim()) return;
+    setPortfolios(prev => prev.map(p => p.id === activePortfolioId ? { ...p, name: newName.trim() } : p));
+  };
+
+  const deleteActivePortfolio = () => {
+    if (portfolios.length <= 1) {
+      alert('You must have at least one portfolio.');
+      return;
+    }
+    const cur = portfolios.find(p => p.id === activePortfolioId);
+    if (!window.confirm(`Delete portfolio "${cur?.name}"? This cannot be undone.`)) return;
+    const nextList = portfolios.filter(p => p.id !== activePortfolioId);
+    const nextActive = nextList[0];
+    setPortfolios(nextList);
+    setActivePortfolioId(nextActive.id);
+    setRows(nextActive.rows?.length ? nextActive.rows : [emptyRow()]);
+    setResult(null);
+    setIntelDesk(null);
+  };
 
   const updateRow = (id, field, val) =>
     setRows(r => r.map(row => row.id === id ? { ...row, [field]: val } : row));
@@ -620,6 +722,34 @@ export default function PortfolioTracker() {
   const addRow = () => setRows(r => [...r, emptyRow()]);
 
   const validRows = useMemo(() => rows.filter(r => r.ticker && +r.qty > 0 && +r.buy_price > 0), [rows]);
+
+  const fetchIntelligenceDesk = useCallback(async (customRows = null) => {
+    const rowsToUse = (customRows && Array.isArray(customRows)) ? customRows : validRows;
+    if (!rowsToUse.length) return;
+    setIntelLoading(true);
+    setIntelError(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/portfolio-intelligence-desk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          holdings: rowsToUse.map(r => ({
+            ticker: r.ticker.trim().toUpperCase(),
+            qty: +r.qty,
+            buy_price: +r.buy_price,
+          })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.detail || 'Failed to fetch intelligence desk');
+      setIntelDesk(json);
+    } catch (e) {
+      console.error("INTEL DESK ERROR:", e);
+      setIntelError(e.message);
+    } finally {
+      setIntelLoading(false);
+    }
+  }, [validRows]);
 
   const loadDemo = () => {
     const demoHoldings = [
@@ -631,6 +761,8 @@ export default function PortfolioTracker() {
     ];
     setRows(demoHoldings);
     setResult(null);
+    setIntelDesk(null);
+    setActiveTab('overview');
     setAdvice(null);
     setSimTicker('');
     setSimResult(null);
@@ -641,6 +773,8 @@ export default function PortfolioTracker() {
   const clearAll = () => {
     setRows([emptyRow()]);
     setResult(null);
+    setIntelDesk(null);
+    setActiveTab('overview');
     setAdvice(null);
     setSimTicker('');
     setSimResult(null);
@@ -673,13 +807,14 @@ export default function PortfolioTracker() {
         throw new Error(errorMsg);
       }
       setResult(json);
+      fetchIntelligenceDesk(rowsToUse);
     } catch (e) {
       console.error("ANALYZE ERROR:", e);
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, [validRows]);
+  }, [validRows, fetchIntelligenceDesk]);
 
   const runOptimization = useCallback(async () => {
     if (!validRows.length || validRows.length < 2) return;
@@ -791,17 +926,22 @@ export default function PortfolioTracker() {
 
   const exportToCSV = () => {
     if (!result?.holdings?.length) return;
-    const headers = ['Stock', 'Qty', 'Buy Price', 'LTP', 'Cost', 'Current Value', 'P&L', 'Return %', 'Weight %'];
+    const headers = ['Stock', 'Qty', 'Buy Price', 'LTP', 'Day Change %', 'Day P&L', 'Cost', 'Current Value', 'P&L', 'Return %', 'Weight %', 'PE', 'PB', 'Div Yield %'];
     const rowsData = result.holdings.map(h => [
       h.ticker,
       h.qty,
       h.buy_price,
       h.live_price,
+      h.day_change_pct != null ? h.day_change_pct : (h.change_pct || 0),
+      h.day_pnl != null ? h.day_pnl : 0,
       h.cost,
       h.curr_value,
       h.pnl,
       h.pnl_pct,
-      h.weight_pct
+      h.weight_pct,
+      h.pe != null ? h.pe : '',
+      h.pb != null ? h.pb : '',
+      h.dividend_yield != null ? h.dividend_yield : 0,
     ]);
     
     const csvContent = "data:text/csv;charset=utf-8," 
@@ -810,7 +950,8 @@ export default function PortfolioTracker() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `portfolio_analysis_${new Date().toISOString().split('T')[0]}.csv`);
+    const activeName = (portfolios.find(p => p.id === activePortfolioId)?.name || 'portfolio').toLowerCase().replace(/\s+/g, '_');
+    link.setAttribute("download", `${activeName}_analysis_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -848,13 +989,24 @@ export default function PortfolioTracker() {
           return res;
         };
 
-        const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
-        const symIdx = headers.findIndex(h => h.includes('symbol') || h.includes('ticker') || h.includes('instrument') || h.includes('stock'));
-        const qtyIdx = headers.findIndex(h => h.includes('qty') || h.includes('quantity') || h.includes('shares') || h.includes('volume'));
-        const priceIdx = headers.findIndex(h => h.includes('buy_price') || h.includes('buy price') || h.includes('avg_price') || h.includes('avg price') || h.includes('average_price') || h.includes('price') || h.includes('rate') || h.includes('cost'));
+        const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ' '));
+        // Match Zerodha, Groww, AngelOne, Upstox, ICICI, etc.
+        const symIdx = headers.findIndex(h =>
+          h.includes('symbol') || h.includes('ticker') || h.includes('instrument') ||
+          h.includes('stock') || h.includes('scrip') || h.includes('trading symbol')
+        );
+        const qtyIdx = headers.findIndex(h =>
+          h.includes('qty') || h.includes('quantity') || h.includes('shares') ||
+          h.includes('units') || h.includes('volume') || h.includes('holding')
+        );
+        const priceIdx = headers.findIndex(h =>
+          h.includes('buy price') || h.includes('buy avg') || h.includes('avg cost') ||
+          h.includes('average price') || h.includes('avg price') || h.includes('buy rate') ||
+          h.includes('price') || h.includes('cost') || h.includes('rate')
+        );
 
         if (symIdx === -1 || qtyIdx === -1 || priceIdx === -1) {
-          alert('Could not detect columns. Please ensure CSV contains Symbol, Qty, and Buy/Avg Price headers.');
+          alert('Could not auto-detect columns. Please ensure your CSV has headers for Symbol/Stock, Quantity/Qty, and Buy/Average Price.');
           return;
         }
 
@@ -864,10 +1016,17 @@ export default function PortfolioTracker() {
           const cols = parseCSVLine(lines[i]);
           if (cols.length <= Math.max(symIdx, qtyIdx, priceIdx)) continue;
           let sym = cols[symIdx]?.trim().toUpperCase();
-          const qty = cols[qtyIdx]?.trim().replace(/,/g, '');
-          const price = cols[priceIdx]?.trim().replace(/,/g, '');
+          // Remove currency symbols, commas, quotes
+          const cleanVal = (v) => v ? v.replace(/[₹$Rs,\s]/gi, '') : '';
+          const qty = cleanVal(cols[qtyIdx]);
+          const price = cleanVal(cols[priceIdx]);
 
           if (!sym || !qty || !price || isNaN(qty) || isNaN(price) || +qty <= 0 || +price <= 0) continue;
+
+          // Clean common broker suffixes like -EQ, -BE, -SM, or prefix NSE:/BSE:
+          sym = sym.replace(/^(NSE|BSE):/i, '');
+          sym = sym.replace(/-(EQ|BE|SM|BZ|BL|GS)$/i, '');
+          sym = sym.trim();
 
           if (!sym.endsWith('.NS') && !sym.endsWith('.BO') && !sym.startsWith('^') && !sym.includes('.')) {
             sym = `${sym}.NS`;
@@ -882,7 +1041,7 @@ export default function PortfolioTracker() {
         }
 
         if (newRows.length === 0) {
-          alert('No valid rows found in CSV. Please verify rows have valid ticker, quantity, and buy price.');
+          alert('No valid rows found in CSV. Please verify rows have valid ticker symbol, quantity, and buy price.');
           return;
         }
 
@@ -920,6 +1079,67 @@ export default function PortfolioTracker() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+
+        {/* Multi-Portfolio Switcher Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white/[0.02] border border-white/[0.06] p-2.5 rounded-xl">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+            <div className="flex items-center gap-1 text-[11px] font-bold text-slate-400 mr-2 px-1">
+              <Briefcase className="h-3.5 w-3.5 text-indigo-400" />
+              <span>Portfolios:</span>
+            </div>
+            {portfolios.map(p => {
+              const isActive = p.id === activePortfolioId;
+              const count = (isActive ? validRows : (p.rows?.filter(r => r.ticker && +r.qty > 0 && +r.buy_price > 0) || [])).length;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => switchPortfolio(p.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition cursor-pointer whitespace-nowrap ${
+                    isActive
+                      ? 'bg-indigo-600/30 border border-indigo-500/50 text-white shadow-sm'
+                      : 'bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.05] text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span>{p.name}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                    isActive ? 'bg-indigo-500/30 text-indigo-200' : 'bg-white/[0.05] text-slate-500'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+            <button
+              onClick={createNewPortfolio}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/[0.02] hover:bg-indigo-500/20 border border-dashed border-white/[0.15] hover:border-indigo-500/50 text-slate-400 hover:text-indigo-300 flex items-center gap-1.5 transition cursor-pointer"
+              title="Create new named portfolio"
+            >
+              <FolderPlus className="h-3.5 w-3.5" />
+              <span>New</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              onClick={renameActivePortfolio}
+              className="p-1.5 rounded-lg hover:bg-white/[0.06] text-slate-400 hover:text-slate-200 text-xs flex items-center gap-1 transition cursor-pointer"
+              title="Rename current portfolio"
+            >
+              <Edit2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline text-[11px]">Rename</span>
+            </button>
+            {portfolios.length > 1 && (
+              <button
+                onClick={deleteActivePortfolio}
+                className="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 text-xs flex items-center gap-1 transition cursor-pointer"
+                title="Delete current portfolio"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline text-[11px]">Delete</span>
+              </button>
+            )}
+          </div>
+        </div>
 
         {/* Holdings input table */}
         <div className="rounded-xl bg-white/[0.02] border border-white/[0.06]">
@@ -1027,14 +1247,25 @@ export default function PortfolioTracker() {
                 <div>
                   <p className="text-[10px] text-slate-300 uppercase tracking-wider font-bold mb-1">Total Portfolio Value</p>
                   <p className="text-3xl font-black text-white">{fmtINR(s.total_value)}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    {s.total_pnl >= 0 ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-rose-400" />}
-                    <span className={`text-sm font-bold ${pColor(s.total_pnl)}`}>
-                      {pSign(s.total_pnl)}{fmtINR(s.total_pnl)} ({pSign(s.total_pnl_pct)}{fmt(s.total_pnl_pct)}%)
-                    </span>
+                  <div className="flex flex-wrap items-center gap-4 mt-2">
+                    {/* Total P&L */}
+                    <div className="flex items-center gap-1.5">
+                      {s.total_pnl >= 0 ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-rose-400" />}
+                      <span className="text-[11px] text-slate-400">Total:</span>
+                      <span className={`text-sm font-bold ${pColor(s.total_pnl)}`}>
+                        {pSign(s.total_pnl)}{fmtINR(s.total_pnl)} ({pSign(s.total_pnl_pct)}{fmt(s.total_pnl_pct)}%)
+                      </span>
+                    </div>
+                    {/* Day P&L */}
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/40 border border-white/[0.06]">
+                      <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Today:</span>
+                      <span className={`text-xs font-bold ${pColor(s.total_day_pnl || 0)}`}>
+                        {pSign(s.total_day_pnl || 0)}{fmtINR(s.total_day_pnl || 0)} ({pSign(s.total_day_pnl_pct || 0)}{fmt(s.total_day_pnl_pct || 0)}%)
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-right">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-right">
                   <div>
                     <p className="text-[9px] text-slate-400 uppercase tracking-wider">Invested</p>
                     <p className="text-sm font-bold text-slate-200">{fmtINR(s.total_cost)}</p>
@@ -1043,10 +1274,111 @@ export default function PortfolioTracker() {
                     <p className="text-[9px] text-slate-400 uppercase tracking-wider">Holdings</p>
                     <p className="text-sm font-bold text-slate-200">{s.num_holdings}</p>
                   </div>
+                  {result.dividend_stream?.projected_annual_cashflow > 0 && (
+                    <div className="hidden sm:block">
+                      <p className="text-[9px] text-slate-400 uppercase tracking-wider">Est. Dividends</p>
+                      <p className="text-sm font-bold text-cyan-300">₹{Math.round(result.dividend_stream.projected_annual_cashflow).toLocaleString('en-IN')}/yr</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
+            {/* Institutional Desks Navigation Bar */}
+            <div className="flex items-center gap-1.5 p-1 bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-x-auto scrollbar-none">
+              <button
+                onClick={() => setActiveTab('overview')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                  activeTab === 'overview'
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                }`}
+              >
+                <Briefcase className="h-3.5 w-3.5" />
+                Holdings & P&L
+              </button>
+
+              <button
+                onClick={() => setActiveTab('xray')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                  activeTab === 'xray'
+                    ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/20'
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                }`}
+              >
+                <Activity className="h-3.5 w-3.5 text-cyan-400" />
+                Portfolio X-Ray & Dividends
+                {result?.dividend_stream?.projected_annual_cashflow > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-200 border border-cyan-500/30">
+                    ₹{Math.round(result.dividend_stream.projected_annual_cashflow).toLocaleString('en-IN')}/yr
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('loss_desk')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                  activeTab === 'loss_desk'
+                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/20'
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                }`}
+              >
+                <ShieldAlert className="h-3.5 w-3.5 text-rose-400" />
+                Capital Defense & Loss Desk
+                {intelDesk?.summary?.loss_holdings_count > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                    {intelDesk.summary.loss_holdings_count}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('profit_desk')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                  activeTab === 'profit_desk'
+                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                }`}
+              >
+                <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
+                Alpha Harvest & Profit Desk
+                {intelDesk?.summary?.profit_holdings_count > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    {intelDesk.summary.profit_holdings_count}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('stress_lab')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                  activeTab === 'stress_lab'
+                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20'
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                }`}
+              >
+                <Flame className="h-3.5 w-3.5 text-purple-400" />
+                Macro Stress Lab
+              </button>
+
+              {result.holdings.length >= 2 && (
+                <button
+                  onClick={() => setActiveTab('optimizer')}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                    activeTab === 'optimizer'
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+                      : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <Sliders className="h-3.5 w-3.5 text-indigo-400" />
+                  Portfolio Optimizer
+                </button>
+              )}
+            </div>
+
+            {/* Overview Tab Content */}
+            {activeTab === 'overview' && (
+              <>
             {/* Holdings table */}
             <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] overflow-x-auto">
               <div className="px-4 py-3 border-b border-white/[0.05] flex items-center justify-between">
@@ -1061,7 +1393,7 @@ export default function PortfolioTracker() {
               <table className="w-full text-[11px] min-w-[680px]">
                 <thead>
                   <tr className="border-b border-white/[0.04]">
-                    {['Stock','Qty','Buy @','LTP','Invested','Value','P&L','Return','Wt%'].map(h => (
+                    {['Stock','Qty','Buy @','LTP','Day Chg','Invested','Value','P&L','Return','Wt%'].map(h => (
                       <th key={h} className="px-3 py-2 text-left text-[9px] text-slate-400 font-bold uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -1094,6 +1426,12 @@ export default function PortfolioTracker() {
                             </div>
                           )}
                         </td>
+                        <td className={`px-3 py-2.5 font-semibold ${pColor(h.day_change_pct != null ? h.day_change_pct : (h.change_pct || 0))}`}>
+                          <div>{pSign(h.day_change_pct != null ? h.day_change_pct : (h.change_pct || 0))}{fmt(h.day_change_pct != null ? h.day_change_pct : (h.change_pct || 0))}%</div>
+                          <div className="text-[9px] opacity-75 font-mono">
+                            {pSign(h.day_pnl || 0)}{fmtINR(h.day_pnl || 0)}
+                          </div>
+                        </td>
                         <td className="px-3 py-2.5 text-slate-300">{fmtINR(h.cost)}</td>
                         <td className="px-3 py-2.5 text-slate-100 font-medium">{fmtINR(h.curr_value)}</td>
                         <td className={`px-3 py-2.5 font-bold ${pColor(h.pnl)}`}>
@@ -1106,7 +1444,7 @@ export default function PortfolioTracker() {
                       </tr>
                       {expandedTicker === h.ticker && (
                         <tr className="bg-white/[0.01]">
-                          <td colSpan={9} className="px-4 py-3.5 border-b border-white/[0.04] bg-[#0c0c12]/40">
+                          <td colSpan={10} className="px-4 py-3.5 border-b border-white/[0.04] bg-[#0c0c12]/40">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                               {/* 52-Week Range indicator */}
                               <div className="space-y-2.5">
@@ -1166,6 +1504,29 @@ export default function PortfolioTracker() {
                                     <p className="text-slate-500 italic mt-2">Click &quot;Get Advice&quot; on the Recovery Advisor card below to load sentiment, RSI, and recovery recommendations for this position.</p>
                                   );
                                 })()}
+                              </div>
+
+                              {/* Fundamental Valuation & Dividend Ratios */}
+                              <div className="col-span-1 md:col-span-2 pt-2 border-t border-white/[0.04]">
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Fundamental Valuation & Dividends</p>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                  <div className="bg-white/[0.03] p-2 rounded-lg border border-white/[0.05]">
+                                    <span className="text-[8px] text-slate-400 uppercase font-bold block mb-0.5">P/E Ratio</span>
+                                    <span className="text-[11px] font-bold text-white">{h.pe != null ? fmt(h.pe) : 'N/A'}</span>
+                                  </div>
+                                  <div className="bg-white/[0.03] p-2 rounded-lg border border-white/[0.05]">
+                                    <span className="text-[8px] text-slate-400 uppercase font-bold block mb-0.5">P/B Ratio</span>
+                                    <span className="text-[11px] font-bold text-white">{h.pb != null ? fmt(h.pb) : 'N/A'}</span>
+                                  </div>
+                                  <div className="bg-white/[0.03] p-2 rounded-lg border border-white/[0.05]">
+                                    <span className="text-[8px] text-slate-400 uppercase font-bold block mb-0.5">ROE</span>
+                                    <span className="text-[11px] font-bold text-emerald-400">{h.roe != null ? `${fmt(h.roe)}%` : 'N/A'}</span>
+                                  </div>
+                                  <div className="bg-white/[0.03] p-2 rounded-lg border border-white/[0.05]">
+                                    <span className="text-[8px] text-slate-400 uppercase font-bold block mb-0.5">Dividend Yield</span>
+                                    <span className="text-[11px] font-bold text-cyan-300">{h.dividend_yield != null ? `${fmt(h.dividend_yield)}%` : '0.00%'}</span>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </td>
@@ -1489,6 +1850,64 @@ export default function PortfolioTracker() {
                 );
               })()}
             </div>
+            </>
+            )}
+
+            {/* Portfolio X-Ray & Dividends Tab */}
+            {activeTab === 'xray' && (
+              <PortfolioXRayAnalytics
+                fundamentals={result?.fundamentals_xray}
+                dividendStream={result?.dividend_stream}
+                benchmark={result?.benchmark_comparison}
+                holdings={result?.holdings || []}
+                currencySymbol={s?.currency_symbol || '₹'}
+                onRebalance={applyRebalance}
+              />
+            )}
+
+            {/* Capital Defense & Loss Desk Tab */}
+            {activeTab === 'loss_desk' && (
+              <PortfolioLossRecoveryDesk
+                remediations={intelDesk?.loss_remediation}
+                loading={intelLoading}
+                currencySymbol={s?.currency_symbol || '₹'}
+                onRefresh={() => fetchIntelligenceDesk()}
+              />
+            )}
+
+            {/* Alpha Harvest & Profit Desk Tab */}
+            {activeTab === 'profit_desk' && (
+              <PortfolioProfitDesk
+                alphaHarvests={intelDesk?.alpha_harvest}
+                loading={intelLoading}
+                currencySymbol={s?.currency_symbol || '₹'}
+                onRefresh={() => fetchIntelligenceDesk()}
+              />
+            )}
+
+            {/* Macro Stress Lab Tab */}
+            {activeTab === 'stress_lab' && (
+              <PortfolioStressLab
+                macroStress={intelDesk?.macro_stress_lab}
+                concentration={intelDesk?.concentration_audit}
+                cashDeployer={intelDesk?.market_cash_deployer}
+                loading={intelLoading}
+                currencySymbol={s?.currency_symbol || '₹'}
+                onRefresh={() => fetchIntelligenceDesk()}
+              />
+            )}
+
+            {/* Portfolio Optimizer Tab */}
+            {activeTab === 'optimizer' && result.holdings.length >= 2 && (
+              <div className="space-y-4">
+                <PortfolioOptimizer
+                  optResult={optResult}
+                  loading={optLoading}
+                  error={optError}
+                  onRebalance={applyRebalance}
+                />
+              </div>
+            )}
 
             {/* As of */}
             <p className="text-[10px] text-slate-700 text-center">

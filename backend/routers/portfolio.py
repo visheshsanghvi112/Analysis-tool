@@ -8,10 +8,17 @@ from pydantic import BaseModel, model_validator
 from scipy.optimize import minimize
 from fastapi import APIRouter, Query, HTTPException, Request
 
-from yf_client import get_quote, get_history, get_asset_type
+from yf_client import get_quote, get_history, get_asset_type, get_info
 from news_intelligence import get_advanced_news_analysis
 from capital_allocator import allocate_capital
 from services.ticker_manager import SECTOR_MAP
+from services.portfolio_intelligence import (
+    evaluate_loss_remediation,
+    evaluate_profit_harvest,
+    evaluate_macro_stress_and_concentration,
+    evaluate_portfolio_fundamentals_and_dividends,
+    compute_benchmark_alpha_overlay,
+)
 
 router = APIRouter(prefix="/api", tags=["portfolio"])
 
@@ -271,10 +278,11 @@ def analyze_portfolio(req: PortfolioRequest):
     if len(req.holdings) > 15:
         raise HTTPException(status_code=400, detail="Max 15 holdings supported")
 
-    # ── Step 1: fetch live prices ──────────────────────────────────────────
+    # ── Step 1: fetch live prices & day changes ────────────────────────────
     holdings_out = []
     total_cost   = 0.0
     total_value  = 0.0
+    total_day_pnl = 0.0
 
     for h in req.holdings:
         tk = h.ticker.strip().upper()
@@ -282,20 +290,41 @@ def analyze_portfolio(req: PortfolioRequest):
         high_52w = None
         low_52w = None
         price_date = ""
+        day_chg = 0.0
+        day_chg_pct = 0.0
+        pe_val = None
+        pb_val = None
+        roe_val = None
+        div_yield_val = 0.0
+
         try:
-            q = get_quote(tk)
+            q = get_quote(tk) or {}
             live_px = float(q.get("price") or h.buy_price)
             company_name = q.get("longName") or tk
             high_52w = q.get("fiftyTwoWeekHigh")
             low_52w = q.get("fiftyTwoWeekLow")
             price_date = q.get("price_date") or ""
+            day_chg = float(q.get("change") or 0.0)
+            day_chg_pct = float(q.get("changePct") or 0.0)
         except Exception:
             live_px = h.buy_price
+
+        # Fundamental metrics from info
+        try:
+            info = get_info(tk) or {}
+            pe_val = info.get("trailingPE")
+            pb_val = info.get("priceToBook")
+            roe_val = info.get("returnOnEquity")
+            div_yield_val = info.get("dividendYield") or 0.0
+        except Exception:
+            pass
 
         cost        = h.qty * h.buy_price
         curr_val    = h.qty * live_px
         pnl         = curr_val - cost
         pnl_pct     = (pnl / cost * 100) if cost > 0 else 0.0
+        day_pnl     = round(day_chg * h.qty, 2)
+        total_day_pnl += day_pnl
 
         raw_symbol  = tk.replace(".NS", "").replace(".BO", "")
         sector      = SECTOR_MAP.get(raw_symbol, "Other")
@@ -308,10 +337,17 @@ def analyze_portfolio(req: PortfolioRequest):
             "qty":           h.qty,
             "buy_price":     round(h.buy_price, 2),
             "live_price":    round(live_px, 2),
+            "day_change":    round(day_chg, 2),
+            "day_change_pct": round(day_chg_pct, 2),
+            "day_pnl":       day_pnl,
             "cost":          round(cost, 2),
             "curr_value":    round(curr_val, 2),
             "pnl":           round(pnl, 2),
             "pnl_pct":       round(pnl_pct, 2),
+            "pe":            pe_val,
+            "pb":            pb_val,
+            "roe":           roe_val,
+            "dividend_yield": div_yield_val,
             "sector":        sector,
             "currency_symbol": curr_sym,
             "high_52w":      high_52w,
@@ -467,6 +503,21 @@ def analyze_portfolio(req: PortfolioRequest):
     is_portfolio_us = all(not (h.ticker or "").endswith(".NS") and not (h.ticker or "").endswith(".BO") for h in req.holdings) if req.holdings else False
     portfolio_curr_sym = "$" if is_portfolio_us else "₹"
 
+    # ── Step 5: Fundamental X-Ray & Dividend Projections ──────────────────
+    fund_div = evaluate_portfolio_fundamentals_and_dividends(holdings_out, total_value, total_cost)
+
+    # ── Step 6: Benchmark Relative Alpha Overlay ──────────────────────────
+    alpha_overlay = {}
+    if nifty_df is not None and not nifty_df.empty:
+        try:
+            nifty_ret = nifty_df["Close"].pct_change().dropna()
+            alpha_overlay = compute_benchmark_alpha_overlay(returns_map, holdings_out, nifty_ret, total_value)
+        except Exception:
+            pass
+
+    base_prev_val = total_value - total_day_pnl
+    tot_day_pct = (total_day_pnl / base_prev_val * 100.0) if base_prev_val > 0 else 0.0
+
     return {
         "holdings":       holdings_out,
         "summary": {
@@ -476,12 +527,17 @@ def analyze_portfolio(req: PortfolioRequest):
             "total_current_value": round(total_value, 2),
             "total_pnl":           round(total_pnl, 2),
             "total_pnl_pct":       round(total_pnl_pct, 2),
+            "total_day_pnl":       round(total_day_pnl, 2),
+            "total_day_pnl_pct":   round(tot_day_pct, 2),
             "num_holdings":        len(holdings_out),
             "currency_symbol":     portfolio_curr_sym,
         },
-        "risk":           portfolio_risk,
-        "price_history":  history_map,
-        "as_of":          datetime.now().isoformat(),
+        "risk":                 portfolio_risk,
+        "fundamentals_xray":    fund_div.get("fundamentals_xray", {}),
+        "dividend_stream":      fund_div.get("dividend_stream", {}),
+        "benchmark_comparison": alpha_overlay,
+        "price_history":        history_map,
+        "as_of":                datetime.now().isoformat(),
     }
 
 
@@ -1070,3 +1126,155 @@ def get_monte_carlo(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Monte Carlo simulation failed: {str(e)}")
+
+
+@router.post("/portfolio-intelligence-desk")
+def portfolio_intelligence_desk(req: PortfolioRequest):
+    """
+    Unified Institutional Intelligence Desk:
+    1. Capital Defense & Loss Remediation (for underwater holdings)
+    2. Alpha Harvest & Profit Maximization (for winning holdings)
+    3. Macro Stress Lab & Concentration Audit (portfolio-wide crisis simulations & HHI)
+    """
+    if not req.holdings:
+        raise HTTPException(status_code=400, detail="Holdings list cannot be empty")
+
+    holdings_processed = []
+    total_val = 0.0
+    total_cost = 0.0
+    loss_remediations = []
+    alpha_harvests = []
+
+    is_portfolio_us = all(not (h.ticker or "").endswith(".NS") and not (h.ticker or "").endswith(".BO") for h in req.holdings)
+    curr_sym = "$" if is_portfolio_us else "₹"
+
+    for h in req.holdings:
+        tk = h.ticker.strip().upper()
+        if not tk:
+            continue
+        try:
+            q = get_quote(tk) or {}
+            live_px = float(q.get("price") or h.buy_price)
+            company_name = q.get("name") or tk
+        except Exception:
+            live_px = h.buy_price
+            company_name = tk
+
+        cost = float(h.qty) * float(h.buy_price)
+        val = float(h.qty) * float(live_px)
+        pnl = val - cost
+        pnl_pct = ((live_px - h.buy_price) / h.buy_price * 100.0) if h.buy_price > 0 else 0.0
+
+        total_val += val
+        total_cost += cost
+
+        # Fetch 1y history & info for quantitative diagnostics
+        df = None
+        info = None
+        try:
+            df = get_history(tk, period="1y")
+            info = get_info(tk) or {}
+        except Exception:
+            pass
+
+        sector = (info.get("sector") if info else None) or SECTOR_MAP.get(tk.replace(".NS","").replace(".BO",""), "Diversified")
+
+        holding_item = {
+            "ticker": tk,
+            "company_name": company_name,
+            "qty": h.qty,
+            "buy_price": h.buy_price,
+            "live_price": live_px,
+            "cost": round(cost, 2),
+            "curr_value": round(val, 2),
+            "pnl": round(pnl, 2),
+            "pnl_pct": round(pnl_pct, 2),
+            "sector": sector,
+        }
+        holdings_processed.append(holding_item)
+
+        # Loss remediation analysis for underwater positions
+        if pnl_pct < -0.5:
+            loss_profile = evaluate_loss_remediation(tk, h.buy_price, h.qty, live_px, df, info)
+            loss_profile["company_name"] = company_name
+            loss_remediations.append(loss_profile)
+
+        # Profit harvest analysis for winning positions
+        if pnl_pct > 0.5:
+            profit_profile = evaluate_profit_harvest(tk, h.buy_price, h.qty, live_px, df, info)
+            profit_profile["company_name"] = company_name
+            alpha_harvests.append(profit_profile)
+
+    # Sort remediations: biggest loss % first
+    loss_remediations.sort(key=lambda x: x["loss_pct"])
+
+    # Sort alpha harvests: highest gain % first
+    alpha_harvests.sort(key=lambda x: x["profit_pct"], reverse=True)
+
+    # Compute macro stress and HHI concentration
+    benchmark_sym = "^GSPC" if is_portfolio_us else "^NSEI"
+    bench_df = None
+    try:
+        bench_df = get_history(benchmark_sym, period="1y")
+    except Exception:
+        pass
+
+    macro_audit = evaluate_macro_stress_and_concentration(holdings_processed, total_val, bench_df)
+
+    tot_pnl = total_val - total_cost
+    tot_pnl_pct = (tot_pnl / total_cost * 100.0) if total_cost > 0 else 0.0
+
+    return {
+        "summary": {
+            "total_invested": round(total_cost, 2),
+            "total_value": round(total_val, 2),
+            "total_pnl": round(tot_pnl, 2),
+            "total_pnl_pct": round(tot_pnl_pct, 2),
+            "currency_symbol": curr_sym,
+            "num_holdings": len(holdings_processed),
+            "loss_holdings_count": len(loss_remediations),
+            "profit_holdings_count": len(alpha_harvests),
+        },
+        "holdings": holdings_processed,
+        "loss_remediation": loss_remediations,
+        "alpha_harvest": alpha_harvests,
+        "macro_stress_lab": macro_audit.get("crisis_stress_test", {}),
+        "concentration_audit": macro_audit.get("concentration", {}),
+        "market_cash_deployer": macro_audit.get("market_cash_deployer", {}),
+        "as_of": datetime.now().isoformat(),
+    }
+
+
+@router.post("/portfolio-remediation")
+def portfolio_remediation_endpoint(req: PortfolioRequest):
+    """Direct modular endpoint for loss remediation & capital defense."""
+    desk = portfolio_intelligence_desk(req)
+    return {
+        "summary": desk["summary"],
+        "loss_remediation": desk["loss_remediation"],
+        "concentration_audit": desk["concentration_audit"],
+    }
+
+
+@router.post("/portfolio-alpha-harvest")
+def portfolio_alpha_harvest_endpoint(req: PortfolioRequest):
+    """Direct modular endpoint for profit maximization & house money harvesting."""
+    desk = portfolio_intelligence_desk(req)
+    return {
+        "summary": desk["summary"],
+        "alpha_harvest": desk["alpha_harvest"],
+        "market_cash_deployer": desk["market_cash_deployer"],
+    }
+
+
+@router.post("/portfolio-stress-test")
+def portfolio_stress_test_endpoint(req: PortfolioRequest):
+    """Direct modular endpoint for macro crisis simulations and concentration risk."""
+    desk = portfolio_intelligence_desk(req)
+    return {
+        "summary": desk["summary"],
+        "macro_stress_lab": desk["macro_stress_lab"],
+        "concentration_audit": desk["concentration_audit"],
+        "market_cash_deployer": desk["market_cash_deployer"],
+    }
+

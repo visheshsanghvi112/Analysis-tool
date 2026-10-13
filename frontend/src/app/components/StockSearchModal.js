@@ -28,6 +28,8 @@ const CATEGORIES = [
 ];
 
 const TRENDING_PICKS = [
+  { symbol: 'NSE.BO', name: 'National Stock Exchange of India Ltd', sector: 'Finance', type: 'Equity' },
+  { symbol: 'BSE.NS', name: 'BSE Limited', sector: 'Finance', type: 'Equity' },
   { symbol: 'RELIANCE.NS', name: 'Reliance Industries Limited', sector: 'Energy', type: 'Equity' },
   { symbol: 'TCS.NS', name: 'Tata Consultancy Services', sector: 'IT', type: 'Equity' },
   { symbol: 'HDFCBANK.NS', name: 'HDFC Bank Limited', sector: 'Banking', type: 'Equity' },
@@ -36,17 +38,24 @@ const TRENDING_PICKS = [
   { symbol: 'GOLDBEES.NS', name: 'Nippon India Gold ETF', sector: 'ETF', type: 'ETF' },
   { symbol: 'MON100.NS', name: 'Motilal Oswal Nasdaq 100 ETF', sector: 'ETF', type: 'ETF' },
   { symbol: 'SWIGGY.NS', name: 'Swiggy Limited', sector: 'Consumer Tech', type: 'Equity' },
-  { symbol: 'WAAREEENER.NS', name: 'Waaree Energies Limited', sector: 'Renewables', type: 'Equity' },
-  { symbol: 'ZOMATO.NS', name: 'Zomato Limited', sector: 'Consumer Tech', type: 'Equity' },
+  { symbol: 'BAJAJHFL.NS', name: 'Bajaj Housing Finance Limited', sector: 'Finance', type: 'Equity' },
+  { symbol: 'JIOFIN.NS', name: 'Jio Financial Services Limited', sector: 'Finance', type: 'Equity' },
+  { symbol: 'WAAREEENER.NS', name: 'Waaree Energies Limited', sector: 'Energy', type: 'Equity' },
+  { symbol: 'ETERNAL.NS', name: 'Eternal Limited (Zomato)', sector: 'Consumer Tech', type: 'Equity' },
 ];
 
 const SECTOR_STYLES = {
   'Banking': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  'Finance': 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
   'IT': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
   'Energy': 'bg-orange-500/10 text-orange-400 border-orange-500/20',
   'Auto': 'bg-red-500/10 text-red-400 border-red-500/20',
   'FMCG': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
   'Pharma': 'bg-teal-500/10 text-teal-400 border-teal-500/20',
+  'Infra': 'bg-stone-500/10 text-stone-300 border-stone-500/20',
+  'Metals': 'bg-slate-500/10 text-slate-300 border-slate-500/20',
+  'Consumer Tech': 'bg-pink-500/10 text-pink-400 border-pink-500/20',
+  'Telecom': 'bg-violet-500/10 text-violet-400 border-violet-500/20',
   'ETF': 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
   'Indices': 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
   'Global': 'bg-purple-500/10 text-purple-400 border-purple-500/20',
@@ -146,24 +155,32 @@ export default function StockSearchModal({ isOpen, onClose, onSelect, currentTic
     });
   }, []);
 
-  // Client-side instant fallback search
+  // Client-side instant fallback search with priority ranking
   const searchLocalUniverse = useCallback((q) => {
     if (!localUniverse.length || !q) return [];
     const qLower = q.toLowerCase().trim();
     const qClean = qLower.replace('.ns', '').replace('.bo', '').replace('^', '');
 
-    const matches = [];
+    const exact = [];
+    const starts = [];
+    const contains = [];
+
     for (const t of localUniverse) {
       const sym = (t.symbol || '').toLowerCase();
+      const symClean = sym.replace('.ns', '').replace('.bo', '').replace('^', '');
       const name = (t.name || '').toLowerCase();
       const bse = t.bse_code || '';
 
-      if (sym.includes(qClean) || name.includes(qLower) || bse === qLower) {
-        matches.push(t);
-        if (matches.length >= 30) break;
+      if (symClean === qClean || bse === qLower) {
+        exact.push(t);
+      } else if (symClean.startsWith(qClean) || name.startsWith(qLower)) {
+        starts.push(t);
+      } else if (sym.includes(qClean) || name.includes(qLower)) {
+        contains.push(t);
       }
+      if (exact.length + starts.length + contains.length >= 60) break;
     }
-    return matches;
+    return [...exact, ...starts, ...contains].slice(0, 30);
   }, [localUniverse]);
 
   // Fetch with debounced API & instant local preview

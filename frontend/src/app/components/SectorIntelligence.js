@@ -430,7 +430,7 @@ function RiskReturnQuadrant({ ranked, meta, ticker, onSelectPeer }) {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
             <Crosshair style={{ width: '15px', height: '15px', color: '#10b981' }} />
-            <span style={{ fontSize: '13px', fontWeight: 800, color: '#fff' }}>2D Risk-Return "Alpha Quadrant" Matrix</span>
+            <span style={{ fontSize: '13px', fontWeight: 800, color: '#fff' }}>2D Risk-Return &quot;Alpha Quadrant&quot; Matrix</span>
           </div>
           <span style={{ fontSize: '11px', color: '#666' }}>Crosshairs indicate sector median return & volatility. Hover dots for details.</span>
         </div>

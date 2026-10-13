@@ -70,7 +70,7 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
     return () => window.removeEventListener('stockiq-watchlist-changed', handleStorage);
   }, []);
 
-  // ── 3. Load full 7,954 master database for instant local smart search ───
+  // ── 3. Load full 8,623 master database for instant local smart search ───
   useEffect(() => {
     if (allTickers.length === 0 && isOpen) {
       fetch('/tickers.json')
@@ -320,7 +320,7 @@ export default function WatchlistDrawer({ isOpen, onClose, onSelectTicker, curre
               <Star className="w-10 h-10 text-slate-700 mb-3" />
               <p className="text-sm text-slate-300 font-semibold">Your watchlist is empty</p>
               <p className="text-xs text-slate-500 mt-1 max-w-[240px]">
-                Search above to pin any of our 7,954 NSE, BSE, ETF, or global instruments.
+                Search above to pin any of our 8,620+ NSE, BSE, ETF, or global instruments.
               </p>
             </div>
           ) : (

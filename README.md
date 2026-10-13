@@ -6,7 +6,7 @@
 
 ### *Advanced Quantitative Intelligence, Live Deep News & Econometric Workstation*
 
-**The analytical firepower of modern quantitative research — calibrated for 7,954 NSE & BSE Equities, ETFs, Indices & Global Assets.**
+**The analytical firepower of modern quantitative research — calibrated for 8,623 NSE & BSE Equities, ETFs, Indices & Global Assets.**
 
 <br/>
 
@@ -53,7 +53,7 @@ Our mission is to give every individual investor the analytical firepower of a q
 ```
                                       STOCKIQ PRO CORE CAPABILITIES
  ┌───────────────────────────┬───────────────────────────┬───────────────────────────┐
- │   7,954 Master Universe   │   Universal Smart Search  │    Live Scrapling News    │
+ │   8,623 Master Universe   │   Universal Smart Search  │    Live Scrapling News    │
  │  NSE, BSE, ETFs, Indices  │   Aliases, Scrips, Typos  │  Deep Full-Article Reader │
  ├───────────────────────────┼───────────────────────────┼───────────────────────────┤
  │    6-Model ML Ensemble    │   GARCH & Regime HMM      │  DCF & Forensics Suite    │
@@ -67,10 +67,11 @@ Our mission is to give every individual investor the analytical firepower of a q
  └───────────────────────────┴───────────────────────────────────────────────────────┘
 ```
 
-### 1. 🌌 The 7,954 Master Asset Catalog
+### 1. 🌌 The 8,623 Master Asset Catalog
 Loaded instantly into RAM at startup, covering the complete Indian and global tradable spectrum:
-*   **2,366+ NSE Equities**: Every active primary listing (`.NS`).
-*   **5,200+ BSE Equities**: Secondary, mid-cap, and micro-cap listings with direct **6-digit BSE scrip code resolution** (e.g. `500325` $\rightarrow$ `RELIANCE.BO`).
+*   **2,620+ NSE Equities & New IPOs**: Every active primary listing (`.NS`), including newly listed growth companies (`HEROMOTORS.NS`, `ACEVECTOR.NS`, `SWIGGY.NS`, `WAAREEENER.NS`, `HYUNDAI.NS`, etc.).
+*   **612+ NSE SME Platform (Emerge) & REITs/InvITs**: Growth SMEs and premier Real Estate & Infrastructure trusts (`EMBASSY.NS`, `BIRET.NS`, `MINDSPACE.NS`, `NXST.NS`, `PGINVIT.NS`).
+*   **4,998+ BSE Equities & Market Infrastructure**: Secondary and mid-cap listings with direct **6-digit BSE scrip code resolution** (e.g. `500325` $\rightarrow$ `RELIANCE.BO`), plus the newly listed **National Stock Exchange of India Limited** (`NSE.BO`, Scrip: `544937`) and **BSE Limited** (`BSE.NS`).
 *   **Gold, Silver & Liquid ETFs**: `GOLDBEES.NS`, `SILVERBEES.NS`, `NIFTYBEES.NS`, `BANKBEES.NS`, `MON100.NS`, `MAFANG.NS`.
 *   **Benchmark & Sectoral Indices**: Nifty 50 (`^NSEI`), Sensex (`^BSESN`), Bank Nifty (`^NSEBANK`), Nifty IT (`^CNXIT`), S&P 500 (`^GSPC`), Nasdaq (`^IXIC`).
 *   **Global Mega-Caps**: Apple, Nvidia, Microsoft, Google, Amazon, Tesla, Meta.
@@ -184,7 +185,7 @@ Takes the emotion out of managing underwater portfolio positions:
 ---
 
 ### 10. 💻 Dark-Mode Financial Terminal, SIP Wealth Planner & PDF Research Memos
-*   **Universal Spotlight Command Palette (<kbd>⌘K</kbd> / <kbd>/</kbd>)**: Instant global search modal across 7,954 assets with category filtering (**All**, **Equities**, **ETFs**, **Indices**, **Global**) and arrow-key navigation.
+*   **Universal Spotlight Command Palette (<kbd>⌘K</kbd> / <kbd>/</kbd>)**: Instant global search modal across 8,623 assets with category filtering (**All**, **Equities**, **ETFs**, **Indices**, **Global**) and arrow-key navigation.
 *   **Systematic Investment Plan (SIP) Calculator**: Compound interest and wealth accumulation planner with step-up annual escalation, inflation indexing, and wealth milestone timelines.
 *   **Multi-Asset Peer Comparison**: Side-by-side comparative matrices analyzing target tickers against industry peers across P/E, P/B, EV/EBITDA, ROE, ROCE, and Dividend Yield.
 *   **Executive Research Memo Exporter**: Generates a print-ready A4 institutional memo in PDF and Markdown format, complete with investment thesis, valuation breakdown, technical levels, and risk disclosures.
@@ -221,7 +222,7 @@ To guarantee rapid response times and eliminate third-party rate limits (HTTP 42
 | **`/api/live`** (Real-Time Price Quote) | 60 seconds | ~0.86 s | **0.18 ms** | **~4,770x faster** |
 | **`/api/desk/evaluate`** (Committee & CRO Gate) | 60 seconds | ~0.92 s | **0.20 ms** | **~4,600x faster** |
 | **`/api/advanced-news`** (Scrapling Deep Read)| 10 minutes (600s) | ~1.95 s | **0.28 ms** | **~6,950x faster** |
-| **`/api/tickers`** (7,954 Master Universe) | 24 hours (86400s) | ~0.12 s | **0.05 ms** | **~2,400x faster** |
+| **`/api/tickers`** (8,623 Master Universe) | 24 hours (86400s) | ~0.12 s | **0.05 ms** | **~2,400x faster** |
 | **`/api/market-screener`** (Sector Movers) | 60 seconds | ~1.20 s | **0.35 ms** | **~3,400x faster** |
 
 ---
@@ -230,7 +231,7 @@ To guarantee rapid response times and eliminate third-party rate limits (HTTP 42
 
 | Shortcut | Action | Description |
 | :--- | :--- | :--- |
-| <kbd>⌘</kbd> + <kbd>K</kbd> / <kbd>Ctrl</kbd> + <kbd>K</kbd> | **Spotlight Search** | Opens global command palette across 7,954 instruments |
+| <kbd>⌘</kbd> + <kbd>K</kbd> / <kbd>Ctrl</kbd> + <kbd>K</kbd> | **Spotlight Search** | Opens global command palette across 8,623 instruments |
 | <kbd>/</kbd> | **Focus Search** | Immediately activates ticker input from anywhere |
 | <kbd>↑</kbd> / <kbd>↓</kbd> | **Navigate Results** | Moves selection through smart search suggestions |
 | <kbd>Enter</kbd> | **Select Asset** | Loads the selected stock, ETF, or index |
@@ -256,7 +257,7 @@ graph TD
         Routers --> R_Desk[/api/desk - Multi-Desk Committee & CRO Gate]
         
         subgraph Domain_Services [Services Layer]
-            R_Tickers --> S_TM[services/ticker_manager.py - 7,954 RAM Catalog]
+            R_Tickers --> S_TM[services/ticker_manager.py - 8,623 RAM Catalog]
             R_Analysis --> S_ENG[engine.py - Quantitative Math]
             R_ML --> S_MLM[ml_models.py - XGBoost, LightGBM, HMM, GARCH]
             R_News --> S_INR[services/intelligent_news_reader.py]
