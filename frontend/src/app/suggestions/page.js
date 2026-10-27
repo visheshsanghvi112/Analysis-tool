@@ -931,6 +931,64 @@ export default function SuggestionsPage() {
                   </div>
                 </div>
 
+                {/* Sector Allocation Distribution Strip */}
+                <div className="p-4 rounded-xl bg-black/50 border border-white/[0.08] space-y-2.5">
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
+                    <span className="flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-cyan-400" />
+                      <span>Portfolio Sector Diversification Weights</span>
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-mono">100% Capital Allocated</span>
+                  </div>
+                  {/* Segmented bar */}
+                  <div className="h-3 w-full rounded-full bg-slate-900/90 flex overflow-hidden border border-white/[0.08] p-0.5 shadow-inner">
+                    {basketData.allocations.map((a, i) => {
+                      const colors = [
+                        'bg-emerald-500',
+                        'bg-cyan-500',
+                        'bg-purple-500',
+                        'bg-amber-500',
+                        'bg-blue-500',
+                        'bg-pink-500',
+                        'bg-teal-500',
+                        'bg-indigo-500',
+                      ];
+                      const color = colors[i % colors.length];
+                      return (
+                        <div
+                          key={a.symbol}
+                          className={`${color} h-full first:rounded-l-full last:rounded-r-full transition-all duration-300 hover:brightness-125 cursor-pointer`}
+                          style={{ width: `${a.allocation_pct}%` }}
+                          title={`${a.display_symbol} (${a.sector}): ${a.allocation_pct}% (₹${a.outlay.toLocaleString('en-IN')})`}
+                        />
+                      );
+                    })}
+                  </div>
+                  {/* Legend */}
+                  <div className="flex items-center gap-3 overflow-x-auto text-[11px] font-mono scrollbar-none pt-1">
+                    {basketData.allocations.map((a, i) => {
+                      const dotColors = [
+                        'bg-emerald-400',
+                        'bg-cyan-400',
+                        'bg-purple-400',
+                        'bg-amber-400',
+                        'bg-blue-400',
+                        'bg-pink-400',
+                        'bg-teal-400',
+                        'bg-indigo-400',
+                      ];
+                      const dot = dotColors[i % dotColors.length];
+                      return (
+                        <div key={a.symbol} className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className={`w-2 h-2 rounded-full ${dot}`} />
+                          <span className="text-slate-200 font-bold">{a.display_symbol}</span>
+                          <span className="text-slate-400 text-[10px]">({a.allocation_pct}%)</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {/* Basket Table */}
                 <div className="overflow-x-auto rounded-xl border border-white/[0.08] bg-black/40">
                   <table className="w-full text-left text-xs">
@@ -1499,6 +1557,38 @@ export default function SuggestionsPage() {
                           </div>
                           <div className="text-[11px] text-purple-300 mt-0.5">{t.setup}</div>
                           <div className="text-[10px] text-slate-500 mt-0.5">Logged: {t.entry_date}</div>
+                          {/* Visual Trade Lifecycle Stepper */}
+                          <div className="flex items-center gap-1 mt-2 text-[9px] font-mono">
+                            <span
+                              className={`px-1.5 py-0.5 rounded border ${
+                                t.status === 'ACTIVE' || t.status === 'T1_HIT' || t.status === 'T2_HIT'
+                                  ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-300 font-bold'
+                                  : 'bg-white/[0.03] border-white/[0.06] text-slate-500'
+                              }`}
+                            >
+                              Entry ₹{t.entry_price.toFixed(1)}
+                            </span>
+                            <span className="text-slate-600">→</span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded border ${
+                                t.status === 'T1_HIT' || t.status === 'T2_HIT'
+                                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 font-bold'
+                                  : 'bg-white/[0.03] border-white/[0.06] text-slate-500'
+                              }`}
+                            >
+                              T1 Hit (50%)
+                            </span>
+                            <span className="text-slate-600">→</span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded border ${
+                                t.status === 'T2_HIT'
+                                  ? 'bg-purple-500/20 border-purple-500/40 text-purple-300 font-bold'
+                                  : 'bg-white/[0.03] border-white/[0.06] text-slate-500'
+                              }`}
+                            >
+                              T2 Runner
+                            </span>
+                          </div>
                         </td>
 
                         <td className="p-3.5 font-mono">
@@ -1957,6 +2047,10 @@ function SuggestionCard({
   const [userCapital, setUserCapital] = useState(100000);
   const [userRiskPct, setUserRiskPct] = useState(1.0);
 
+  // Dossier Sub-Tabs & Broker Order State
+  const [dossierTab, setDossierTab] = useState('reasoning'); // 'reasoning' | 'audit' | 'roadmap' | 'broker'
+  const [copiedOrderFmt, setCopiedOrderFmt] = useState('');
+
   // Dynamic calculations
   const riskBudget = userCapital * (userRiskPct / 100.0);
   const riskPerShare = Math.max(trade_plan.risk_per_share || currentPrice - trade_plan.stop_loss, 0.05);
@@ -2083,20 +2177,23 @@ function SuggestionCard({
             </div>
 
             <div className="flex items-center gap-2 pl-3 border-l border-white/[0.08]">
-              <div className="text-right">
-                <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Conviction</div>
-                <div
-                  className="text-lg font-black font-mono leading-none mt-0.5"
-                  style={{ color: suggestion.conviction_color }}
-                >
-                  {conviction_score}
-                  <span className="text-[10px] text-slate-500 font-normal">/100</span>
-                </div>
-                <div
-                  className="text-[10px] font-bold uppercase tracking-tight mt-0.5"
-                  style={{ color: suggestion.conviction_color }}
-                >
-                  {conviction_tier.split(' ')[0]}
+              <div
+                className="relative flex items-center justify-center w-14 h-14 rounded-2xl bg-black/60 border shadow-inner backdrop-blur-md"
+                style={{ borderColor: `${suggestion.conviction_color}40` }}
+              >
+                <div className="text-center">
+                  <div
+                    className="text-lg font-black font-mono leading-none tracking-tight"
+                    style={{ color: suggestion.conviction_color }}
+                  >
+                    {conviction_score}
+                  </div>
+                  <div
+                    className="text-[9px] font-extrabold uppercase tracking-tight mt-1"
+                    style={{ color: suggestion.conviction_color }}
+                  >
+                    {conviction_tier.split(' ')[0]}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2148,12 +2245,13 @@ function SuggestionCard({
         </div>
 
         {/* ── Technical Indicator Confluence Strip ─────────────────────────── */}
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs pt-2.5 border-t border-white/[0.04]">
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-slate-400 text-[11px]">
-              RSI(14):{' '}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2.5 text-xs pt-2.5 border-t border-white/[0.04]">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Visual RSI-14 Meter */}
+            <div className="flex items-center gap-1.5 bg-black/40 px-2.5 py-1 rounded-lg border border-white/[0.06]">
+              <span className="text-[10px] text-slate-400 font-semibold">RSI(14):</span>
               <strong
-                className={`font-mono ${
+                className={`font-mono text-xs ${
                   technicals.rsi >= 60
                     ? 'text-emerald-400'
                     : technicals.rsi <= 35
@@ -2163,49 +2261,52 @@ function SuggestionCard({
               >
                 {technicals.rsi.toFixed(1)}
               </strong>
-            </span>
+              <div className="w-10 h-1.5 bg-slate-800 rounded-full overflow-hidden relative">
+                <div
+                  className={`h-full rounded-full ${
+                    technicals.rsi >= 60 ? 'bg-emerald-400' : technicals.rsi <= 35 ? 'bg-amber-400' : 'bg-cyan-400'
+                  }`}
+                  style={{ width: `${Math.min(100, Math.max(0, technicals.rsi))}%` }}
+                />
+              </div>
+            </div>
 
-            <span className="text-slate-400 text-[11px]">
-              Relative Vol (RVOL):{' '}
-              <strong
-                className={`font-mono ${
-                  technicals.rvol >= 1.25 ? 'text-emerald-400' : 'text-slate-200'
-                }`}
-              >
+            {/* Visual RVOL Meter */}
+            <div className="flex items-center gap-1.5 bg-black/40 px-2.5 py-1 rounded-lg border border-white/[0.06]">
+              <Flame className={`w-3.5 h-3.5 ${technicals.rvol >= 1.25 ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} />
+              <span className="text-[10px] text-slate-400 font-semibold">RVOL:</span>
+              <strong className={`font-mono text-xs ${technicals.rvol >= 1.25 ? 'text-emerald-400' : 'text-slate-200'}`}>
                 {technicals.rvol.toFixed(2)}x
               </strong>
-            </span>
+            </div>
 
-            <span className="text-slate-400 text-[11px]">
-              20 DMA:{' '}
-              <strong className="font-mono text-slate-300">₹{technicals.sma20.toFixed(2)}</strong> (
+            <span className="text-slate-400 text-[11px] bg-black/30 px-2 py-1 rounded border border-white/[0.04]">
+              20 DMA: <strong className="font-mono text-slate-200">₹{technicals.sma20.toFixed(2)}</strong> (
               <span className={technicals.pct_vs_sma20 >= 0 ? 'text-emerald-400' : 'text-red-400'}>
-                {technicals.pct_vs_sma20 >= 0 ? '+' : ''}
-                {technicals.pct_vs_sma20.toFixed(1)}%
-              </span>
-              )
+                {technicals.pct_vs_sma20 >= 0 ? '+' : ''}{technicals.pct_vs_sma20.toFixed(1)}%
+              </span>)
             </span>
 
-            <span className="text-slate-400 text-[11px]">
-              50 DMA:{' '}
-              <strong className="font-mono text-slate-300">₹{technicals.sma50.toFixed(2)}</strong>
+            <span className="text-slate-400 text-[11px] bg-black/30 px-2 py-1 rounded border border-white/[0.04]">
+              50 DMA: <strong className="font-mono text-slate-200">₹{technicals.sma50.toFixed(2)}</strong>
             </span>
 
-            <span className="text-slate-400 text-[11px]">
-              200 DMA:{' '}
-              <strong className="font-mono text-slate-300">₹{technicals.sma200.toFixed(2)}</strong>
+            <span className="text-slate-400 text-[11px] bg-black/30 px-2 py-1 rounded border border-white/[0.04]">
+              200 DMA: <strong className="font-mono text-slate-200">₹{technicals.sma200.toFixed(2)}</strong>
             </span>
           </div>
 
-          <div className="flex items-center gap-2 min-w-[170px]">
+          {/* 52-Week Range Bar */}
+          <div className="flex items-center gap-2 min-w-[180px] bg-black/40 px-2.5 py-1 rounded-lg border border-white/[0.06]">
             <span className="text-[10px] text-slate-500 font-mono">₹{low52.toFixed(1)}</span>
             <div className="flex-1 h-1.5 bg-slate-800 rounded-full relative overflow-hidden">
               <div
-                className="absolute top-0 bottom-0 bg-emerald-500/80 rounded-full"
+                className="absolute top-0 bottom-0 bg-gradient-to-r from-emerald-500 to-cyan-400 rounded-full"
                 style={{ width: `${positionPct}%` }}
               />
             </div>
             <span className="text-[10px] text-slate-500 font-mono">₹{high52.toFixed(1)}</span>
+            <span className="text-[9px] font-mono text-cyan-300 font-bold">{positionPct.toFixed(0)}%</span>
           </div>
         </div>
 
@@ -2391,172 +2492,415 @@ function SuggestionCard({
             <span className="text-[11px] text-slate-500 font-mono">Audited by StockIQ Pro Models</span>
           </div>
 
-          {/* 3-Stage Trailing Trade Management Roadmap */}
-          {execution_playbook && (
-            <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/25">
-              <div className="flex items-center gap-2 text-xs font-bold text-purple-300 uppercase mb-3">
-                <Target className="w-4 h-4 text-purple-400" />
-                <span>Real-World 3-Stage Trade Execution Roadmap</span>
+          {/* Dossier Navigation Sub-Tabs */}
+          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/60 border border-white/[0.08] overflow-x-auto scrollbar-none">
+            {[
+              { id: 'reasoning', label: '1. Pillars & Thesis', icon: Sparkles },
+              { id: 'audit', label: '2. Risk & Circuit Audit', icon: ShieldCheck },
+              { id: 'roadmap', label: '3. Trailing Roadmap', icon: Target },
+              { id: 'broker', label: '4. Instant Broker Order', icon: Briefcase },
+            ].map((tab) => {
+              const TabIcon = tab.icon;
+              const isActive = dossierTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setDossierTab(tab.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex-shrink-0 ${
+                    isActive
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-950/40'
+                      : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <TabIcon className={`w-3.5 h-3.5 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* TAB 1: 5 QUANTITATIVE PILLARS & THESIS */}
+          {dossierTab === 'reasoning' && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                <div className="p-4 rounded-xl bg-gradient-to-br from-cyan-950/20 to-black/40 border border-cyan-500/20">
+                  <div className="flex items-center gap-2 text-xs font-bold text-cyan-400 mb-2">
+                    <BarChart2 className="w-4 h-4" />
+                    <span>1. Price Action & Moving Average Alignment</span>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">{reasoning.price_action}</p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-950/20 to-black/40 border border-emerald-500/20">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 mb-2">
+                    <Activity className="w-4 h-4" />
+                    <span>2. Volume Footprint & Institutional Absorption</span>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">{reasoning.volume_footprint}</p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-gradient-to-br from-purple-950/20 to-black/40 border border-purple-500/20">
+                  <div className="flex items-center gap-2 text-xs font-bold text-purple-400 mb-2">
+                    <Zap className="w-4 h-4" />
+                    <span>3. Momentum & Indicator Confluence</span>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">{reasoning.momentum_indicators}</p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-gradient-to-br from-amber-950/20 to-black/40 border border-amber-500/20">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-400 mb-2">
+                    <Target className="w-4 h-4" />
+                    <span>4. Mathematical Target & Stop-Loss Justification</span>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">{reasoning.levels_rationale}</p>
+                </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="p-3 rounded-lg bg-black/50 border border-white/[0.06]">
-                  <div className="text-xs font-bold text-slate-200">{execution_playbook.stage_1_entry.title}</div>
-                  <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                    {execution_playbook.stage_1_entry.description}
-                  </p>
+
+              <div className="p-4 rounded-xl bg-gradient-to-br from-blue-950/20 to-black/40 border border-blue-500/20">
+                <div className="flex items-center gap-2 text-xs font-bold text-blue-400 mb-2">
+                  <Layers className="w-4 h-4" />
+                  <span>5. Fundamental Drivers & Sector Tailwinds</span>
                 </div>
-                <div className="p-3 rounded-lg bg-black/50 border border-white/[0.06]">
-                  <div className="text-xs font-bold text-emerald-300">{execution_playbook.stage_2_target_1.title}</div>
-                  <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                    {execution_playbook.stage_2_target_1.description}
+                <p className="text-xs text-slate-300 leading-relaxed">{reasoning.sector_catalyst}</p>
+                {suggestion.description && (
+                  <p className="text-[11px] text-slate-400 mt-2 italic border-t border-white/[0.06] pt-2">
+                    {suggestion.description}
                   </p>
-                </div>
-                <div className="p-3 rounded-lg bg-black/50 border border-white/[0.06]">
-                  <div className="text-xs font-bold text-cyan-300">{execution_playbook.stage_3_target_2.title}</div>
-                  <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                    {execution_playbook.stage_3_target_2.description}
-                  </p>
-                </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* 4 Quantitative pillars */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-400 mb-1.5">
-                <BarChart2 className="w-3.5 h-3.5" />
-                <span>1. Price Action &amp; Moving Average Alignment</span>
-              </div>
-              <p className="text-xs text-slate-300 leading-relaxed">{reasoning.price_action}</p>
-            </div>
+          {/* TAB 2: RISK, CIRCUIT & DELIVERY AUDIT */}
+          {dossierTab === 'audit' && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {/* Circuit Ceiling & Headroom */}
+                {suggestion.circuit_metrics && (
+                  <div className="p-4 rounded-xl bg-black/50 border border-amber-500/25">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
+                        <Zap className="w-4 h-4" />
+                        <span>Exchange Circuit Limit & Headroom</span>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">
+                        {suggestion.circuit_metrics.circuit_band_pct}% Band
+                      </span>
+                    </div>
 
-            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 mb-1.5">
-                <Activity className="w-3.5 h-3.5" />
-                <span>2. Volume Footprint &amp; Institutional Absorption</span>
-              </div>
-              <p className="text-xs text-slate-300 leading-relaxed">{reasoning.volume_footprint}</p>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-purple-400 mb-1.5">
-                <Zap className="w-3.5 h-3.5" />
-                <span>3. Momentum &amp; Indicator Confluence</span>
-              </div>
-              <p className="text-xs text-slate-300 leading-relaxed">{reasoning.momentum_indicators}</p>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400 mb-1.5">
-                <Target className="w-3.5 h-3.5" />
-                <span>4. Mathematical Target &amp; Stop-Loss Justification</span>
-              </div>
-              <p className="text-xs text-slate-300 leading-relaxed">{reasoning.levels_rationale}</p>
-            </div>
-          </div>
-
-          {/* Catalysts & Liquidity Guardrails */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-blue-400 mb-1.5">
-                <Layers className="w-3.5 h-3.5" />
-                <span>5. Fundamental Drivers &amp; Sector Tailwinds</span>
-              </div>
-              <p className="text-xs text-slate-300 leading-relaxed">{reasoning.sector_catalyst}</p>
-              {suggestion.description && (
-                <p className="text-[11px] text-slate-400 mt-1 italic">{suggestion.description}</p>
-              )}
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-400 mb-1.5">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>6. Liquidity &amp; Operator Trap Assessment</span>
-              </div>
-              {liquidity_guardrails && (
-                <div className="space-y-1.5 text-xs text-slate-300">
-                  <div>
-                    20-Day Daily Turnover:{' '}
-                    <strong className="text-white font-mono">₹{liquidity_guardrails.avg_turnover_cr} Crores / day</strong>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Upper Circuit Ceiling:</span>
+                        <strong className="text-emerald-400 font-mono">
+                          ₹{suggestion.circuit_metrics.upper_circuit.toFixed(2)} (+{suggestion.circuit_metrics.headroom_pct}%)
+                        </strong>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Lower Circuit Floor:</span>
+                        <strong className="text-red-400 font-mono">
+                          ₹{suggestion.circuit_metrics.lower_circuit.toFixed(2)}
+                        </strong>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Circuit Status:</span>
+                        <strong className="text-slate-200 capitalize font-medium">
+                          {suggestion.circuit_metrics.circuit_status.replace('_', ' ')}
+                        </strong>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    Operator Risk Tier:{' '}
-                    <strong className="text-emerald-400">{liquidity_guardrails.operator_trap_label}</strong>
+                )}
+
+                {/* Institutional Delivery Quality */}
+                {suggestion.delivery_metrics && (
+                  <div className="p-4 rounded-xl bg-black/50 border border-cyan-500/25">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2 text-xs font-bold text-cyan-400">
+                        <Briefcase className="w-4 h-4" />
+                        <span>Delivery Accumulation Audit</span>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-bold">
+                        {suggestion.delivery_metrics.delivery_quality}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Estimated Delivery:</span>
+                        <strong className="text-cyan-300 font-mono text-sm">
+                          {suggestion.delivery_metrics.estimated_delivery_pct}%
+                        </strong>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed italic">
+                        {suggestion.delivery_metrics.delivery_verdict}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-[11px] text-slate-400">{liquidity_guardrails.circuit_band_desc}</div>
+                )}
+
+                {/* Operator Risk & Liquidity Guardrail */}
+                {liquidity_guardrails && (
+                  <div className="p-4 rounded-xl bg-black/50 border border-white/[0.08]">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2 text-xs font-bold text-white">
+                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                        <span>Liquidity & Operator Trap Audit</span>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
+                        {liquidity_guardrails.operator_trap_label}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 text-xs text-slate-300">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">20-Day Daily Turnover:</span>
+                        <strong className="text-white font-mono">₹{liquidity_guardrails.avg_turnover_cr} Cr / day</strong>
+                      </div>
+                      <div className="text-[11px] text-slate-400">{liquidity_guardrails.circuit_band_desc}</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Nifty Beta Sensitivity */}
+                {suggestion.nifty_beta_sensitivity && (
+                  <div className="p-4 rounded-xl bg-black/50 border border-white/[0.08]">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2 text-xs font-bold text-cyan-400">
+                        <Activity className="w-4 h-4" />
+                        <span>Nifty Beta Sensitivity ({suggestion.nifty_beta_sensitivity.beta}x)</span>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-white/[0.06] text-slate-300 font-mono">
+                        {suggestion.nifty_beta_sensitivity.defensive_score}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">If Nifty Drops -1.0%:</span>
+                        <strong className="text-red-400 font-mono">{suggestion.nifty_beta_sensitivity.nifty_drop_1pct}%</strong>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">If Nifty Drops -2.0% (Correction):</span>
+                        <strong className="text-red-400 font-mono">{suggestion.nifty_beta_sensitivity.nifty_drop_2pct}%</strong>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">If Nifty Rallies +1.0%:</span>
+                        <strong className="text-emerald-400 font-mono">+{suggestion.nifty_beta_sensitivity.nifty_rally_1pct}%</strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Invalidation Rules */}
+              <div className="p-4 rounded-xl bg-red-950/20 border border-red-500/25">
+                <div className="flex items-center gap-2 text-xs font-bold text-red-400 mb-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span>Downside Risk & Strict Invalidation Rules (Zero Sugarcoating)</span>
                 </div>
-              )}
+                <p className="text-xs text-slate-300 leading-relaxed">{reasoning.invalidation_warning}</p>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* 7 & 8: Circuit Headroom, Institutional Delivery & Beta Sensitivity */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {suggestion.circuit_metrics && suggestion.delivery_metrics && (
-              <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400 mb-1.5">
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>7. Circuit Headroom &amp; Delivery Footprint</span>
+          {/* TAB 3: 3-STAGE TRAILING ROADMAP */}
+          {dossierTab === 'roadmap' && execution_playbook && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                <div className="p-4 rounded-xl bg-gradient-to-b from-blue-950/30 to-black/60 border border-blue-500/25 relative overflow-hidden">
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/20 border border-blue-500/40 text-blue-300 font-bold flex items-center justify-center text-xs mb-3">
+                    1
+                  </div>
+                  <div className="text-xs font-bold text-slate-100">{execution_playbook.stage_1_entry.title}</div>
+                  <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                    {execution_playbook.stage_1_entry.description}
+                  </p>
                 </div>
-                <div className="space-y-1.5 text-xs text-slate-300">
-                  <div className="flex items-center justify-between">
-                    <span>Upper Circuit Ceiling ({suggestion.circuit_metrics.circuit_band_pct}% band):</span>
-                    <strong className="text-white font-mono">
-                      ₹{suggestion.circuit_metrics.upper_circuit.toFixed(2)} (+{suggestion.circuit_metrics.headroom_pct}%)
-                    </strong>
+
+                <div className="p-4 rounded-xl bg-gradient-to-b from-emerald-950/30 to-black/60 border border-emerald-500/25 relative overflow-hidden">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold flex items-center justify-center text-xs mb-3">
+                    2
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span>Lower Circuit Floor:</span>
-                    <strong className="text-slate-400 font-mono">
-                      ₹{suggestion.circuit_metrics.lower_circuit.toFixed(2)}
-                    </strong>
+                  <div className="text-xs font-bold text-emerald-300">{execution_playbook.stage_2_target_1.title}</div>
+                  <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                    {execution_playbook.stage_2_target_1.description}
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-gradient-to-b from-purple-950/30 to-black/60 border border-purple-500/25 relative overflow-hidden">
+                  <div className="w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-500/40 text-purple-300 font-bold flex items-center justify-center text-xs mb-3">
+                    3
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span>Estimated Institutional Delivery:</span>
-                    <strong className="text-cyan-300 font-mono">
-                      {suggestion.delivery_metrics.estimated_delivery_pct}% ({suggestion.delivery_metrics.delivery_quality})
-                    </strong>
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-1 italic">{suggestion.delivery_metrics.delivery_verdict}</p>
+                  <div className="text-xs font-bold text-purple-300">{execution_playbook.stage_3_target_2.title}</div>
+                  <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                    {execution_playbook.stage_3_target_2.description}
+                  </p>
                 </div>
               </div>
-            )}
 
-            {suggestion.nifty_beta_sensitivity && (
-              <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-400 mb-1.5">
-                  <Activity className="w-3.5 h-3.5" />
-                  <span>8. Nifty Beta Sensitivity ({suggestion.nifty_beta_sensitivity.beta}x)</span>
+              <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center gap-3 text-xs text-slate-400">
+                <Info className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                <span>
+                  <strong>Discipline Reminder:</strong> In low-ticket scrips under ₹200, retail traders often hold losing trades hoping for a rebound. Always honor the stop loss at ₹{trade_plan.stop_loss} without hesitation.
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: INSTANT 1-CLICK BROKER ORDER STUDIO */}
+          {dossierTab === 'broker' && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="p-4 rounded-xl bg-black/60 border border-white/[0.08] space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="text-xs font-bold text-white flex items-center gap-2">
+                    <Briefcase className="w-4 h-4 text-emerald-400" />
+                    <span>Copy Pre-Formatted Terminal Order for {display_symbol}</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Size: {calcShares} Qty | Outlay: ₹{calcOutlay.toFixed(0)}
+                  </span>
                 </div>
-                <div className="text-xs text-slate-300 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span>If Nifty Drops -1.0%:</span>
-                    <strong className="text-red-400 font-mono">{suggestion.nifty_beta_sensitivity.nifty_drop_1pct}%</strong>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Zerodha Kite Format */}
+                  <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.08] flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-200 mb-1">
+                        <span>🪁 Zerodha Kite (Basket Limit)</span>
+                        <span className="text-[9px] text-slate-500 font-mono">NSE CNC</span>
+                      </div>
+                      <div className="p-2 rounded bg-black/80 font-mono text-[11px] text-emerald-400 break-all select-all border border-white/[0.04]">
+                        {display_symbol},NSE,BUY,CNC,LIMIT,{trade_plan.entry_max},{calcShares}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const txt = `${display_symbol},NSE,BUY,CNC,LIMIT,${trade_plan.entry_max},${calcShares}`;
+                        navigator.clipboard.writeText(txt);
+                        setCopiedOrderFmt('zerodha');
+                        setTimeout(() => setCopiedOrderFmt(''), 2000);
+                      }}
+                      className="mt-2 w-full py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-semibold text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      {copiedOrderFmt === 'zerodha' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy Zerodha CSV</span>
+                        </>
+                      )}
+                    </button>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span>If Nifty Drops -2.0% (Correction):</span>
-                    <strong className="text-red-400 font-mono">{suggestion.nifty_beta_sensitivity.nifty_drop_2pct}%</strong>
+
+                  {/* Angel One Format */}
+                  <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.08] flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-200 mb-1">
+                        <span>👼 Angel One Bulk Order</span>
+                        <span className="text-[9px] text-slate-500 font-mono">DELIVERY</span>
+                      </div>
+                      <div className="p-2 rounded bg-black/80 font-mono text-[11px] text-cyan-400 break-all select-all border border-white/[0.04]">
+                        BUY {display_symbol} QTY:{calcShares} LIMIT:₹{trade_plan.entry_max} SL:₹{trade_plan.stop_loss} T1:₹{trade_plan.target_1}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const txt = `BUY ${display_symbol} QTY:${calcShares} LIMIT:${trade_plan.entry_max} SL:${trade_plan.stop_loss} T1:${trade_plan.target_1}`;
+                        navigator.clipboard.writeText(txt);
+                        setCopiedOrderFmt('angel');
+                        setTimeout(() => setCopiedOrderFmt(''), 2000);
+                      }}
+                      className="mt-2 w-full py-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 font-semibold text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      {copiedOrderFmt === 'angel' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy Angel One Order</span>
+                        </>
+                      )}
+                    </button>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span>If Nifty Rallies +1.0%:</span>
-                    <strong className="text-emerald-400 font-mono">+{suggestion.nifty_beta_sensitivity.nifty_rally_1pct}%</strong>
+
+                  {/* Groww / Upstox Format */}
+                  <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.08] flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-200 mb-1">
+                        <span>🌱 Groww / Upstox Quick Limit</span>
+                        <span className="text-[9px] text-slate-500 font-mono">DELIVERY</span>
+                      </div>
+                      <div className="p-2 rounded bg-black/80 font-mono text-[11px] text-purple-300 break-all select-all border border-white/[0.04]">
+                        NSE:{display_symbol} | BUY DELIVERY | LIMIT ₹{trade_plan.entry_max} | QTY: {calcShares} | SL: ₹{trade_plan.stop_loss}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const txt = `NSE:${display_symbol} | BUY DELIVERY | LIMIT ₹${trade_plan.entry_max} | QTY: ${calcShares} | SL: ₹${trade_plan.stop_loss}`;
+                        navigator.clipboard.writeText(txt);
+                        setCopiedOrderFmt('groww');
+                        setTimeout(() => setCopiedOrderFmt(''), 2000);
+                      }}
+                      className="mt-2 w-full py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 font-semibold text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      {copiedOrderFmt === 'groww' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-purple-400" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy Groww Note</span>
+                        </>
+                      )}
+                    </button>
                   </div>
-                  <div className="text-[11px] text-slate-400 mt-1">
-                    Profile: {suggestion.nifty_beta_sensitivity.defensive_score}
+
+                  {/* Trade Journal & Social Sharing */}
+                  <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.08] flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-200 mb-1">
+                        <span>📱 WhatsApp / Journal Note</span>
+                        <span className="text-[9px] text-slate-500 font-mono">LOG</span>
+                      </div>
+                      <div className="p-2 rounded bg-black/80 font-mono text-[10px] text-slate-300 line-clamp-2 select-all border border-white/[0.04]">
+                        🎯 Setup: {display_symbol} ({sector}) | BUY: ₹{trade_plan.entry_min}-₹{trade_plan.entry_max} | SL: ₹{trade_plan.stop_loss} | T1: ₹{trade_plan.target_1} | T2: ₹{trade_plan.target_2}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const txt = `🎯 StockIQ Quantitative Setup: ${display_symbol} (${sector})\nAction: BUY between ₹${trade_plan.entry_min} - ₹${trade_plan.entry_max}\nStop Loss: ₹${trade_plan.stop_loss} | Target 1: ₹${trade_plan.target_1} | Target 2: ₹${trade_plan.target_2}\nConviction: ${conviction_score}/100 | Setup: ${setup_label}\nCalculated Size: ${calcShares} shares (~₹${calcOutlay.toFixed(0)})\nRationale: ${reasoning.primary_thesis}`;
+                        navigator.clipboard.writeText(txt);
+                        setCopiedOrderFmt('journal');
+                        setTimeout(() => setCopiedOrderFmt(''), 2000);
+                      }}
+                      className="mt-2 w-full py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-slate-200 font-semibold text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      {copiedOrderFmt === 'journal' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Copied Full Plan!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Share2 className="w-3.5 h-3.5" />
+                          <span>Copy Trading Plan</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               </div>
-            )}
-          </div>
-
-          {/* Invalidation Rules */}
-          <div className="p-3.5 rounded-xl bg-red-950/20 border border-red-500/25">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-red-400 mb-1.5">
-              <AlertTriangle className="w-3.5 h-3.5" />
-              <span>9. Downside Risk &amp; Strict Invalidation Rules (Zero Sugarcoating)</span>
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed">{reasoning.invalidation_warning}</p>
-          </div>
+          )}
 
           {/* Action links */}
           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06] flex-wrap gap-3">
