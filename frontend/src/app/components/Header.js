@@ -16,6 +16,7 @@ import {
   Briefcase,
   Star,
   Activity,
+  Sparkles,
 } from 'lucide-react';
 import WatchlistDrawer from './WatchlistDrawer';
 import StockSearchModal from './StockSearchModal';
@@ -363,6 +364,29 @@ const Header = ({ onTickerSelect, currentTicker }) => {
               >
                 <Activity style={{ width: '13px', height: '13px', color: '#34d399' }} />
                 <span className="hidden md:inline">Intraday Desk</span>
+              </Link>
+
+              {/* Suggestions Under-200 Link */}
+              <Link
+                href="/suggestions"
+                className="touch-manipulation"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '6px 11px', background: 'rgba(168, 85, 247, 0.08)',
+                  border: '1px solid rgba(168, 85, 247, 0.25)', borderRadius: '7px',
+                  color: '#c084fc', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                  transition: 'all 0.15s', textDecoration: 'none',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(168, 85, 247, 0.16)'; e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.45)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(168, 85, 247, 0.08)'; e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.25)'; }}
+                title="Open Scrip Suggestions & Under-₹200 Radar"
+              >
+                <Sparkles style={{ width: '13px', height: '13px', color: '#c084fc' }} />
+                <span className="hidden md:inline">Suggestions</span>
+                <span style={{
+                  fontSize: '9px', background: 'rgba(168, 85, 247, 0.25)', color: '#e9d5ff',
+                  padding: '1px 5px', borderRadius: '4px', fontWeight: 700, letterSpacing: '0.02em'
+                }} className="hidden lg:inline">Under ₹200</span>
               </Link>
 
               {/* Watchlist button */}

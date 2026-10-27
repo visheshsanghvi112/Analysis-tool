@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Bookmark,
   Scale,
+  Sparkles,
 } from 'lucide-react';
 
 export default function SideNavDrawer({ isOpen, onClose, onOpenSearch, onOpenWatchlist, currentTicker }) {
@@ -65,6 +66,14 @@ export default function SideNavDrawer({ isOpen, onClose, onOpenSearch, onOpenWat
       icon: Activity,
       active: pathname === '/intraday',
       badge: 'Live Desk',
+    },
+    {
+      href: `/suggestions${tickerParam}`,
+      label: 'Scrip Suggestions',
+      description: 'Data-driven quantitative picks & under-₹200 radar',
+      icon: Sparkles,
+      active: pathname === '/suggestions',
+      badge: 'Under ₹200 Focus',
     },
     {
       href: '/browse',

@@ -48,6 +48,7 @@ import {
   TrendingUp, Brain, Newspaper, PieChart,
   Activity, ArrowRight, CheckCircle, Clock, AlertTriangle,
   LayoutGrid, BarChart2, Trophy, FileText, Star, Scale,
+  Sparkles,
 } from 'lucide-react';
 import InfoBadge from './components/InfoBadge';
 import { API_BASE_URL } from './config';
@@ -182,6 +183,19 @@ const WelcomeScreen = () => (
         onMouseLeave={e => { e.currentTarget.style.borderColor = '#282828'; e.currentTarget.style.color = '#cccccc'; }}
       >
         <LayoutGrid style={{ width: '15px', height: '15px' }} /> Browse sectors
+      </Link>
+      <Link
+        href="/suggestions"
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 26px',
+          fontSize: '14px', fontWeight: 600, borderRadius: '8px', border: '1px solid rgba(168,85,247,0.4)',
+          background: 'rgba(168,85,247,0.12)', color: '#c084fc', textDecoration: 'none',
+          transition: 'all 0.15s ease', letterSpacing: '-0.01em', cursor: 'pointer'
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(168,85,247,0.22)'; e.currentTarget.style.borderColor = 'rgba(168,85,247,0.6)'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(168,85,247,0.12)'; e.currentTarget.style.borderColor = 'rgba(168,85,247,0.4)'; }}
+      >
+        <Sparkles style={{ width: '15px', height: '15px', color: '#c084fc' }} /> Scrip Suggestions (Under ₹200)
       </Link>
     </div>
 
@@ -543,6 +557,22 @@ export default function Dashboard() {
                   <Scale style={{ width: '13px', height: '13px' }} />
                   <span>🏛️ Committee Desk</span>
                 </button>
+                <Link
+                  href="/suggestions"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    padding: '6px 13px', background: 'rgba(168, 85, 247, 0.1)',
+                    border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: '7px',
+                    color: '#c084fc', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                    textDecoration: 'none', transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(168, 85, 247, 0.18)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(168, 85, 247, 0.1)'}
+                  title="Explore Quantitative Scrip Suggestions & Under-₹200 Radar"
+                >
+                  <Sparkles style={{ width: '13px', height: '13px', color: '#c084fc' }} />
+                  <span>Under-₹200 Radar</span>
+                </Link>
                 <button
                   onClick={() => setReportModalOpen(true)}
                   style={{

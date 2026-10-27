@@ -1,8 +1,8 @@
 {
-  "last_synced_at": "2026-10-13T16:31:00.998430",
-  "last_synced_epoch": 1791889258.0296268,
+  "last_synced_at": "2026-10-27T11:54:07.677501",
+  "last_synced_epoch": 1793082245.9798641,
   "last_added_count": 0,
-  "total_instruments": 8624,
+  "total_instruments": 8643,
   "sync_interval_hours": 48,
   "last_status": "success",
   "new_symbols_sample": []

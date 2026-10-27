@@ -13,7 +13,7 @@ from utils.limiter import limiter
 from services.ticker_manager import ensure_ticker_list, start_periodic_ticker_sync
 
 # Import all routers from our routers package
-from routers import tickers, ml, news, portfolio, analysis, intraday, desk
+from routers import tickers, ml, news, portfolio, analysis, intraday, desk, suggestions
 
 logger = logging.getLogger("stockiq")
 
@@ -86,6 +86,7 @@ app.include_router(portfolio.router)
 app.include_router(analysis.router)
 app.include_router(intraday.router)
 app.include_router(desk.router)
+app.include_router(suggestions.router)
 
 if __name__ == "__main__":
     import uvicorn

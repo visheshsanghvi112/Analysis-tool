@@ -422,6 +422,13 @@
     "isin": "INF769K01HI8"
   },
   {
+    "symbol": "BIRLATOTAL.NS",
+    "name": "BIRLASLAMC - BIRLATOTAL",
+    "sector": "ETF",
+    "type": "ETF",
+    "isin": "INF209KC1746"
+  },
+  {
     "symbol": "BNKETFAXIS.NS",
     "name": "AXISAMC-BNKETFAXIS",
     "sector": "ETF",
@@ -721,6 +728,13 @@
     "sector": "ETF",
     "type": "ETF",
     "isin": "INF769K01LQ3"
+  },
+  {
+    "symbol": "FARBEES.NS",
+    "name": "NIPPONAMC - FARBEES",
+    "sector": "ETF",
+    "type": "ETF",
+    "isin": "INF204KC1HS1"
   },
   {
     "symbol": "FINIETF.NS",
@@ -1204,6 +1218,13 @@
     "sector": "ETF",
     "type": "ETF",
     "isin": "INF209KB10C2"
+  },
+  {
+    "symbol": "HFTSEINDIA.NS",
+    "name": "HDFCAMC - HFTSEINDIA",
+    "sector": "ETF",
+    "type": "ETF",
+    "isin": "INF179KC1LA2"
   },
   {
     "symbol": "HNGSNGBEES.NS",
@@ -2163,6 +2184,13 @@
     "sector": "ETF",
     "type": "ETF",
     "isin": "INF109KC11V0"
+  },
+  {
+    "symbol": "NXT100CASE.NS",
+    "name": "ZERODHAAMC - NXT100CASE",
+    "sector": "ETF",
+    "type": "ETF",
+    "isin": "INF0R8F01257"
   },
   {
     "symbol": "OILIETF.NS",
@@ -7101,7 +7129,7 @@
     "name": "Azad India Mobility Limited",
     "sector": "Others",
     "type": "Equity",
-    "isin": "INE566M01017"
+    "isin": "INE566M01025"
   },
   {
     "symbol": "BABAFP.NS",
@@ -7375,7 +7403,7 @@
     "name": "Bansal Wire Industries Limited",
     "sector": "Others",
     "type": "Equity",
-    "isin": "INE0B9K01025"
+    "isin": "INE0B9K01033"
   },
   {
     "symbol": "BANSWRAS.NS",
@@ -8062,6 +8090,13 @@
     "isin": "INE032A01023"
   },
   {
+    "symbol": "BONFIG.NS",
+    "name": "Bonfiglioli Transmissions Limited",
+    "sector": "Others",
+    "type": "Equity",
+    "isin": "INE28SO01013"
+  },
+  {
     "symbol": "BONLON.NS",
     "name": "Bonlon Industries Limited",
     "sector": "Others",
@@ -8453,9 +8488,9 @@
   {
     "symbol": "CCAVENUE.NS",
     "name": "AvenuesAI Limited",
-    "sector": "Finance",
+    "sector": "Others",
     "type": "Equity",
-    "isin": "INE483S01020"
+    "isin": "INE483S01038"
   },
   {
     "symbol": "CCCL.NS",
@@ -11346,6 +11381,13 @@
     "isin": "INE139R01012"
   },
   {
+    "symbol": "FUSIONCX.NS",
+    "name": "Fusion CX Limited",
+    "sector": "Others",
+    "type": "Equity",
+    "isin": "INE0N2201019"
+  },
+  {
     "symbol": "FWSTC.NS",
     "name": "FLYWINGS SIMULATOR TRAINING CENTRE LIMITED",
     "sector": "Others",
@@ -12678,6 +12720,13 @@
     "isin": "INE795G01014"
   },
   {
+    "symbol": "HDFIRE.NS",
+    "name": "HD Fire Protect Limited",
+    "sector": "Others",
+    "type": "Equity",
+    "isin": "INE18AK01028"
+  },
+  {
     "symbol": "HDIL.NS",
     "name": "Housing Development and Infrastructure Limited",
     "sector": "Infra",
@@ -13214,6 +13263,13 @@
     "isin": "INE765G01017"
   },
   {
+    "symbol": "ICICILIFE.NS",
+    "name": "ICICI Life Insurance Limited",
+    "sector": "Finance",
+    "type": "Equity",
+    "isin": "INE726G01019"
+  },
+  {
     "symbol": "ICICIPRULI.NS",
     "name": "ICICI Prudential Life Insurance Company Limited",
     "sector": "Finance",
@@ -13369,6 +13425,13 @@
     "sector": "Finance",
     "type": "Equity",
     "isin": "INE489L01022"
+  },
+  {
+    "symbol": "IIRM.NS",
+    "name": "IIRM Holdings India Limited",
+    "sector": "Others",
+    "type": "Equity",
+    "isin": "INE670C01026"
   },
   {
     "symbol": "IITL.NS",
@@ -14534,7 +14597,7 @@
     "name": "JSW Dulux Limited",
     "sector": "Others",
     "type": "Equity",
-    "isin": "INE133A01011"
+    "isin": "INE133A01029"
   },
   {
     "symbol": "JSWENERGY.NS",
@@ -15042,6 +15105,13 @@
     "sector": "Finance",
     "type": "Equity",
     "isin": "INE060B01014"
+  },
+  {
+    "symbol": "KHAZANCHI.NS",
+    "name": "Khazanchi Jewellers Limited",
+    "sector": "Others",
+    "type": "Equity",
+    "isin": "INE0OWC01011"
   },
   {
     "symbol": "KHERIAAUTO.NS",
@@ -15930,6 +16000,12 @@
     "sector": "Others",
     "type": "Equity",
     "isin": "INE269B01029"
+  },
+  {
+    "symbol": "LOANFRONT.NS",
+    "name": "VAIBHAV VYAPAAR LIMITED",
+    "sector": "Others",
+    "type": "SME Equity"
   },
   {
     "symbol": "LODHA.NS",
@@ -19016,6 +19092,12 @@
     "type": "SME Equity"
   },
   {
+    "symbol": "PARTYPP.NS",
+    "name": "PARTY CRUISERS LIMITED",
+    "sector": "Others",
+    "type": "Equity"
+  },
+  {
     "symbol": "PASHUPATI.NS",
     "name": "Pashupati Cotspin Limited",
     "sector": "Others",
@@ -20422,6 +20504,12 @@
     "sector": "Infra",
     "type": "Equity",
     "isin": "INE05CZ01011"
+  },
+  {
+    "symbol": "RAVITA.NS",
+    "name": "RAVITA ENGINEERING SERVICES LIMITED",
+    "sector": "Infra",
+    "type": "SME Equity"
   },
   {
     "symbol": "RAYMOND.NS",
@@ -22262,6 +22350,13 @@
     "isin": "INE788J01021"
   },
   {
+    "symbol": "SHIVAM-RE1.NS",
+    "name": "Shivam Autotech Ltd-RE",
+    "sector": "Consumer Tech",
+    "type": "Equity",
+    "isin": "INE637H20024"
+  },
+  {
     "symbol": "SHIVAMAUTO.NS",
     "name": "Shivam Autotech Limited",
     "sector": "Consumer Tech",
@@ -22867,6 +22962,13 @@
     "sector": "Pharma",
     "type": "Equity",
     "isin": "INE812G01025"
+  },
+  {
+    "symbol": "SMT.NS",
+    "name": "Sahajanand Medical Technologies Limited",
+    "sector": "Pharma",
+    "type": "Equity",
+    "isin": "INE356Y01018"
   },
   {
     "symbol": "SMVD.NS",
@@ -23477,6 +23579,13 @@
     "sector": "Pharma",
     "type": "Equity",
     "isin": "INE659A01023"
+  },
+  {
+    "symbol": "SUDARSHAN.NS",
+    "name": "Sudarshan Pharma Industries Limited",
+    "sector": "Pharma",
+    "type": "Equity",
+    "isin": "INE00TV01023"
   },
   {
     "symbol": "SUDEEPPHRM.NS",
@@ -24575,6 +24684,13 @@
     "isin": "INE440L01017"
   },
   {
+    "symbol": "TIKONA.NS",
+    "name": "Tikona Communication Limited",
+    "sector": "Others",
+    "type": "Equity",
+    "isin": "INE534A01028"
+  },
+  {
     "symbol": "TIL.NS",
     "name": "TIL Limited",
     "sector": "Others",
@@ -24718,6 +24834,13 @@
     "sector": "Auto",
     "type": "Equity",
     "isin": "INE0RWQ01014"
+  },
+  {
+    "symbol": "TONBO.NS",
+    "name": "Tonbo Imaging India Limited",
+    "sector": "Others",
+    "type": "Equity",
+    "isin": "INE0LDG01026"
   },
   {
     "symbol": "TORNTPHARM.NS",
@@ -26733,6 +26856,13 @@
     "sector": "Infra",
     "type": "Equity",
     "isin": "INE251B01027"
+  },
+  {
+    "symbol": "ZETWERK.NS",
+    "name": "Zetwerk Manufacturing Businesses Limited",
+    "sector": "Others",
+    "type": "Equity",
+    "isin": "INE09PO01019"
   },
   {
     "symbol": "ZFCVINDIA.NS",
