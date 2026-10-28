@@ -43,6 +43,9 @@ import {
   FileText,
   CheckSquare,
   Share2,
+  Scale,
+  Receipt,
+  Calendar,
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
@@ -122,6 +125,15 @@ export default function SuggestionsPage() {
   const [sortBy, setSortBy] = useState('conviction');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // ── Global Capital & Holding Horizon Customization Deck ─────────────────
+  const [globalCapital, setGlobalCapital] = useState(100000); // User's total money: ₹10k, ₹50k, ₹1L, ₹5L, etc.
+  const [globalRiskPct, setGlobalRiskPct] = useState(1.0); // 0.5%, 1.0%, 1.5%, 2.0%
+  const [globalHoldingHorizon, setGlobalHoldingHorizon] = useState('all'); // 'all', 'btst', 'swing_short', 'swing_positional', 'quarterly', 'wealth'
+  const [globalSizingMode, setGlobalSizingMode] = useState('risk_budget'); // 'risk_budget', 'slot_4', 'slot_5', 'conviction_kelly', 'fixed_outlay', 'fixed_shares'
+  const [customHoldingDays, setCustomHoldingDays] = useState(7); // Slider from 1 to 180 days
+  const [fixedOutlayPerScrip, setFixedOutlayPerScrip] = useState(20000); // For fixed outlay mode
+  const [fixedSharesPerScrip, setFixedSharesPerScrip] = useState(100); // For fixed shares mode
+
   // Expandable reasoning state
   const [expandedCards, setExpandedCards] = useState(new Set());
 
@@ -154,6 +166,10 @@ export default function SuggestionsPage() {
   const [calcTicker, setCalcTicker] = useState('PNB.NS');
   const [calcCapital, setCalcCapital] = useState(100000);
   const [calcRiskPct, setCalcRiskPct] = useState(1.0);
+  const [calcSizingMode, setCalcSizingMode] = useState('risk_budget');
+  const [calcHoldingDays, setCalcHoldingDays] = useState(7);
+  const [calcFixedOutlay, setCalcFixedOutlay] = useState(20000);
+  const [calcFixedShares, setCalcFixedShares] = useState(100);
   const [calcNiftyScenario, setCalcNiftyScenario] = useState(-1.0);
 
   // Sync watchlist and paper trades
@@ -501,7 +517,25 @@ export default function SuggestionsPage() {
     const t2 = activeCalcScrip.trade_plan.target_2;
     const riskPerShare = Math.max(price - sl, 0.05);
     const riskBudget = calcCapital * (calcRiskPct / 100.0);
-    const shares = Math.max(1, Math.floor(riskBudget / riskPerShare));
+
+    // Multi-strategy share sizing
+    let shares = 1;
+    if (calcSizingMode === 'slot_4') {
+      shares = Math.max(1, Math.floor((calcCapital * 0.25) / price));
+    } else if (calcSizingMode === 'slot_5') {
+      shares = Math.max(1, Math.floor((calcCapital * 0.20) / price));
+    } else if (calcSizingMode === 'conviction_kelly') {
+      const score = activeCalcScrip.conviction_score || 70;
+      const kelly = score >= 85 ? 0.25 : score >= 70 ? 0.18 : 0.10;
+      shares = Math.max(1, Math.floor((calcCapital * kelly) / price));
+    } else if (calcSizingMode === 'fixed_outlay') {
+      shares = Math.max(1, Math.floor(calcFixedOutlay / price));
+    } else if (calcSizingMode === 'fixed_shares') {
+      shares = Math.max(1, calcFixedShares);
+    } else {
+      shares = Math.max(1, Math.floor(riskBudget / riskPerShare));
+    }
+
     const outlay = Math.round(shares * price);
     const capitalPct = ((outlay / calcCapital) * 100).toFixed(1);
     const maxLoss = Math.round(shares * riskPerShare);
@@ -509,6 +543,26 @@ export default function SuggestionsPage() {
     const t2Gain = Math.round(shares * (t2 - price));
     const t1GainPct = ((t1Gain / calcCapital) * 100).toFixed(2);
     const t2GainPct = ((t2Gain / calcCapital) * 100).toFixed(2);
+
+    // Statutory Indian Delivery Taxes & DP Charges Model (Zerodha/Groww/Angel CNC)
+    const sttBuy = outlay * 0.001;
+    const sttSellT1 = (shares * t1) * 0.001;
+    const stampDuty = outlay * 0.00015;
+    const exchangeFee = (outlay + (shares * t1)) * 0.0000325;
+    const sebiFee = (outlay + (shares * t1)) * 0.000001;
+    const gstFee = exchangeFee * 0.18;
+    const dpFee = 15.34;
+    const totalTaxes = sttBuy + sttSellT1 + stampDuty + exchangeFee + sebiFee + gstFee + dpFee;
+    const netT1Gain = Math.round(t1Gain - totalTaxes);
+    const breakEvenPrice = Number((price + (totalTaxes / shares)).toFixed(2));
+    const breakEvenPct = Number((((breakEvenPrice - price) / price) * 100).toFixed(2));
+
+    // Dynamic Annualized Return (IRR / CAGR equivalent for holding days)
+    const effDays = calcHoldingDays || activeCalcScrip.holding_period_metrics?.days_to_target_1 || 7;
+    const t1GainPctRaw = activeCalcScrip.trade_plan.target_1_pct;
+    const annualizedIrr = Math.min(999, Math.round((((1 + t1GainPctRaw / 100) ** (252 / Math.max(1, effDays))) - 1) * 100));
+
+    // Nifty Stress Simulation
     const beta = activeCalcScrip.nifty_beta_sensitivity?.beta || 1.25;
     const scenarioStockPct = Number((calcNiftyScenario * beta).toFixed(2));
     const simulatedPrice = Number((price * (1 + scenarioStockPct / 100)).toFixed(2));
@@ -530,6 +584,19 @@ export default function SuggestionsPage() {
       t2Gain,
       t1GainPct,
       t2GainPct,
+      sttBuy,
+      sttSellT1,
+      stampDuty,
+      exchangeFee,
+      sebiFee,
+      gstFee,
+      dpFee,
+      totalTaxes,
+      netT1Gain,
+      breakEvenPrice,
+      breakEvenPct,
+      effDays,
+      annualizedIrr,
       beta,
       scenarioStockPct,
       simulatedPrice,
@@ -537,7 +604,7 @@ export default function SuggestionsPage() {
       wouldHitSL,
       rr: activeCalcScrip.trade_plan.risk_reward_ratio,
     };
-  }, [activeCalcScrip, calcCapital, calcRiskPct, calcNiftyScenario]);
+  }, [activeCalcScrip, calcCapital, calcRiskPct, calcSizingMode, calcHoldingDays, calcFixedOutlay, calcFixedShares, calcNiftyScenario]);
 
   // Paper Trading Aggregate Stats
   const paperStats = useMemo(() => {
@@ -598,8 +665,22 @@ export default function SuggestionsPage() {
       );
     }
 
+    // Filter by Holding Horizon (Time in Market)
+    if (globalHoldingHorizon !== 'all') {
+      list = list.filter((s) => {
+        const days = s.holding_period_metrics?.days_to_target_1 || 7;
+        const bucket = s.holding_period_metrics?.horizon_bucket || 'SWING_SHORT';
+        if (globalHoldingHorizon === 'btst') return bucket === 'BTST' || days <= 2;
+        if (globalHoldingHorizon === 'swing_short') return bucket === 'SWING_SHORT' || (days >= 3 && days <= 7);
+        if (globalHoldingHorizon === 'swing_positional') return bucket === 'SWING_POSITIONAL' || (days >= 8 && days <= 21);
+        if (globalHoldingHorizon === 'quarterly') return bucket === 'QUARTERLY_CYCLE' || (days >= 22 && days <= 65);
+        if (globalHoldingHorizon === 'wealth') return bucket === 'WEALTH_COMPOUNDER' || days > 65;
+        return true;
+      });
+    }
+
     return list;
-  }, [data, selectedTheme, sortBy, searchQuery]);
+  }, [data, selectedTheme, sortBy, searchQuery, globalHoldingHorizon]);
 
   return (
     <div className="min-h-screen bg-[#07090e] text-slate-100 selection:bg-emerald-500/20 selection:text-emerald-300">
@@ -1184,7 +1265,7 @@ export default function SuggestionsPage() {
                       Total Trading Capital:
                     </label>
                     <div className="flex items-center gap-1.5 flex-wrap mb-2">
-                      {[25000, 50000, 100000, 200000, 500000].map((amt) => (
+                      {[10000, 25000, 50000, 100000, 250000, 500000].map((amt) => (
                         <button
                           key={amt}
                           onClick={() => setCalcCapital(amt)}
@@ -1211,37 +1292,125 @@ export default function SuggestionsPage() {
                     </div>
                   </div>
 
-                  {/* 3. Risk Tolerance Per Trade */}
+                  {/* 3. Sizing Strategy Mode Selector */}
                   <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <Shield className="w-3.5 h-3.5 text-red-400" />
-                        Max Risk Per Trade (%):
-                      </span>
-                      <span className="font-mono text-amber-300 font-bold text-xs">{calcRiskPct}%</span>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <Scale className="w-3.5 h-3.5 text-purple-400" />
+                      Position Sizing Strategy:
                     </label>
-                    <div className="flex items-center gap-1.5 mb-2">
-                      {[0.5, 1.0, 1.5, 2.0].map((pct) => (
+                    <div className="grid grid-cols-2 gap-1.5 mb-2">
+                      {[
+                        { id: 'risk_budget', label: '1% Risk Budget' },
+                        { id: 'slot_4', label: '4 Slots (25% each)' },
+                        { id: 'slot_5', label: '5 Slots (20% each)' },
+                        { id: 'conviction_kelly', label: 'Kelly Conviction' },
+                        { id: 'fixed_outlay', label: 'Fixed Outlay ₹' },
+                        { id: 'fixed_shares', label: 'Fixed Shares' },
+                      ].map((mode) => (
                         <button
-                          key={pct}
-                          onClick={() => setCalcRiskPct(pct)}
-                          className={`flex-1 py-1 rounded-lg text-xs font-bold transition cursor-pointer border ${
-                            calcRiskPct === pct
-                              ? 'bg-red-500/20 border-red-500/60 text-red-300'
-                              : 'bg-white/[0.04] border-white/[0.08] text-slate-400 hover:text-white'
+                          key={mode.id}
+                          onClick={() => setCalcSizingMode(mode.id)}
+                          className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border transition cursor-pointer text-left ${
+                            calcSizingMode === mode.id
+                              ? 'bg-purple-500/20 border-purple-500/60 text-purple-200'
+                              : 'bg-white/[0.03] border-white/[0.06] text-slate-400 hover:text-slate-200'
                           }`}
                         >
-                          {pct}%
+                          {mode.label}
                         </button>
                       ))}
                     </div>
-                    <div className="text-[11px] text-slate-400">
-                      Allowable Risk Budget:{' '}
-                      <strong className="text-white font-mono">
-                        ₹{(calcCapital * (calcRiskPct / 100)).toFixed(0)}
-                      </strong>{' '}
-                      (Golden rule: never exceed 1.5% on small/mid-caps)
+
+                    {/* Mode specific parameters */}
+                    {calcSizingMode === 'risk_budget' && (
+                      <div className="mt-2">
+                        <div className="flex items-center justify-between text-xs text-slate-300 mb-1">
+                          <span>Risk Tolerance Per Trade:</span>
+                          <span className="font-mono text-amber-300 font-bold">{calcRiskPct}%</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {[0.5, 1.0, 1.5, 2.0].map((pct) => (
+                            <button
+                              key={pct}
+                              onClick={() => setCalcRiskPct(pct)}
+                              className={`flex-1 py-1 rounded-lg text-xs font-bold transition cursor-pointer border ${
+                                calcRiskPct === pct
+                                  ? 'bg-red-500/20 border-red-500/60 text-red-300'
+                                  : 'bg-white/[0.04] border-white/[0.08] text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              {pct}%
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {calcSizingMode === 'fixed_outlay' && (
+                      <div className="mt-2">
+                        <label className="text-xs text-slate-400 block mb-1">Fixed Rupees Per Scrip:</label>
+                        <input
+                          type="number"
+                          value={calcFixedOutlay}
+                          onChange={(e) => setCalcFixedOutlay(Math.max(1000, Number(e.target.value)))}
+                          className="w-full px-3 py-1.5 rounded-lg bg-black/60 border border-white/[0.12] text-xs font-mono text-white focus:outline-none focus:border-purple-500"
+                          step={5000}
+                        />
+                      </div>
+                    )}
+
+                    {calcSizingMode === 'fixed_shares' && (
+                      <div className="mt-2">
+                        <label className="text-xs text-slate-400 block mb-1">Fixed Shares Per Scrip:</label>
+                        <input
+                          type="number"
+                          value={calcFixedShares}
+                          onChange={(e) => setCalcFixedShares(Math.max(1, Number(e.target.value)))}
+                          className="w-full px-3 py-1.5 rounded-lg bg-black/60 border border-white/[0.12] text-xs font-mono text-white focus:outline-none focus:border-purple-500"
+                          step={50}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 4. Target Holding Horizon & Duration Slider */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+                        Target Holding Horizon:
+                      </span>
+                      <span className="font-mono text-cyan-300 font-bold text-xs">{calcHoldingDays} Days</span>
+                    </label>
+                    <div className="flex items-center gap-1 flex-wrap mb-2">
+                      {[
+                        { label: 'BTST (2d)', days: 2 },
+                        { label: 'Short Swing (7d)', days: 7 },
+                        { label: 'Positional (21d)', days: 21 },
+                        { label: 'Quarterly (60d)', days: 60 },
+                        { label: 'Wealth (180d)', days: 180 },
+                      ].map((item) => (
+                        <button
+                          key={item.days}
+                          onClick={() => setCalcHoldingDays(item.days)}
+                          className={`px-2 py-0.5 rounded text-[10px] font-medium border transition cursor-pointer ${
+                            calcHoldingDays === item.days
+                              ? 'bg-cyan-500/20 border-cyan-500/60 text-cyan-300 font-bold'
+                              : 'bg-white/[0.03] border-white/[0.06] text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
                     </div>
+                    <input
+                      type="range"
+                      min={1}
+                      max={180}
+                      value={calcHoldingDays}
+                      onChange={(e) => setCalcHoldingDays(Number(e.target.value))}
+                      className="w-full accent-cyan-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                    />
                   </div>
                 </div>
 
@@ -1281,7 +1450,7 @@ export default function SuggestionsPage() {
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
                           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                          Computed Order Blueprint
+                          Computed Order Blueprint ({calcResults.shares} shares)
                         </span>
                         <span className="text-xs font-mono text-amber-400 font-bold">
                           Risk-Reward 1 : {calcResults.rr}
@@ -1294,15 +1463,15 @@ export default function SuggestionsPage() {
                           <div className="text-xl font-extrabold text-white font-mono mt-0.5">
                             {calcResults.shares} shares
                           </div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">Whole equity shares</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">₹{calcResults.outlay.toLocaleString('en-IN')} outlay</div>
                         </div>
 
                         <div className="p-3 rounded-xl bg-black/50 border border-white/[0.08]">
-                          <div className="text-[10px] text-slate-400 uppercase font-semibold">Capital Outlay</div>
+                          <div className="text-[10px] text-slate-400 uppercase font-semibold">Portfolio %</div>
                           <div className="text-xl font-extrabold text-white font-mono mt-0.5">
-                            ₹{calcResults.outlay.toLocaleString('en-IN')}
+                            {calcResults.capitalPct}%
                           </div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">{calcResults.capitalPct}% of capital</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">of ₹{(calcCapital / 1000).toFixed(0)}k capital</div>
                         </div>
 
                         <div className="p-3 rounded-xl bg-black/50 border border-red-500/30">
@@ -1314,20 +1483,70 @@ export default function SuggestionsPage() {
                         </div>
 
                         <div className="p-3 rounded-xl bg-black/50 border border-emerald-500/30">
-                          <div className="text-[10px] text-emerald-400 uppercase font-semibold">Target 1 Profit</div>
+                          <div className="text-[10px] text-emerald-400 uppercase font-semibold">Net In-Pocket Profit</div>
                           <div className="text-xl font-extrabold text-emerald-400 font-mono mt-0.5">
-                            +₹{calcResults.t1Gain.toLocaleString('en-IN')}
+                            +₹{calcResults.netT1Gain.toLocaleString('en-IN')}
                           </div>
-                          <div className="text-[10px] text-emerald-500 mt-0.5">+{calcResults.t1GainPct}% portfolio</div>
+                          <div className="text-[10px] text-emerald-500 mt-0.5">Gross +₹{calcResults.t1Gain}</div>
+                        </div>
+                      </div>
+
+                      {/* Compounding & Break-Even Banner */}
+                      <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-950/30 via-slate-900/60 to-cyan-950/20 border border-emerald-500/20 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-medium">Annualized Return (IRR)</div>
+                          <div className="text-sm font-extrabold text-emerald-400 font-mono">+{calcResults.annualizedIrr}% p.a.</div>
+                          <div className="text-[10px] text-slate-500">Based on {calcResults.effDays}d hold</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-medium">True Break-Even Price</div>
+                          <div className="text-sm font-extrabold text-white font-mono">₹{calcResults.breakEvenPrice.toFixed(2)}</div>
+                          <div className="text-[10px] text-amber-300 font-mono">+{calcResults.breakEvenPct}% buffer</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-medium">Total Statutory Taxes</div>
+                          <div className="text-sm font-extrabold text-purple-300 font-mono">₹{calcResults.totalTaxes.toFixed(1)}</div>
+                          <div className="text-[10px] text-slate-500">{((calcResults.totalTaxes / Math.max(calcResults.t1Gain, 1)) * 100).toFixed(1)}% friction drag</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-medium">Target 2 Potential</div>
+                          <div className="text-sm font-extrabold text-cyan-400 font-mono">+₹{calcResults.t2Gain.toLocaleString('en-IN')}</div>
+                          <div className="text-[10px] text-cyan-500">+{calcResults.t2GainPct}% portfolio</div>
+                        </div>
+                      </div>
+
+                      {/* Statutory Taxes Breakdown Accordion / Pills */}
+                      <div className="p-3 rounded-xl bg-black/60 border border-white/[0.06] text-xs">
+                        <div className="flex items-center justify-between font-bold text-slate-300 mb-2">
+                          <span className="flex items-center gap-1.5 text-purple-300">
+                            <Receipt className="w-3.5 h-3.5" />
+                            Indian Statutory Delivery Taxes Breakdown (CNC / Delivery)
+                          </span>
+                          <span className="font-mono text-slate-400 text-[11px]">DP Fee: ₹15.34</span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono">
+                          <div className="bg-white/[0.02] p-1.5 rounded border border-white/[0.04]">
+                            <span className="text-slate-400 block text-[9px] uppercase">STT (Buy+Sell 0.1%)</span>
+                            <span className="text-white">₹{(calcResults.sttBuy + calcResults.sttSellT1).toFixed(1)}</span>
+                          </div>
+                          <div className="bg-white/[0.02] p-1.5 rounded border border-white/[0.04]">
+                            <span className="text-slate-400 block text-[9px] uppercase">Stamp Duty (0.015%)</span>
+                            <span className="text-white">₹{calcResults.stampDuty.toFixed(1)}</span>
+                          </div>
+                          <div className="bg-white/[0.02] p-1.5 rounded border border-white/[0.04]">
+                            <span className="text-slate-400 block text-[9px] uppercase">Exchange + SEBI + GST</span>
+                            <span className="text-white">₹{(calcResults.exchangeFee + calcResults.sebiFee + calcResults.gstFee).toFixed(1)}</span>
+                          </div>
+                          <div className="bg-white/[0.02] p-1.5 rounded border border-white/[0.04]">
+                            <span className="text-slate-400 block text-[9px] uppercase">CDSL Flat DP Charge</span>
+                            <span className="text-amber-400">₹{calcResults.dpFee.toFixed(2)}</span>
+                          </div>
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between pt-2 border-t border-white/[0.06] flex-wrap gap-2">
                         <div className="text-xs text-slate-400">
-                          Target 2 Max Gain:{' '}
-                          <strong className="text-cyan-400 font-mono">
-                            +₹{calcResults.t2Gain.toLocaleString('en-IN')} (+{calcResults.t2GainPct}% portfolio)
-                          </strong>
+                          Ready to execute?
                         </div>
 
                         <button
@@ -1791,9 +2010,249 @@ export default function SuggestionsPage() {
                     }
                     onAddPaperTrade={(s) => addPaperTrade(s)}
                     highlighted
+                    globalCapital={globalCapital}
+                    globalRiskPct={globalRiskPct}
+                    globalSizingMode={globalSizingMode}
+                    customHoldingDays={customHoldingDays}
+                    fixedOutlayPerScrip={fixedOutlayPerScrip}
+                    fixedSharesPerScrip={fixedSharesPerScrip}
                   />
                 </div>
               )}
+            </div>
+
+            {/* ── CAPITAL BUDGET & HOLDING HORIZON CONTROL DECK ──────────────────────────── */}
+            <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/25 via-[#0b101d] to-cyan-950/25 border border-emerald-500/30 shadow-2xl space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Coins className="w-5 h-5 text-emerald-400" />
+                    <h3 className="text-base font-extrabold text-white">Capital Allocation &amp; Holding Horizon Control Deck</h3>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Specify your exact capital, holding timeframe, and position sizing strategy. Every scrip card, risk budget, and tax calculation will dynamically adapt.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono text-xs font-bold">
+                    Capital: ₹{globalCapital.toLocaleString('en-IN')}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-mono text-xs font-bold">
+                    {customHoldingDays} Days Horizon
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-300 font-mono text-xs font-bold">
+                    {globalSizingMode === 'risk_budget' ? `${globalRiskPct}% Risk Sizing` : globalSizingMode.replace('_', ' ').toUpperCase()}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pt-2 border-t border-white/[0.08]">
+                {/* SECTION 1: HOW MUCH MONEY DO YOU WANT TO PUT? */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-200 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Coins className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>1. Total Capital Budget:</span>
+                    </span>
+                    <span className="text-[11px] font-mono text-emerald-400">₹{globalCapital.toLocaleString('en-IN')}</span>
+                  </label>
+
+                  {/* Preset Chips */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {[
+                      { label: '₹10k', val: 10000 },
+                      { label: '₹25k', val: 25000 },
+                      { label: '₹50k', val: 50000 },
+                      { label: '₹1L', val: 100000 },
+                      { label: '₹2.5L', val: 250000 },
+                      { label: '₹5L', val: 500000 },
+                      { label: '₹10L', val: 1000000 },
+                    ].map((chip) => (
+                      <button
+                        key={chip.val}
+                        onClick={() => setGlobalCapital(chip.val)}
+                        className={`px-2 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer border ${
+                          globalCapital === chip.val
+                            ? 'bg-emerald-500/25 border-emerald-500/70 text-emerald-300 shadow-sm shadow-emerald-950/40'
+                            : 'bg-black/50 border-white/[0.08] text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Exact INR Input */}
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono text-slate-500">₹</span>
+                    <input
+                      type="number"
+                      value={globalCapital}
+                      onChange={(e) => setGlobalCapital(Math.max(1000, Number(e.target.value)))}
+                      className="w-full pl-7 pr-3 py-1.5 rounded-lg bg-black/70 border border-white/[0.12] text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
+                      placeholder="Custom INR amount..."
+                      min={1000}
+                      step={5000}
+                    />
+                  </div>
+                </div>
+
+                {/* SECTION 2: HOW DO YOU WANT TO SIZE YOUR TRADES? */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-200 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Scale className="w-3.5 h-3.5 text-purple-400" />
+                      <span>2. Sizing Strategy:</span>
+                    </span>
+                    <span className="text-[11px] font-mono text-purple-300">
+                      {globalSizingMode === 'risk_budget' ? `${globalRiskPct}% Risk Sizing` : 'Slot / Block Mode'}
+                    </span>
+                  </label>
+
+                  {/* Strategy Pills */}
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { id: 'risk_budget', label: '🛡️ 1% Risk Budget', desc: 'Sized so SL hits exactly risk budget' },
+                      { id: 'slot_4', label: '⚖️ 4 Slots (25% each)', desc: 'Equal 4-stock bucket portfolio' },
+                      { id: 'slot_5', label: '⚖️ 5 Slots (20% each)', desc: 'Equal 5-stock bucket portfolio' },
+                      { id: 'conviction_kelly', label: '🎯 Kelly Conviction', desc: 'High conviction gets larger allocation' },
+                      { id: 'fixed_outlay', label: '💵 Fixed Outlay (₹)', desc: 'Allocates fixed ₹ per stock' },
+                      { id: 'fixed_shares', label: '📦 Fixed Shares (Qty)', desc: 'Buys fixed lot of shares' },
+                    ].map((strat) => (
+                      <button
+                        key={strat.id}
+                        onClick={() => setGlobalSizingMode(strat.id)}
+                        className={`p-1.5 rounded-lg text-left text-[11px] font-medium transition cursor-pointer border ${
+                          globalSizingMode === strat.id
+                            ? 'bg-purple-500/25 border-purple-500/60 text-purple-200 shadow-sm'
+                            : 'bg-black/50 border-white/[0.08] text-slate-400 hover:text-white'
+                        }`}
+                        title={strat.desc}
+                      >
+                        <div className="font-semibold truncate">{strat.label}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Dynamic Sizing Sub-Inputs */}
+                  {globalSizingMode === 'risk_budget' && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-[11px] text-slate-400">Risk %:</span>
+                      {[0.5, 1.0, 1.5, 2.0].map((rp) => (
+                        <button
+                          key={rp}
+                          onClick={() => setGlobalRiskPct(rp)}
+                          className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition cursor-pointer border ${
+                            globalRiskPct === rp
+                              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                              : 'bg-black/40 border-white/[0.06] text-slate-400'
+                          }`}
+                        >
+                          {rp}%
+                        </button>
+                      ))}
+                      <span className="text-[10px] text-slate-500 font-mono ml-auto">
+                        Max loss: ₹{((globalCapital * globalRiskPct) / 100).toFixed(0)}
+                      </span>
+                    </div>
+                  )}
+
+                  {globalSizingMode === 'fixed_outlay' && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-[11px] text-slate-400">₹ Per Scrip:</span>
+                      <input
+                        type="number"
+                        value={fixedOutlayPerScrip}
+                        onChange={(e) => setFixedOutlayPerScrip(Math.max(1000, Number(e.target.value)))}
+                        className="w-28 px-2 py-1 rounded bg-black/60 border border-white/[0.12] text-xs font-mono text-white focus:outline-none"
+                        step={5000}
+                      />
+                    </div>
+                  )}
+
+                  {globalSizingMode === 'fixed_shares' && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-[11px] text-slate-400">Shares / Stock:</span>
+                      <input
+                        type="number"
+                        value={fixedSharesPerScrip}
+                        onChange={(e) => setFixedSharesPerScrip(Math.max(1, Number(e.target.value)))}
+                        className="w-24 px-2 py-1 rounded bg-black/60 border border-white/[0.12] text-xs font-mono text-white focus:outline-none"
+                        step={25}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* SECTION 3: FOR HOW MUCH TIME DO YOU WANT TO HOLD? */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-200 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>3. Time Horizon &amp; Holding Period:</span>
+                    </span>
+                    <span className="text-[11px] font-mono text-cyan-300">{customHoldingDays} Trading Days</span>
+                  </label>
+
+                  {/* Horizon Preset Pills */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {[
+                      { id: 'all', label: '🌐 All (1-180d)', days: 7 },
+                      { id: 'btst', label: '⚡ BTST (1-2d)', days: 2 },
+                      { id: 'swing_short', label: '📈 Short (3-7d)', days: 5 },
+                      { id: 'swing_positional', label: '🎯 Positional (2-4w)', days: 15 },
+                      { id: 'quarterly', label: '🏢 Quarterly (1-3m)', days: 45 },
+                      { id: 'wealth', label: '💎 Wealth (6m+)', days: 120 },
+                    ].map((h) => (
+                      <button
+                        key={h.id}
+                        onClick={() => {
+                          setGlobalHoldingHorizon(h.id);
+                          if (h.id !== 'all') setCustomHoldingDays(h.days);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer border ${
+                          globalHoldingHorizon === h.id
+                            ? 'bg-cyan-500/25 border-cyan-500/70 text-cyan-300 shadow-sm shadow-cyan-950/40'
+                            : 'bg-black/50 border-white/[0.08] text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        {h.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Holding Days Slider */}
+                  <div className="pt-2">
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                      <span>Fine-Tune Days Slider:</span>
+                      <strong className="text-white font-mono">{customHoldingDays} Days</strong>
+                    </div>
+                    <input
+                      type="range"
+                      min={1}
+                      max={180}
+                      value={customHoldingDays}
+                      onChange={(e) => {
+                        const d = Number(e.target.value);
+                        setCustomHoldingDays(d);
+                        if (d <= 2) setGlobalHoldingHorizon('btst');
+                        else if (d <= 7) setGlobalHoldingHorizon('swing_short');
+                        else if (d <= 21) setGlobalHoldingHorizon('swing_positional');
+                        else if (d <= 65) setGlobalHoldingHorizon('quarterly');
+                        else setGlobalHoldingHorizon('wealth');
+                      }}
+                      className="w-full accent-cyan-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg appearance-none"
+                    />
+                    <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono mt-1">
+                      <span>1 Day (Intraday)</span>
+                      <span>15 Days (Swing)</span>
+                      <span>60 Days (Quarter)</span>
+                      <span>180 Days (Long-Term)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* ── Playbook & Setup Filters ───────────────────────────────────── */}
@@ -2006,6 +2465,12 @@ export default function SuggestionsPage() {
                     isCalcOpen={activeCalcSymbol === item.symbol}
                     onToggleCalc={() => setActiveCalcSymbol(activeCalcSymbol === item.symbol ? null : item.symbol)}
                     onAddPaperTrade={(s) => addPaperTrade(s)}
+                    globalCapital={globalCapital}
+                    globalRiskPct={globalRiskPct}
+                    globalSizingMode={globalSizingMode}
+                    customHoldingDays={customHoldingDays}
+                    fixedOutlayPerScrip={fixedOutlayPerScrip}
+                    fixedSharesPerScrip={fixedSharesPerScrip}
                   />
                 ))}
               </div>
@@ -2030,6 +2495,12 @@ function SuggestionCard({
   onToggleCalc,
   onAddPaperTrade,
   highlighted = false,
+  globalCapital = 100000,
+  globalRiskPct = 1.0,
+  globalSizingMode = 'risk_budget',
+  customHoldingDays = 7,
+  fixedOutlayPerScrip = 20000,
+  fixedSharesPerScrip = 100,
 }) {
   const { symbol, display_symbol, name, sector, setup_label, setup_icon, conviction_score, conviction_tier } = suggestion;
   const { trade_plan, technicals, reasoning, liquidity_guardrails, execution_playbook } = suggestion;
@@ -2043,22 +2514,69 @@ function SuggestionCard({
   const rangeSpan = Math.max(high52 - low52, 0.01);
   const positionPct = Math.min(100, Math.max(0, ((currentPrice - low52) / rangeSpan) * 100));
 
-  // Interactive Position Sizing State (default ₹1,00,000 portfolio, 1% risk)
-  const [userCapital, setUserCapital] = useState(100000);
-  const [userRiskPct, setUserRiskPct] = useState(1.0);
+  // Capital & Sizing state: allow local override or inherit from global deck
+  const [userCapital, setUserCapital] = useState(globalCapital);
+  const [userRiskPct, setUserRiskPct] = useState(globalRiskPct);
+  const [userSizingMode, setUserSizingMode] = useState(globalSizingMode);
+  const [userHoldingDays, setUserHoldingDays] = useState(customHoldingDays);
+  const [userFixedOutlay, setUserFixedOutlay] = useState(fixedOutlayPerScrip);
+  const [userFixedShares, setUserFixedShares] = useState(fixedSharesPerScrip);
+
+  useEffect(() => {
+    setUserCapital(globalCapital);
+    setUserRiskPct(globalRiskPct);
+    setUserSizingMode(globalSizingMode);
+    setUserHoldingDays(customHoldingDays);
+    setUserFixedOutlay(fixedOutlayPerScrip);
+    setUserFixedShares(fixedSharesPerScrip);
+  }, [globalCapital, globalRiskPct, globalSizingMode, customHoldingDays, fixedOutlayPerScrip, fixedSharesPerScrip]);
 
   // Dossier Sub-Tabs & Broker Order State
-  const [dossierTab, setDossierTab] = useState('reasoning'); // 'reasoning' | 'audit' | 'roadmap' | 'broker'
+  const [dossierTab, setDossierTab] = useState('reasoning'); // 'reasoning' | 'audit' | 'roadmap' | 'friction' | 'broker'
   const [copiedOrderFmt, setCopiedOrderFmt] = useState('');
 
-  // Dynamic calculations
-  const riskBudget = userCapital * (userRiskPct / 100.0);
+  // Dynamic calculations based on sizing mode
   const riskPerShare = Math.max(trade_plan.risk_per_share || currentPrice - trade_plan.stop_loss, 0.05);
-  const calcShares = Math.max(1, Math.floor(riskBudget / riskPerShare));
+  const riskBudget = userCapital * (userRiskPct / 100.0);
+  let calcShares = 1;
+  if (userSizingMode === 'slot_4') {
+    calcShares = Math.max(1, Math.floor((userCapital * 0.25) / currentPrice));
+  } else if (userSizingMode === 'slot_5') {
+    calcShares = Math.max(1, Math.floor((userCapital * 0.20) / currentPrice));
+  } else if (userSizingMode === 'conviction_kelly') {
+    const kellyPct = conviction_score >= 85 ? 0.25 : (conviction_score >= 70 ? 0.18 : 0.10);
+    calcShares = Math.max(1, Math.floor((userCapital * kellyPct) / currentPrice));
+  } else if (userSizingMode === 'fixed_outlay') {
+    calcShares = Math.max(1, Math.floor(userFixedOutlay / currentPrice));
+  } else if (userSizingMode === 'fixed_shares') {
+    calcShares = Math.max(1, userFixedShares);
+  } else {
+    calcShares = Math.max(1, Math.floor(riskBudget / riskPerShare));
+  }
+
+  // Cap single position at 50% of portfolio unless explicit fixed shares
   const calcOutlay = calcShares * currentPrice;
   const calcT1Gain = calcShares * (trade_plan.target_1 - currentPrice);
   const calcT2Gain = calcShares * (trade_plan.target_2 - currentPrice);
   const calcMaxLoss = calcShares * riskPerShare;
+
+  // Real Indian Delivery Statutory Taxes & DP Friction Model
+  const sttBuy = calcOutlay * 0.001;
+  const sttSellT1 = (calcShares * trade_plan.target_1) * 0.001;
+  const stampDuty = calcOutlay * 0.00015;
+  const exchangeFee = (calcOutlay + (calcShares * trade_plan.target_1)) * 0.0000325;
+  const sebiFee = (calcOutlay + (calcShares * trade_plan.target_1)) * 0.000001;
+  const gstFee = exchangeFee * 0.18;
+  const dpFee = 15.34;
+  const totalTaxesT1 = sttBuy + sttSellT1 + stampDuty + exchangeFee + sebiFee + gstFee + dpFee;
+  const netT1Profit = calcT1Gain - totalTaxesT1;
+  const breakEvenPrice = currentPrice + (totalTaxesT1 / calcShares);
+  const breakEvenPct = ((breakEvenPrice - currentPrice) / currentPrice) * 100;
+
+  // Dynamic Annualized Compounding Return (IRR)
+  const effDays = userHoldingDays || suggestion.holding_period_metrics?.days_to_target_1 || 7;
+  const t1GainPct = trade_plan.target_1_pct;
+  const annualizedIrr = Math.min(999, Math.round((((1 + t1GainPct / 100) ** (252 / Math.max(1, effDays))) - 1) * 100));
 
   return (
     <div
@@ -2310,6 +2828,62 @@ function SuggestionCard({
           </div>
         </div>
 
+        {/* ── Real-World Capital, Duration & In-Pocket Projection Ribbon ───────── */}
+        <div className="mt-3.5 p-3 rounded-xl bg-gradient-to-r from-emerald-950/20 via-cyan-950/15 to-purple-950/20 border border-emerald-500/25 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="p-2 rounded-lg bg-black/40 border border-white/[0.06]">
+            <div className="text-[10px] text-slate-400 font-semibold uppercase flex items-center gap-1">
+              <Coins className="w-3 h-3 text-amber-400" />
+              <span>Capital Outlay</span>
+            </div>
+            <div className="text-xs font-extrabold text-white font-mono mt-0.5">
+              ₹{calcOutlay.toLocaleString('en-IN')}{' '}
+              <span className="text-[10px] text-slate-400 font-normal">({calcShares} shs)</span>
+            </div>
+            <div className="text-[10px] text-amber-300 font-mono">
+              {((calcOutlay / userCapital) * 100).toFixed(1)}% of ₹{(userCapital / 1000).toFixed(0)}k
+            </div>
+          </div>
+
+          <div className="p-2 rounded-lg bg-black/40 border border-white/[0.06]">
+            <div className="text-[10px] text-slate-400 font-semibold uppercase flex items-center gap-1">
+              <Clock className="w-3 h-3 text-cyan-400" />
+              <span>Target 1 Horizon</span>
+            </div>
+            <div className="text-xs font-extrabold text-cyan-300 font-mono mt-0.5">
+              ~{effDays} Trading Days
+            </div>
+            <div className="text-[10px] text-slate-400 truncate">
+              {suggestion.holding_period_metrics?.horizon_label || suggestion.horizon}
+            </div>
+          </div>
+
+          <div className="p-2 rounded-lg bg-black/40 border border-white/[0.06]">
+            <div className="text-[10px] text-slate-400 font-semibold uppercase flex items-center gap-1">
+              <TrendingUp className="w-3 h-3 text-emerald-400" />
+              <span>Compounding Velocity</span>
+            </div>
+            <div className="text-xs font-extrabold text-emerald-400 font-mono mt-0.5">
+              +{annualizedIrr}% p.a.
+            </div>
+            <div className="text-[10px] text-emerald-500 font-mono">
+              Annualized Dynamic IRR
+            </div>
+          </div>
+
+          <div className="p-2 rounded-lg bg-black/40 border border-white/[0.06]">
+            <div className="text-[10px] text-slate-400 font-semibold uppercase flex items-center gap-1">
+              <Receipt className="w-3 h-3 text-purple-400" />
+              <span>Net In-Pocket Profit</span>
+            </div>
+            <div className="text-xs font-extrabold text-emerald-300 font-mono mt-0.5">
+              +₹{Math.max(0, netT1Profit).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            </div>
+            <div className="text-[10px] text-slate-400 font-mono">
+              Break-Even: ₹{breakEvenPrice.toFixed(2)} (+{breakEvenPct.toFixed(2)}%)
+            </div>
+          </div>
+        </div>
+
         {/* ── Primary Thesis Banner & Action Triggers ───────────────────────── */}
         <div className="mt-3.5 p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between gap-3 flex-wrap">
           <p className="text-xs text-slate-300 font-medium leading-relaxed flex-1 min-w-[280px]">
@@ -2369,16 +2943,16 @@ function SuggestionCard({
             <span className="text-[11px] text-slate-400">Never risk &gt; 1% to 1.5% of total capital on one scrip</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             {/* Capital input */}
             <div>
-              <label className="text-xs text-slate-400 block mb-1">Your Total Trading Capital:</label>
-              <div className="flex items-center gap-1.5 mb-1.5">
-                {[50000, 100000, 200000].map((amt) => (
+              <label className="text-xs text-slate-400 block mb-1">Your Trading Capital:</label>
+              <div className="flex items-center gap-1 flex-wrap mb-1.5">
+                {[10000, 25000, 50000, 100000, 250000, 500000].map((amt) => (
                   <button
                     key={amt}
                     onClick={() => setUserCapital(amt)}
-                    className={`px-2 py-0.5 rounded text-[11px] font-mono cursor-pointer border ${
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono cursor-pointer border ${
                       userCapital === amt
                         ? 'bg-amber-500/30 border-amber-500/60 text-amber-200'
                         : 'bg-white/[0.04] border-white/[0.08] text-slate-400'
@@ -2397,40 +2971,118 @@ function SuggestionCard({
               />
             </div>
 
-            {/* Risk tolerance */}
+            {/* Sizing Strategy Mode */}
             <div>
-              <label className="text-xs text-slate-400 block mb-1">Risk Budget Per Trade:</label>
-              <div className="flex items-center gap-1.5 mb-1.5">
-                {[0.5, 1.0, 1.5, 2.0].map((pct) => (
+              <label className="text-xs text-slate-400 block mb-1">Sizing Strategy:</label>
+              <div className="grid grid-cols-2 gap-1 mb-1.5">
+                {[
+                  { id: 'risk_budget', label: '1% Risk Budget' },
+                  { id: 'slot_4', label: '4 Slots (25%)' },
+                  { id: 'slot_5', label: '5 Slots (20%)' },
+                  { id: 'conviction_kelly', label: 'Kelly Conviction' },
+                  { id: 'fixed_outlay', label: 'Fixed Outlay ₹' },
+                  { id: 'fixed_shares', label: 'Fixed Shares' },
+                ].map((mode) => (
                   <button
-                    key={pct}
-                    onClick={() => setUserRiskPct(pct)}
-                    className={`px-2 py-0.5 rounded text-[11px] font-mono cursor-pointer border ${
-                      userRiskPct === pct
-                        ? 'bg-amber-500/30 border-amber-500/60 text-amber-200'
-                        : 'bg-white/[0.04] border-white/[0.08] text-slate-400'
+                    key={mode.id}
+                    onClick={() => setUserSizingMode(mode.id)}
+                    className={`py-1 px-1.5 rounded text-[10px] font-semibold border transition cursor-pointer text-left ${
+                      userSizingMode === mode.id
+                        ? 'bg-amber-500/25 border-amber-500/60 text-amber-200'
+                        : 'bg-white/[0.03] border-white/[0.06] text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    {pct}%
+                    {mode.label}
                   </button>
                 ))}
               </div>
-              <div className="text-xs font-mono text-amber-300 font-bold mt-2">
-                Max Allowable Loss: ₹{riskBudget.toFixed(2)} ({userRiskPct}%)
+
+              {userSizingMode === 'risk_budget' && (
+                <div className="flex items-center gap-1 mt-1">
+                  {[0.5, 1.0, 1.5, 2.0].map((pct) => (
+                    <button
+                      key={pct}
+                      onClick={() => setUserRiskPct(pct)}
+                      className={`flex-1 py-0.5 rounded text-[10px] font-mono cursor-pointer border ${
+                        userRiskPct === pct
+                          ? 'bg-red-500/20 border-red-500/60 text-red-300'
+                          : 'bg-white/[0.04] border-white/[0.08] text-slate-400'
+                      }`}
+                    >
+                      {pct}%
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {userSizingMode === 'fixed_outlay' && (
+                <input
+                  type="number"
+                  value={userFixedOutlay}
+                  onChange={(e) => setUserFixedOutlay(Math.max(1000, Number(e.target.value)))}
+                  className="w-full mt-1 px-2 py-1 rounded bg-black/60 border border-white/[0.12] text-xs font-mono text-white focus:outline-none focus:border-amber-500"
+                  step={5000}
+                />
+              )}
+
+              {userSizingMode === 'fixed_shares' && (
+                <input
+                  type="number"
+                  value={userFixedShares}
+                  onChange={(e) => setUserFixedShares(Math.max(1, Number(e.target.value)))}
+                  className="w-full mt-1 px-2 py-1 rounded bg-black/60 border border-white/[0.12] text-xs font-mono text-white focus:outline-none focus:border-amber-500"
+                  step={50}
+                />
+              )}
+            </div>
+
+            {/* Target Holding Days */}
+            <div>
+              <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                <span>Holding Days:</span>
+                <span className="font-mono text-cyan-300 font-bold">{effDays}d</span>
               </div>
+              <div className="flex items-center gap-1 mb-1.5 flex-wrap">
+                {[
+                  { label: 'BTST 2d', days: 2 },
+                  { label: 'Swing 7d', days: 7 },
+                  { label: 'Pos 21d', days: 21 },
+                  { label: 'Qtr 60d', days: 60 },
+                ].map((item) => (
+                  <button
+                    key={item.days}
+                    onClick={() => setUserHoldingDays(item.days)}
+                    className={`px-1.5 py-0.5 rounded text-[10px] border cursor-pointer ${
+                      userHoldingDays === item.days
+                        ? 'bg-cyan-500/20 border-cyan-500/60 text-cyan-300 font-bold'
+                        : 'bg-white/[0.03] border-white/[0.06] text-slate-400'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={180}
+                value={effDays}
+                onChange={(e) => setUserHoldingDays(Number(e.target.value))}
+                className="w-full accent-cyan-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+              />
             </div>
 
             {/* Calculated summary */}
             <div className="p-3 rounded-lg bg-black/50 border border-white/[0.08]">
-              <div className="text-[10px] text-slate-400 uppercase font-semibold">Risk Per Share</div>
+              <div className="text-[10px] text-slate-400 uppercase font-semibold">Break-Even &amp; Compounding</div>
               <div className="text-xs font-mono font-bold text-white mt-0.5">
-                ₹{riskPerShare.toFixed(2)}{' '}
-                <span className="text-[10px] text-slate-500">
-                  (Entry ₹{currentPrice.toFixed(2)} - SL ₹{trade_plan.stop_loss.toFixed(2)})
-                </span>
+                Break-Even: <strong className="text-amber-300 font-mono">₹{breakEvenPrice.toFixed(2)}</strong> (+{breakEvenPct.toFixed(2)}%)
               </div>
-              <div className="text-[11px] text-slate-400 mt-1">
-                Risk-to-Reward Ratio: <strong className="text-amber-400 font-mono">1 : {trade_plan.risk_reward_ratio}</strong>
+              <div className="text-xs font-mono font-bold text-emerald-400 mt-1">
+                Annualized IRR: +{annualizedIrr}% p.a.
+              </div>
+              <div className="text-[10px] text-slate-500 mt-0.5">
+                Risk Per Share: ₹{riskPerShare.toFixed(2)}
               </div>
             </div>
           </div>
@@ -2456,12 +3108,12 @@ function SuggestionCard({
             </div>
 
             <div className="p-2.5 rounded-lg bg-black/40 border border-white/[0.06]">
-              <div className="text-[10px] text-slate-400 uppercase font-semibold">Target 1 Potential Profit</div>
+              <div className="text-[10px] text-slate-400 uppercase font-semibold">Target 1 Net Profit</div>
               <div className="text-base font-extrabold text-emerald-400 font-mono mt-0.5">
-                +₹{calcT1Gain.toFixed(2)}
+                +₹{Math.max(0, netT1Profit).toFixed(2)}
               </div>
               <div className="text-[10px] text-emerald-500 mt-0.5">
-                +{((calcT1Gain / userCapital) * 100).toFixed(2)}% portfolio boost
+                Gross +₹{calcT1Gain.toFixed(2)} (-₹{totalTaxesT1.toFixed(1)} taxes)
               </div>
             </div>
 
@@ -2497,8 +3149,9 @@ function SuggestionCard({
             {[
               { id: 'reasoning', label: '1. Pillars & Thesis', icon: Sparkles },
               { id: 'audit', label: '2. Risk & Circuit Audit', icon: ShieldCheck },
-              { id: 'roadmap', label: '3. Trailing Roadmap', icon: Target },
-              { id: 'broker', label: '4. Instant Broker Order', icon: Briefcase },
+              { id: 'roadmap', label: '3. Trailing Roadmap & SL Rules', icon: Target },
+              { id: 'friction', label: '4. Taxes, Friction & Scale-In', icon: Receipt },
+              { id: 'broker', label: '5. Instant Broker Order', icon: Briefcase },
             ].map((tab) => {
               const TabIcon = tab.icon;
               const isActive = dossierTab === tab.id;
@@ -2738,6 +3391,27 @@ function SuggestionCard({
                 </div>
               </div>
 
+              {/* 4 Tactical Trailing Stop-Loss Strategies for Swing Trading */}
+              {suggestion.trailing_stop_strategies && (
+                <div className="p-4 rounded-xl bg-black/50 border border-amber-500/25 space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-300 uppercase tracking-wider">
+                    <Target className="w-4 h-4 text-amber-400" />
+                    <span>4 Tactical Trailing Stop-Loss Strategies for Swing Trading Under ₹200</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {Object.entries(suggestion.trailing_stop_strategies).map(([key, strat]) => (
+                      <div key={key} className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.06] hover:border-amber-500/30 transition">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-white">{strat.name}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 font-mono font-semibold">Rule</span>
+                        </div>
+                        <p className="text-xs text-slate-300 leading-relaxed">{strat.rule}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center gap-3 text-xs text-slate-400">
                 <Info className="w-4 h-4 text-cyan-400 flex-shrink-0" />
                 <span>
@@ -2747,7 +3421,179 @@ function SuggestionCard({
             </div>
           )}
 
-          {/* TAB 4: INSTANT 1-CLICK BROKER ORDER STUDIO */}
+          {/* TAB 4: STATUTORY DELIVERY TAXES, FRICTION & SCALE-IN MATRIX */}
+          {dossierTab === 'friction' && (
+            <div className="space-y-4 animate-fade-in">
+              {/* Friction & Net In-Pocket Profit Card */}
+              <div className="p-4 rounded-xl bg-gradient-to-br from-purple-950/20 to-black/60 border border-purple-500/25 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-purple-300 uppercase tracking-wider">
+                    <Receipt className="w-4 h-4 text-purple-400" />
+                    <span>Statutory Delivery Taxes &amp; Take-Home Profit ({display_symbol})</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Based on {calcShares} Shares · Outlay ₹{calcOutlay.toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="p-2.5 rounded-lg bg-black/60 border border-white/[0.06]">
+                    <div className="text-[10px] text-slate-400 uppercase font-semibold">Gross Profit @ T1</div>
+                    <div className="text-sm font-extrabold text-emerald-400 font-mono mt-0.5">
+                      +₹{calcT1Gain.toFixed(2)}
+                    </div>
+                    <div className="text-[10px] text-slate-500">Target ₹{trade_plan.target_1}</div>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-black/60 border border-white/[0.06]">
+                    <div className="text-[10px] text-slate-400 uppercase font-semibold">Total Taxes &amp; DP</div>
+                    <div className="text-sm font-extrabold text-purple-300 font-mono mt-0.5">
+                      -₹{totalTaxesT1.toFixed(2)}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono">{((totalTaxesT1 / Math.max(calcT1Gain, 1)) * 100).toFixed(1)}% drag</div>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-black/60 border border-emerald-500/30">
+                    <div className="text-[10px] text-emerald-400 uppercase font-semibold">Net In-Pocket Profit</div>
+                    <div className="text-sm font-extrabold text-emerald-300 font-mono mt-0.5">
+                      +₹{Math.max(0, netT1Profit).toFixed(2)}
+                    </div>
+                    <div className="text-[10px] text-emerald-500 font-mono">Clean Take-Home Cash</div>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-black/60 border border-amber-500/30">
+                    <div className="text-[10px] text-amber-300 uppercase font-semibold">True Break-Even Price</div>
+                    <div className="text-sm font-extrabold text-white font-mono mt-0.5">
+                      ₹{breakEvenPrice.toFixed(2)}
+                    </div>
+                    <div className="text-[10px] text-amber-300 font-mono">+{breakEvenPct.toFixed(2)}% buffer</div>
+                  </div>
+                </div>
+
+                {/* Detailed Statutory Tax Breakdown Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs font-mono border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/[0.08] text-slate-400 text-[10px] uppercase">
+                        <th className="py-2 px-3">Statutory Component</th>
+                        <th className="py-2 px-3">Standard Regulatory Rate</th>
+                        <th className="py-2 px-3 text-right">Debit for this Trade</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.04] text-slate-300 text-[11px]">
+                      <tr>
+                        <td className="py-2 px-3 text-slate-200">Securities Transaction Tax (STT Buy)</td>
+                        <td className="py-2 px-3 text-slate-400">0.1% on delivery buy turnover</td>
+                        <td className="py-2 px-3 text-right text-white">₹{sttBuy.toFixed(2)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-3 text-slate-200">Securities Transaction Tax (STT Sell)</td>
+                        <td className="py-2 px-3 text-slate-400">0.1% on delivery sell turnover @ T1</td>
+                        <td className="py-2 px-3 text-right text-white">₹{sttSellT1.toFixed(2)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-3 text-slate-200">Stamp Duty</td>
+                        <td className="py-2 px-3 text-slate-400">0.015% or ₹1,500 / crore on buy</td>
+                        <td className="py-2 px-3 text-right text-white">₹{stampDuty.toFixed(2)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-3 text-slate-200">NSE / BSE Exchange Turnover Fee</td>
+                        <td className="py-2 px-3 text-slate-400">0.00325% on combined turnover</td>
+                        <td className="py-2 px-3 text-right text-white">₹{exchangeFee.toFixed(2)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-3 text-slate-200">SEBI Regulatory Turnover Fee</td>
+                        <td className="py-2 px-3 text-slate-400">₹10 per crore (0.0001%)</td>
+                        <td className="py-2 px-3 text-right text-white">₹{sebiFee.toFixed(2)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-3 text-slate-200">Goods &amp; Services Tax (GST)</td>
+                        <td className="py-2 px-3 text-slate-400">18% on exchange + SEBI fees</td>
+                        <td className="py-2 px-3 text-right text-white">₹{gstFee.toFixed(2)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-3 text-amber-300 font-semibold">CDSL / NSDL DP Flat Debit Charge</td>
+                        <td className="py-2 px-3 text-amber-300">Flat ₹15.34 (₹13.00 + 18% GST) per delivery sell</td>
+                        <td className="py-2 px-3 text-right text-amber-300 font-bold">₹{dpFee.toFixed(2)}</td>
+                      </tr>
+                      <tr className="bg-white/[0.03] font-bold">
+                        <td className="py-2 px-3 text-white">Total Delivery Friction Drag</td>
+                        <td className="py-2 px-3 text-slate-400">All mandatory statutory charges</td>
+                        <td className="py-2 px-3 text-right text-purple-300 font-mono">₹{totalTaxesT1.toFixed(2)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 3-Tranche Staggered Scale-In / Pyramiding Plan */}
+              {suggestion.pyramiding_plan && (
+                <div className="p-4 rounded-xl bg-black/60 border border-cyan-500/25 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2 text-xs font-bold text-cyan-300 uppercase tracking-wider">
+                      <Layers className="w-4 h-4 text-cyan-400" />
+                      <span>3-Tranche Staggered Scale-In Matrix for Volatility Control</span>
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-300 font-mono font-bold">
+                      Blended Avg: ₹{suggestion.pyramiding_plan.blended_entry_price.toFixed(2)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Never market-buy all {calcShares} shares in one block in sub-₹200 scrips. Stagger entries to avoid upper-wick slippage:
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="p-3 rounded-lg bg-black/40 border border-white/[0.08]">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-bold text-white">{suggestion.pyramiding_plan.tranche_1.name}</span>
+                        <span className="text-[10px] font-mono text-cyan-400 font-bold">
+                          {Math.floor(calcShares * 0.40)} shs ({suggestion.pyramiding_plan.tranche_1.allocation_pct}%)
+                        </span>
+                      </div>
+                      <div className="text-xs font-mono font-bold text-emerald-400 mb-1">
+                        Trigger Price: ₹{suggestion.pyramiding_plan.tranche_1.target_price.toFixed(2)}
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        {suggestion.pyramiding_plan.tranche_1.condition}
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-black/40 border border-white/[0.08]">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-bold text-white">{suggestion.pyramiding_plan.tranche_2.name}</span>
+                        <span className="text-[10px] font-mono text-cyan-400 font-bold">
+                          {Math.floor(calcShares * 0.30)} shs ({suggestion.pyramiding_plan.tranche_2.allocation_pct}%)
+                        </span>
+                      </div>
+                      <div className="text-xs font-mono font-bold text-cyan-400 mb-1">
+                        Trigger Price: ₹{suggestion.pyramiding_plan.tranche_2.target_price.toFixed(2)}
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        {suggestion.pyramiding_plan.tranche_2.condition}
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-black/40 border border-white/[0.08]">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-bold text-white">{suggestion.pyramiding_plan.tranche_3.name}</span>
+                        <span className="text-[10px] font-mono text-cyan-400 font-bold">
+                          {calcShares - Math.floor(calcShares * 0.40) - Math.floor(calcShares * 0.30)} shs ({suggestion.pyramiding_plan.tranche_3.allocation_pct}%)
+                        </span>
+                      </div>
+                      <div className="text-xs font-mono font-bold text-purple-300 mb-1">
+                        Trigger Price: ₹{suggestion.pyramiding_plan.tranche_3.target_price.toFixed(2)}
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        {suggestion.pyramiding_plan.tranche_3.condition}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: INSTANT 1-CLICK BROKER ORDER STUDIO */}
           {dossierTab === 'broker' && (
             <div className="space-y-4 animate-fade-in">
               <div className="p-4 rounded-xl bg-black/60 border border-white/[0.08] space-y-3">

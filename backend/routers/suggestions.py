@@ -175,6 +175,10 @@ def get_position_sizing(
     capital: float = Query(100000.0, description="Total portfolio trading capital in rupees"),
     risk_pct: float = Query(1.0, description="Risk tolerance percentage (e.g. 1.0 for 1%)"),
     custom_risk_amount: Optional[float] = Query(None, description="Optional fixed risk amount in rupees"),
+    sizing_mode: str = Query("risk_budget", description="risk_budget, slot_4, slot_5, conviction_kelly, fixed_outlay, fixed_shares"),
+    fixed_outlay: Optional[float] = Query(None, description="Exact rupee outlay to allocate for fixed_outlay mode"),
+    fixed_shares: Optional[int] = Query(None, description="Exact number of shares for fixed_shares mode"),
+    holding_days: Optional[int] = Query(None, description="Planned holding horizon in days to compute annualized IRR"),
 ) -> Dict[str, Any]:
     """
     Calculates position sizing and risk allocation for any ticker given the user's capital.
@@ -197,6 +201,10 @@ def get_position_sizing(
             capital=capital,
             risk_pct=risk_pct,
             custom_risk_amount=custom_risk_amount,
+            sizing_mode=sizing_mode,
+            fixed_outlay=fixed_outlay,
+            fixed_shares=fixed_shares,
+            holding_days=holding_days,
         )
     except HTTPException:
         raise

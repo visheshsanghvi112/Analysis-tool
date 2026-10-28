@@ -97,3 +97,58 @@ def test_api_evaluate_ticker_endpoint(client):
     assert "trade_plan" in data
     assert "reasoning" in data
     assert data["conviction_score"] >= 0
+
+
+def test_holding_period_and_tax_breakdown():
+    """Verify holding period metrics, Indian tax breakdown, pyramiding, and trailing stop strategies."""
+    res = analyze_single_scrip("IOC.NS")
+    if res is not None:
+        assert "holding_period_metrics" in res
+        metrics = res["holding_period_metrics"]
+        assert "days_to_target_1" in metrics
+        assert "annualized_irr_t1_pct" in metrics
+        assert metrics["days_to_target_1"] >= 1
+
+        assert "tax_breakdown" in res
+        tax = res["tax_breakdown"]
+        assert "stt_total" in tax
+        assert "dp_charges" in tax
+        assert tax["dp_charges"] == 15.34
+        assert "breakeven_price" in tax
+        assert "net_profit_t1" in tax
+
+        assert "pyramiding_plan" in res
+        pyramid = res["pyramiding_plan"]
+        assert "tranche_1" in pyramid
+        assert "tranche_2" in pyramid
+        assert "tranche_3" in pyramid
+        assert "blended_entry_price" in pyramid
+
+        assert "trailing_stop_strategies" in res
+        trail = res["trailing_stop_strategies"]
+        assert "breakeven_trail" in trail
+        assert "moving_average_trail" in trail
+        assert "atr_volatility_trail" in trail
+        assert "swing_low_trail" in trail
+
+
+def test_position_sizing_api_modes(client):
+    """Test /api/suggestions/position-size with multi-strategy modes and statutory tax calculation."""
+    # 1. Slot sizing
+    res1 = client.get("/api/suggestions/position-size?ticker=IOC.NS&capital=100000&sizing_mode=slot_4&holding_days=10")
+    assert res1.status_code == 200
+    d1 = res1.json()
+    assert d1["sizing_mode"] == "slot_4"
+    assert d1["shares_to_buy"] > 0
+    assert d1["total_statutory_taxes"] > 0
+    assert d1["annualized_irr_t1_pct"] > 0
+    assert d1["breakeven_price"] > 0
+
+    # 2. Fixed shares sizing
+    res2 = client.get("/api/suggestions/position-size?ticker=IOC.NS&capital=100000&sizing_mode=fixed_shares&fixed_shares=250")
+    assert res2.status_code == 200
+    d2 = res2.json()
+    assert d2["shares_to_buy"] == 250
+    assert d2["capital_outlay"] > 0
+
+

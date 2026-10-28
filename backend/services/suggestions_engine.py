@@ -913,6 +913,123 @@ def _determine_setup_and_plan(metrics: Dict[str, Any], meta: Dict[str, Any]) -> 
         "one_click_alert_text": f"BUY {clean_sym} @ ₹{price:.2f} | SL: ₹{stop_loss:.2f} | T1: ₹{target_1:.2f} | T2: ₹{target_2:.2f} (R:R 1:{rr_ratio})"
     }
 
+    # Dynamic Holding Time & Days to Target Projection
+    eff_atr = max(atr, price * 0.015)
+    dist_t1 = max(target_1 - price, price * 0.02)
+    dist_t2 = max(target_2 - price, price * 0.05)
+    
+    # Days needed based on trending velocity (0.65x ATR daily travel)
+    days_to_t1 = max(1, int(math.ceil(dist_t1 / max(eff_atr * 0.65, 0.1))))
+    days_to_t2 = max(days_to_t1 + 2, int(math.ceil(dist_t2 / max(eff_atr * 0.50, 0.1))))
+    
+    if days_to_t1 <= 2 or setup_type == "BTST_SURGE":
+        horizon_bucket = "BTST"
+        horizon_label = "1–2 Trading Days (BTST / Scalp)"
+    elif days_to_t1 <= 7:
+        horizon_bucket = "SWING_SHORT"
+        horizon_label = "3–7 Trading Days (Short Swing)"
+    elif days_to_t1 <= 21:
+        horizon_bucket = "SWING_POSITIONAL"
+        horizon_label = "2–4 Weeks (Positional Swing)"
+    elif days_to_t1 <= 65:
+        horizon_bucket = "QUARTERLY_CYCLE"
+        horizon_label = "1–3 Months (Quarterly Trend)"
+    else:
+        horizon_bucket = "WEALTH_COMPOUNDER"
+        horizon_label = "6+ Months (Multi-Bagger Compounder)"
+
+    # Annualized Return (IRR / CAGR equivalent for holding days)
+    gain_ratio_t1 = max(1.0 + (target_1_pct / 100.0), 1.001)
+    annualized_irr_t1 = min(999.0, round(((gain_ratio_t1 ** (252.0 / max(days_to_t1, 1))) - 1.0) * 100.0, 1))
+    gain_ratio_t2 = max(1.0 + (target_2_pct / 100.0), 1.001)
+    annualized_irr_t2 = min(999.0, round(((gain_ratio_t2 ** (252.0 / max(days_to_t2, 2))) - 1.0) * 100.0, 1))
+
+    holding_period_metrics = {
+        "days_to_target_1": days_to_t1,
+        "days_to_target_2": days_to_t2,
+        "horizon_bucket": horizon_bucket,
+        "horizon_label": horizon_label,
+        "annualized_irr_t1_pct": annualized_irr_t1,
+        "annualized_irr_t2_pct": annualized_irr_t2,
+    }
+
+    # Statutory Indian Delivery Taxes & Real Net Profit Friction Model (Zerodha/Angel/Groww CNC)
+    unit_qty = max(10, int(50000 // price))
+    buy_val = unit_qty * price
+    sell_val_t1 = unit_qty * target_1
+    sell_val_t2 = unit_qty * target_2
+    stt_total_t1 = round((buy_val * 0.001) + (sell_val_t1 * 0.001), 2)
+    stamp_duty = round(buy_val * 0.00015, 2)
+    exchange_charges = round((buy_val + sell_val_t1) * 0.0000325, 2)
+    sebi_charges = round((buy_val + sell_val_t1) * 0.000001, 2)
+    gst_charges = round(exchange_charges * 0.18, 2)
+    dp_charges = 15.34  # CDSL flat fee on delivery sale
+    total_friction_charges_t1 = round(stt_total_t1 + stamp_duty + exchange_charges + sebi_charges + gst_charges + dp_charges, 2)
+    
+    gross_profit_t1 = round(unit_qty * (target_1 - price), 2)
+    net_profit_t1 = round(gross_profit_t1 - total_friction_charges_t1, 2)
+    breakeven_price = round(price + (total_friction_charges_t1 / unit_qty), 2)
+    friction_drag_pct = round((total_friction_charges_t1 / max(gross_profit_t1, 1.0)) * 100.0, 1)
+
+    tax_breakdown = {
+        "reference_shares": unit_qty,
+        "brokerage": 0.0,  # Zero brokerage for CNC delivery
+        "stt_total": stt_total_t1,
+        "stamp_duty": stamp_duty,
+        "exchange_charges": exchange_charges,
+        "gst_charges": gst_charges,
+        "dp_charges": dp_charges,
+        "total_statutory_charges": total_friction_charges_t1,
+        "breakeven_price": breakeven_price,
+        "breakeven_move_pct": round(((breakeven_price - price) / price) * 100.0, 2),
+        "gross_profit_t1": gross_profit_t1,
+        "net_profit_t1": net_profit_t1,
+        "friction_drag_pct": friction_drag_pct,
+    }
+
+    # 3-Tranche Staggered Scale-In Matrix for Sub-₹200 Volatility Control
+    pyramiding_plan = {
+        "tranche_1": {
+            "name": "Tranche 1 (Starter Support)",
+            "allocation_pct": 40,
+            "target_price": round(price, 2),
+            "condition": "Initiate 40% position at CMP / immediate support floor",
+        },
+        "tranche_2": {
+            "name": "Tranche 2 (Momentum Pivot)",
+            "allocation_pct": 30,
+            "target_price": round(entry_high, 2),
+            "condition": f"Add 30% only on clean 15-min candle close above ₹{entry_high:.2f}",
+        },
+        "tranche_3": {
+            "name": "Tranche 3 (Retest Buffer)",
+            "allocation_pct": 30,
+            "target_price": round(entry_low, 2),
+            "condition": f"Accumulate final 30% on intraday pullback near ₹{entry_low:.2f}",
+        },
+        "blended_entry_price": round(0.40 * price + 0.30 * entry_high + 0.30 * entry_low, 2)
+    }
+
+    # Trailing Stop-Loss Strategies
+    trailing_stop_strategies = {
+        "breakeven_trail": {
+            "name": "Target 1 Breakeven Trail",
+            "rule": f"Once price crosses Target 1 (₹{target_1:.2f}), move Stop Loss from ₹{stop_loss:.2f} to ₹{entry_high:.2f} (locked profit).",
+        },
+        "moving_average_trail": {
+            "name": "20 EMA Trend Trail",
+            "rule": f"Hold remaining runner position until a daily candle closes below the 20 EMA (~₹{sma20:.2f}).",
+        },
+        "atr_volatility_trail": {
+            "name": "1.5x ATR Volatility Floor",
+            "rule": f"Dynamic trailing stop set at (Peak Price - ₹{(1.5 * atr):.2f}).",
+        },
+        "swing_low_trail": {
+            "name": "3-Day Swing Low Trail",
+            "rule": "Trail stop loss to the lowest price of the preceding 3 trading sessions.",
+        }
+    }
+
     return {
         "setup_type": setup_type,
         "setup_label": setup_label,
@@ -970,6 +1087,10 @@ def _determine_setup_and_plan(metrics: Dict[str, Any], meta: Dict[str, Any]) -> 
         "broker_order_formats": broker_order_formats,
         "execution_playbook": execution_playbook,
         "position_sizing_presets": position_sizing_presets,
+        "holding_period_metrics": holding_period_metrics,
+        "tax_breakdown": tax_breakdown,
+        "pyramiding_plan": pyramiding_plan,
+        "trailing_stop_strategies": trailing_stop_strategies,
         "reasoning": {
             "primary_thesis": thesis_summary,
             "price_action": reasoning_price_action,
@@ -1171,7 +1292,11 @@ def calculate_custom_position_size(
     ticker: str,
     capital: float = 100000.0,
     risk_pct: float = 1.0,
-    custom_risk_amount: Optional[float] = None
+    custom_risk_amount: Optional[float] = None,
+    sizing_mode: str = "risk_budget",
+    fixed_outlay: Optional[float] = None,
+    fixed_shares: Optional[int] = None,
+    holding_days: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Calculates position size and risk allocation for any ticker and user capital."""
     suggestion = analyze_single_scrip(ticker)
@@ -1182,22 +1307,60 @@ def calculate_custom_position_size(
     stop_loss = suggestion["trade_plan"]["stop_loss"]
     target_1 = suggestion["trade_plan"]["target_1"]
     target_2 = suggestion["trade_plan"]["target_2"]
+    conviction = suggestion.get("conviction_score", 75)
+    default_days = suggestion.get("holding_period_metrics", {}).get("days_to_target_1", 7)
+    effective_days = holding_days if (holding_days and holding_days > 0) else default_days
 
     risk_per_share = max(round(price - stop_loss, 2), 0.05)
-    risk_budget = custom_risk_amount if custom_risk_amount is not None else capital * (risk_pct / 100.0)
-    risk_budget = max(risk_budget, 100.0)
 
-    qty = max(1, int(risk_budget // risk_per_share))
+    # Determine quantity based on sizing_mode
+    if sizing_mode == "fixed_shares" and fixed_shares and fixed_shares > 0:
+        qty = fixed_shares
+    elif sizing_mode == "fixed_outlay" and fixed_outlay and fixed_outlay > 0:
+        qty = max(1, int(fixed_outlay // price))
+    elif sizing_mode == "slot_4":
+        slot_budget = capital * 0.25
+        qty = max(1, int(slot_budget // price))
+    elif sizing_mode == "slot_5":
+        slot_budget = capital * 0.20
+        qty = max(1, int(slot_budget // price))
+    elif sizing_mode == "conviction_kelly":
+        # Kelly weight: 85+ conviction -> 25%, 70-84 -> 18%, <70 -> 10%
+        kelly_pct = 0.25 if conviction >= 85 else (0.18 if conviction >= 70 else 0.10)
+        qty = max(1, int((capital * kelly_pct) // price))
+    else:
+        # Default: Risk-Budgeted Sizing (Capital * Risk% / Risk-per-share)
+        risk_budget = custom_risk_amount if custom_risk_amount is not None else capital * (risk_pct / 100.0)
+        risk_budget = max(risk_budget, 100.0)
+        qty = max(1, int(risk_budget // risk_per_share))
+
     outlay = round(qty * price, 2)
 
-    # Max single-position concentration cap at 40% of capital
-    if outlay > capital * 0.40:
-        qty = max(1, int((capital * 0.40) // price))
+    # Cap single position at 50% of capital for safety unless explicit fixed_shares requested
+    if sizing_mode not in ["fixed_shares"] and outlay > capital * 0.50:
+        qty = max(1, int((capital * 0.50) // price))
         outlay = round(qty * price, 2)
 
     profit_t1 = round(qty * (target_1 - price), 2)
     profit_t2 = round(qty * (target_2 - price), 2)
     actual_risk_loss = round(qty * risk_per_share, 2)
+
+    # Statutory Indian Delivery Taxes on this exact quantity
+    buy_val = outlay
+    sell_val_t1 = qty * target_1
+    stt_val = round((buy_val * 0.001) + (sell_val_t1 * 0.001), 2)
+    stamp_val = round(buy_val * 0.00015, 2)
+    exchange_val = round((buy_val + sell_val_t1) * 0.0000325, 2)
+    sebi_val = round((buy_val + sell_val_t1) * 0.000001, 2)
+    gst_val = round(exchange_val * 0.18, 2)
+    dp_val = 15.34
+    total_tax_fees = round(stt_val + stamp_val + exchange_val + sebi_val + gst_val + dp_val, 2)
+    net_profit_t1 = round(profit_t1 - total_tax_fees, 2)
+    breakeven_price = round(price + (total_tax_fees / qty), 2)
+
+    # Annualized Return (IRR) based on holding days
+    gain_pct_t1 = ((target_1 - price) / price) * 100.0
+    irr_t1 = min(999.0, round((((1.0 + gain_pct_t1 / 100.0) ** (252.0 / max(effective_days, 1))) - 1.0) * 100.0, 1))
 
     return {
         "ticker": suggestion["symbol"],
@@ -1209,14 +1372,19 @@ def calculate_custom_position_size(
         "target_2": target_2,
         "risk_per_share": risk_per_share,
         "portfolio_capital": capital,
-        "risk_budget": round(risk_budget, 2),
-        "risk_pct": round((actual_risk_loss / capital) * 100, 2),
+        "sizing_mode": sizing_mode,
+        "holding_days": effective_days,
         "shares_to_buy": qty,
         "capital_outlay": outlay,
         "capital_pct": round((outlay / capital) * 100, 1),
         "max_risk_loss": actual_risk_loss,
-        "profit_target_1": profit_t1,
-        "profit_target_2": profit_t2,
+        "risk_pct": round((actual_risk_loss / capital) * 100, 2),
+        "gross_profit_t1": profit_t1,
+        "gross_profit_t2": profit_t2,
+        "total_statutory_taxes": total_tax_fees,
+        "net_profit_t1": net_profit_t1,
+        "breakeven_price": breakeven_price,
+        "annualized_irr_t1_pct": irr_t1,
         "portfolio_gain_t1_pct": round((profit_t1 / capital) * 100, 2),
         "portfolio_gain_t2_pct": round((profit_t2 / capital) * 100, 2),
         "risk_reward_ratio": suggestion["trade_plan"]["risk_reward_ratio"],
